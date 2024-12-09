@@ -2,6 +2,9 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, Window, HtmlTextAreaElement, HtmlDivElement, InputEvent};
 use markdown::{to_html_with_options, Options};
 use rinja::Template;
+use crate::config::{EditorConfig, ShortcutConfig};
+
+mod config;
 
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!
 
@@ -25,29 +28,29 @@ This is a simple markdown editor built with:
 struct EditorTemplate {
     initial_content: String,
     initial_preview: String,
+    shortcuts: Vec<ShortcutConfig>,
 }
 
 #[wasm_bindgen(start)]
 pub fn run() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
+    let config = EditorConfig::default();
+    
     let window: Window = web_sys::window().ok_or_else(|| JsValue::from_str("No window found"))?;
     let document: Document = window.document().ok_or_else(|| JsValue::from_str("No document found"))?;
     let app: Element = document.get_element_by_id("app").ok_or_else(|| JsValue::from_str("No element with id 'app' found"))?;
 
-    // Create initial template content
     let initial_preview = to_html_with_options(INITIAL_MARKDOWN, &Options::default())
         .expect("Failed to convert initial markdown to HTML");
 
     let template = EditorTemplate {
         initial_content: INITIAL_MARKDOWN.to_string(),
         initial_preview,
+        shortcuts: config.shortcuts,
     };
 
-    // Render template into the app
     app.set_inner_html(&template.render().expect("Failed to render template"));
-
-    // Set up markdown conversion handler
     setup_markdown_conversion(&document)?;
 
     Ok(())

@@ -1,0 +1,24 @@
+[shortcuts.bold]
+key = "ctrl+b"
+prefix = "**"
+suffix = "**"
+
+[shortcuts.italic]
+key = "ctrl+i"
+prefix = "_"
+suffix = "_"
+
+[shortcuts.code]
+key = "ctrl+k"
+prefix = "`"
+suffix = "`"
+
+[shortcuts.link]
+key = "ctrl+l"
+prefix = "["
+suffix = "](url)"
+
+[shortcuts.heading]
+key = "ctrl+h"
+prefix = "# "
+suffix = "" 
