@@ -48,6 +48,32 @@
             padding: 1rem;
             overflow-y: auto;
         }
+
+        .command-palette::part(panel) {
+            width: 300px;
+        }
+
+        .command-search {
+            margin-bottom: 1rem;
+            width: 100%;
+        }
+
+        .command-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .command-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+
+        .command-item:hover {
+            background: var(--sl-color-neutral-100);
+        }
     </style>
   </head>
   <body>

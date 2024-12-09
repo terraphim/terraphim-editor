@@ -16,7 +16,7 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
-    <script nonce="ASWOPvohb68g/5cG2Kw21g==">window.shortcuts = [
+    <script nonce="ZQolbGWWGG1devLCHj7lSg==">window.shortcuts = [
     {
       "name": "type-bold",
       "key": "ctrl+b",
@@ -54,7 +54,7 @@
     }
 ]; </script>
     <script>console.log("shortcuts.js loaded");</script>
-    <script nonce="NP6isV/gAZZR4RFUc84g5w==">class MarkdownEditor {
+    <script nonce="L1UgIcbCA0EHwzSYxvKJlA==">class MarkdownEditor {
   constructor() {
     if (typeof shortcuts === 'undefined') {
       console.error('Shortcuts not loaded');
@@ -62,6 +62,16 @@
     } else {
       this.shortcuts = shortcuts;
     }
+    this.commandPalette = null;
+    this.commands = [
+      { name: 'Heading 1', icon: 'type-h1', action: () => this.wrapSelectedText('# ', '') },
+      { name: 'Heading 2', icon: 'type-h2', action: () => this.wrapSelectedText('## ', '') },
+      { name: 'Heading 3', icon: 'type-h3', action: () => this.wrapSelectedText('### ', '') },
+      { name: 'Bold', icon: 'type-bold', action: () => this.wrapSelectedText('**', '**') },
+      { name: 'Italic', icon: 'type-italic', action: () => this.wrapSelectedText('_', '_') },
+      { name: 'Underline', icon: 'type-underline', action: () => this.wrapSelectedText('<u>', '</u>') },
+      { name: 'Custom', icon: 'gear', action: () => this.showCustomDialog() }
+    ];
   }
 
   initialize() {
@@ -85,6 +95,7 @@
 
     this.setupShortcuts();
     this.setupHelpDialog();
+    this.setupCommandPalette();
   }
 
   wrapSelectedText(prefix, suffix) {
@@ -151,6 +162,91 @@
 
     this.helpButton.addEventListener('click', () => this.dialog.show());
   }
+
+  setupCommandPalette() {
+    // Create command palette dialog
+    this.commandPalette = document.createElement('sl-dialog');
+    this.commandPalette.label = 'Commands';
+    this.commandPalette.classList.add('command-palette');
+    
+    const searchInput = document.createElement('sl-input');
+    searchInput.placeholder = 'Search commands...';
+    searchInput.classList.add('command-search');
+    
+    const commandList = document.createElement('div');
+    commandList.classList.add('command-list');
+    
+    this.commandPalette.appendChild(searchInput);
+    this.commandPalette.appendChild(commandList);
+    document.body.appendChild(this.commandPalette);
+
+    // Add commands to the list
+    this.commands.forEach(cmd => {
+      const item = document.createElement('div');
+      item.classList.add('command-item');
+      item.innerHTML = `
+        <sl-icon name="${cmd.icon}"></sl-icon>
+        <span>${cmd.name}</span>
+      `;
+      
+      item.addEventListener('click', () => {
+        cmd.action();
+        this.commandPalette.hide();
+      });
+      
+      commandList.appendChild(item);
+    });
+
+    // Setup search functionality
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const items = commandList.querySelectorAll('.command-item');
+      
+      items.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = text.includes(query) ? 'flex' : 'none';
+      });
+    });
+
+    // Show command palette on forward slash
+    this.textarea.addEventListener('keydown', (e) => {
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        this.commandPalette.show();
+        searchInput.value = '';
+        searchInput.focus();
+      }
+    });
+  }
+
+  showCustomDialog() {
+    const dialog = document.createElement('sl-dialog');
+    dialog.label = 'Custom Formatting';
+    
+    dialog.innerHTML = `
+      <sl-input label="Prefix" id="prefix-input"></sl-input>
+      <sl-input label="Suffix" id="suffix-input"></sl-input>
+      <sl-button slot="footer" variant="primary">Apply</sl-button>
+      <sl-button slot="footer" variant="default">Cancel</sl-button>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    const [applyBtn, cancelBtn] = dialog.querySelectorAll('sl-button');
+    const prefixInput = dialog.querySelector('#prefix-input');
+    const suffixInput = dialog.querySelector('#suffix-input');
+    
+    applyBtn.addEventListener('click', () => {
+      this.wrapSelectedText(prefixInput.value, suffixInput.value);
+      dialog.hide();
+    });
+    
+    cancelBtn.addEventListener('click', () => dialog.hide());
+    
+    dialog.addEventListener('sl-after-hide', () => dialog.remove());
+    
+    dialog.show();
+  }
 }
 
 // Wait for both DOM content and WASM initialization
@@ -206,12 +302,38 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
             padding: 1rem;
             overflow-y: auto;
         }
+
+        .command-palette::part(panel) {
+            width: 300px;
+        }
+
+        .command-search {
+            margin-bottom: 1rem;
+            width: 100%;
+        }
+
+        .command-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .command-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+
+        .command-item:hover {
+            background: var(--sl-color-neutral-100);
+        }
     </style>
   <link rel="modulepreload" href="/terraphim-editor-57d10ccc6f387824.js" crossorigin=anonymous integrity="sha384-L0sAqQai/GKyJ1u3znvqFwgONAe5bfpmLCjOvTxoo+kuJzRCIcVoMHtj4BsxjPMw"><link rel="preload" href="/terraphim-editor-57d10ccc6f387824_bg.wasm" crossorigin=anonymous integrity="sha384-+9z6GTBohGYrIuzdtUgY1gDV2AwOvZGivqo3Obilp24LyIvpzJ8ncgU9VzqXuU6x" as="fetch" type="application/wasm"></head>
   <body>
     <div id="app"></div>
   
-<script type="module" nonce="YTS5km7hVZt9VIbtU5khPg==">
+<script type="module" nonce="xSOYwNqmbhc9XZHieqlbsw==">
 import init, * as bindings from '/terraphim-editor-57d10ccc6f387824.js';
 const wasm = await init({ module_or_path: '/terraphim-editor-57d10ccc6f387824_bg.wasm' });
 
