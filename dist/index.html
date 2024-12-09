@@ -8,6 +8,7 @@
       import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
       setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
     </script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/input/input.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
@@ -16,7 +17,7 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
-    <script nonce="ZQolbGWWGG1devLCHj7lSg==">window.shortcuts = [
+    <script nonce="kt7+W0USkOgAW0r+R8/G9g==">window.shortcuts = [
     {
       "name": "type-bold",
       "key": "ctrl+b",
@@ -54,7 +55,7 @@
     }
 ]; </script>
     <script>console.log("shortcuts.js loaded");</script>
-    <script nonce="L1UgIcbCA0EHwzSYxvKJlA==">class MarkdownEditor {
+    <script nonce="ko08pcQeZjk3ZiieAa2jaw==">class MarkdownEditor {
   constructor() {
     if (typeof shortcuts === 'undefined') {
       console.error('Shortcuts not loaded');
@@ -180,6 +181,9 @@
     this.commandPalette.appendChild(commandList);
     document.body.appendChild(this.commandPalette);
 
+    let selectedIndex = -1;
+    let visibleItems = [];
+
     // Add commands to the list
     this.commands.forEach(cmd => {
       const item = document.createElement('div');
@@ -197,7 +201,54 @@
       commandList.appendChild(item);
     });
 
-    // Setup search functionality
+    const updateSelection = () => {
+      visibleItems.forEach((item, index) => {
+        if (index === selectedIndex) {
+          item.classList.add('selected');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('selected');
+        }
+      });
+    };
+
+    // Setup search and keyboard navigation
+    searchInput.addEventListener('keydown', (e) => {
+      visibleItems = Array.from(commandList.querySelectorAll('.command-item:not([style*="display: none"])'));
+      
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          selectedIndex = Math.min(selectedIndex + 1, visibleItems.length - 1);
+          if (selectedIndex === -1 && visibleItems.length > 0) selectedIndex = 0;
+          updateSelection();
+          break;
+          
+        case 'ArrowUp':
+          e.preventDefault();
+          selectedIndex = Math.max(selectedIndex - 1, 0);
+          updateSelection();
+          break;
+          
+        case 'Enter':
+          e.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < visibleItems.length) {
+            visibleItems[selectedIndex].click();
+          }
+          break;
+          
+        case 'Escape':
+          e.preventDefault();
+          this.commandPalette.hide();
+          break;
+          
+        default:
+          selectedIndex = -1;
+          break;
+      }
+    });
+
+    // Setup search filtering
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
       const items = commandList.querySelectorAll('.command-item');
@@ -206,6 +257,9 @@
         const text = item.textContent.toLowerCase();
         item.style.display = text.includes(query) ? 'flex' : 'none';
       });
+      
+      selectedIndex = -1;
+      updateSelection();
     });
 
     // Show command palette on forward slash
@@ -215,7 +269,15 @@
         this.commandPalette.show();
         searchInput.value = '';
         searchInput.focus();
+        selectedIndex = -1;
+        updateSelection();
       }
+    });
+
+    // Reset selection when dialog is hidden
+    this.commandPalette.addEventListener('sl-after-hide', () => {
+      selectedIndex = -1;
+      updateSelection();
     });
   }
 
@@ -315,6 +377,7 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
         .command-list {
             max-height: 300px;
             overflow-y: auto;
+            padding: 0.5rem;
         }
 
         .command-item {
@@ -323,17 +386,35 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
             gap: 0.5rem;
             padding: 0.5rem;
             cursor: pointer;
+            border-radius: var(--sl-border-radius-medium);
         }
 
         .command-item:hover {
             background: var(--sl-color-neutral-100);
+        }
+
+        .command-item.selected {
+            background: var(--sl-color-primary-100);
+        }
+
+        .command-list {
+            scroll-behavior: smooth;
+        }
+
+        .command-item.selected {
+            background: var(--sl-color-primary-100);
+            position: relative;
+        }
+
+        .command-list {
+            user-select: none;
         }
     </style>
   <link rel="modulepreload" href="/terraphim-editor-57d10ccc6f387824.js" crossorigin=anonymous integrity="sha384-L0sAqQai/GKyJ1u3znvqFwgONAe5bfpmLCjOvTxoo+kuJzRCIcVoMHtj4BsxjPMw"><link rel="preload" href="/terraphim-editor-57d10ccc6f387824_bg.wasm" crossorigin=anonymous integrity="sha384-+9z6GTBohGYrIuzdtUgY1gDV2AwOvZGivqo3Obilp24LyIvpzJ8ncgU9VzqXuU6x" as="fetch" type="application/wasm"></head>
   <body>
     <div id="app"></div>
   
-<script type="module" nonce="xSOYwNqmbhc9XZHieqlbsw==">
+<script type="module" nonce="xcLrYMOET/kA+SqJg1QX7Q==">
 import init, * as bindings from '/terraphim-editor-57d10ccc6f387824.js';
 const wasm = await init({ module_or_path: '/terraphim-editor-57d10ccc6f387824_bg.wasm' });
 

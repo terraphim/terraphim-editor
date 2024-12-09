@@ -124,6 +124,9 @@ class MarkdownEditor {
     this.commandPalette.appendChild(commandList);
     document.body.appendChild(this.commandPalette);
 
+    let selectedIndex = -1;
+    let visibleItems = [];
+
     // Add commands to the list
     this.commands.forEach(cmd => {
       const item = document.createElement('div');
@@ -141,7 +144,54 @@ class MarkdownEditor {
       commandList.appendChild(item);
     });
 
-    // Setup search functionality
+    const updateSelection = () => {
+      visibleItems.forEach((item, index) => {
+        if (index === selectedIndex) {
+          item.classList.add('selected');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('selected');
+        }
+      });
+    };
+
+    // Setup search and keyboard navigation
+    searchInput.addEventListener('keydown', (e) => {
+      visibleItems = Array.from(commandList.querySelectorAll('.command-item:not([style*="display: none"])'));
+      
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          selectedIndex = Math.min(selectedIndex + 1, visibleItems.length - 1);
+          if (selectedIndex === -1 && visibleItems.length > 0) selectedIndex = 0;
+          updateSelection();
+          break;
+          
+        case 'ArrowUp':
+          e.preventDefault();
+          selectedIndex = Math.max(selectedIndex - 1, 0);
+          updateSelection();
+          break;
+          
+        case 'Enter':
+          e.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < visibleItems.length) {
+            visibleItems[selectedIndex].click();
+          }
+          break;
+          
+        case 'Escape':
+          e.preventDefault();
+          this.commandPalette.hide();
+          break;
+          
+        default:
+          selectedIndex = -1;
+          break;
+      }
+    });
+
+    // Setup search filtering
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
       const items = commandList.querySelectorAll('.command-item');
@@ -150,6 +200,9 @@ class MarkdownEditor {
         const text = item.textContent.toLowerCase();
         item.style.display = text.includes(query) ? 'flex' : 'none';
       });
+      
+      selectedIndex = -1;
+      updateSelection();
     });
 
     // Show command palette on forward slash
@@ -159,7 +212,15 @@ class MarkdownEditor {
         this.commandPalette.show();
         searchInput.value = '';
         searchInput.focus();
+        selectedIndex = -1;
+        updateSelection();
       }
+    });
+
+    // Reset selection when dialog is hidden
+    this.commandPalette.addEventListener('sl-after-hide', () => {
+      selectedIndex = -1;
+      updateSelection();
     });
   }
 
