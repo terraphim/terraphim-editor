@@ -8,11 +8,176 @@
       import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
       setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
     </script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
+    <script nonce="bZT1GvgZWWZOQkBjxXobNA==">window.shortcuts = [
+    {
+      "name": "type-bold",
+      "key": "ctrl+b",
+      "prefix": "**",
+      "suffix": "**",
+      "desc": "Bold text"
+    },
+    {
+      "name": "type-italic",
+      "key": "ctrl+i",
+      "prefix": "_",
+      "suffix": "_",
+      "desc": "Italic text"
+    },
+    {
+      "name": "code",
+      "key": "ctrl+k",
+      "prefix": "`",
+      "suffix": "`",
+      "desc": "Inline code"
+    },
+    {
+      "name": "link",
+      "key": "ctrl+l",
+      "prefix": "[",
+      "suffix": "](url)",
+      "desc": "Create link"
+    },
+    {
+      "name": "type-h1",
+      "key": "ctrl+h",
+      "prefix": "# ",
+      "suffix": "",
+      "desc": "Heading"
+    }
+]; </script>
+    <script>console.log("shortcuts.js loaded");</script>
+    <script nonce="8OkQSbClmyzkkrpwdLEm+Q==">class MarkdownEditor {
+  constructor() {
+    if (typeof shortcuts === 'undefined') {
+      console.error('Shortcuts not loaded');
+      this.shortcuts = [];
+    } else {
+      this.shortcuts = shortcuts;
+    }
+  }
+
+  initialize() {
+    // Get DOM elements after template is rendered
+    this.textarea = document.querySelector('.markdown-input');
+    this.toolbar = document.querySelector('#formatting-toolbar');
+    this.shortcutsList = document.querySelector('#shortcuts-list');
+    this.dialog = document.querySelector('.shortcuts-dialog');
+    this.helpButton = document.querySelector('#show-help');
+
+    // Check if elements exist
+    if (!this.textarea || !this.toolbar || !this.shortcutsList || !this.dialog || !this.helpButton) {
+      console.error('Required DOM elements not found');
+      return;
+    }
+
+    if (this.shortcuts.length === 0) {
+      console.error('No shortcuts available');
+      return;
+    }
+
+    this.setupShortcuts();
+    this.setupHelpDialog();
+  }
+
+  wrapSelectedText(prefix, suffix) {
+    const start = this.textarea.selectionStart;
+    const end = this.textarea.selectionEnd;
+    const text = this.textarea.value;
+    const before = text.substring(0, start);
+    const selection = text.substring(start, end);
+    const after = text.substring(end);
+    
+    const wrappedText = selection ? selection : 'text';
+    this.textarea.value = before + prefix + wrappedText + suffix + after;
+    
+    this.textarea.focus();
+    this.textarea.selectionStart = selection ? start + prefix.length : start + prefix.length;
+    this.textarea.selectionEnd = selection ? end + prefix.length : start + prefix.length + 4;
+    
+    this.textarea.dispatchEvent(new Event('input'));
+  }
+
+  setupShortcuts() {
+    // Create toolbar buttons
+    this.shortcuts.forEach(shortcut => {
+      const button = document.createElement('sl-tooltip');
+      button.setAttribute('content', shortcut.key);
+      
+      button.innerHTML = `
+        <sl-button size="small" variant="default">
+          <sl-icon name="${shortcut.name}"></sl-icon>
+        </sl-button>
+      `;
+      
+      button.querySelector('sl-button').addEventListener('click', () => {
+        this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
+      });
+      
+      this.toolbar.appendChild(button);
+    });
+
+    // Setup keyboard shortcuts
+    this.textarea.addEventListener('keydown', (e) => {
+      const key = `${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`;
+      const shortcut = this.shortcuts.find(s => s.key === key);
+      
+      if (shortcut) {
+        e.preventDefault();
+        this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
+      }
+    });
+  }
+
+  setupHelpDialog() {
+    // Create shortcut list items
+    this.shortcuts.forEach(shortcut => {
+      const item = document.createElement('div');
+      item.className = 'shortcut-item';
+      item.innerHTML = `
+        <sl-icon name="${shortcut.name}"></sl-icon>
+        <span class="shortcut-desc">${shortcut.desc}</span>
+        <sl-badge variant="neutral">${shortcut.key}</sl-badge>
+      `;
+      this.shortcutsList.appendChild(item);
+    });
+
+    this.helpButton.addEventListener('click', () => this.dialog.show());
+  }
+}
+
+// Wait for both DOM content and WASM initialization
+const initEditor = () => {
+  const checkElements = () => {
+    const required = [
+      '.markdown-input',
+      '#formatting-toolbar',
+      '#shortcuts-list',
+      '.shortcuts-dialog',
+      '#show-help'
+    ];
+
+    if (required.every(selector => document.querySelector(selector))) {
+      const editor = new MarkdownEditor();
+      editor.initialize();
+    } else {
+      // Check again in 100ms
+      setTimeout(checkElements, 100);
+    }
+  };
+
+  checkElements();
+};
+
+document.addEventListener('DOMContentLoaded', initEditor); </script>
+    <script>console.log("editor.js loaded");</script>
     <style>
         body {
             margin: 0;
@@ -26,42 +191,29 @@
             box-sizing: border-box;
         }
 
-        sl-split-panel {
-            height: calc(100vh - 40px);
-            border: 1px solid var(--sl-color-neutral-200);
-            border-radius: var(--sl-border-radius-medium);
-            --divider-width: 2px;
-        }
-
         .markdown-input {
             width: 100%;
-            height: 100%;
-            padding: 1rem;
+            height: calc(100% - 50px);
             border: none;
+            padding: 1rem;
             resize: none;
-            font-family: var(--sl-font-mono);
-            font-size: var(--sl-font-size-medium);
-            background: none;
+            font-family: monospace;
             outline: none;
-            box-sizing: border-box;
         }
 
         .markdown-preview {
-            width: 100%;
             height: 100%;
             padding: 1rem;
             overflow-y: auto;
-            background: var(--sl-color-neutral-50);
-            box-sizing: border-box;
         }
     </style>
-  <link rel="modulepreload" href="/terraphim-editor-948f96b0300f0373.js" crossorigin=anonymous integrity="sha384-nCSWfcX/OBygKVJhGgfzrBgxia3ZkYvqGUbXaxNDYfqJbXzkwiWWLiD6ZZ3V1uvv"><link rel="preload" href="/terraphim-editor-948f96b0300f0373_bg.wasm" crossorigin=anonymous integrity="sha384-bmNk4O4f3vsb677u3HDqTss7sPP2xLEMl7IiylCR+RSye/EXbXSxiH13ISW5XN/M" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/terraphim-editor-57d10ccc6f387824.js" crossorigin=anonymous integrity="sha384-L0sAqQai/GKyJ1u3znvqFwgONAe5bfpmLCjOvTxoo+kuJzRCIcVoMHtj4BsxjPMw"><link rel="preload" href="/terraphim-editor-57d10ccc6f387824_bg.wasm" crossorigin=anonymous integrity="sha384-+9z6GTBohGYrIuzdtUgY1gDV2AwOvZGivqo3Obilp24LyIvpzJ8ncgU9VzqXuU6x" as="fetch" type="application/wasm"></head>
   <body>
     <div id="app"></div>
   
-<script type="module" nonce="KQI+F1gEATvOrXo1BhAOgA==">
-import init, * as bindings from '/terraphim-editor-948f96b0300f0373.js';
-const wasm = await init({ module_or_path: '/terraphim-editor-948f96b0300f0373_bg.wasm' });
+<script type="module" nonce="+SSS3jW6GrfgxYeBDf6v+Q==">
+import init, * as bindings from '/terraphim-editor-57d10ccc6f387824.js';
+const wasm = await init({ module_or_path: '/terraphim-editor-57d10ccc6f387824_bg.wasm' });
 
 
 window.wasmBindings = bindings;

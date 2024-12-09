@@ -1,0 +1,37 @@
+window.shortcuts = [
+    {
+      "name": "type-bold",
+      "key": "ctrl+b",
+      "prefix": "**",
+      "suffix": "**",
+      "desc": "Bold text"
+    },
+    {
+      "name": "type-italic",
+      "key": "ctrl+i",
+      "prefix": "_",
+      "suffix": "_",
+      "desc": "Italic text"
+    },
+    {
+      "name": "code",
+      "key": "ctrl+k",
+      "prefix": "`",
+      "suffix": "`",
+      "desc": "Inline code"
+    },
+    {
+      "name": "link",
+      "key": "ctrl+l",
+      "prefix": "[",
+      "suffix": "](url)",
+      "desc": "Create link"
+    },
+    {
+      "name": "type-h1",
+      "key": "ctrl+h",
+      "prefix": "# ",
+      "suffix": "",
+      "desc": "Heading"
+    }
+]; 

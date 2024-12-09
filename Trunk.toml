@@ -9,4 +9,9 @@ port = 8080
 [[hooks]]
 stage = "build"
 command = "sh"
-command_arguments = ["-c", "cp pkg/* dist/"] 
+command_arguments = ["-c", "cp -r public/* dist/ && cp pkg/* dist/"]
+
+# Add proper MIME types
+[serve.static_file_headers]
+"**/*.js" = { "Content-Type" = "application/javascript" }
+"**/*.json" = { "Content-Type" = "application/json" }

@@ -2,18 +2,8 @@
   <sl-split-panel position="50">
     <div slot="start">
       <div class="toolbar">
-        <sl-button-group label="Formatting">
-          {% for shortcut in shortcuts %}
-          <sl-tooltip content="{{ shortcut.key }}">
-            <sl-button size="small" 
-                      data-key="{{ shortcut.key }}" 
-                      data-prefix="{{ shortcut.prefix }}" 
-                      data-suffix="{{ shortcut.suffix }}"
-                      variant="default">
-              <sl-icon name="{{ shortcut.name }}"></sl-icon>
-            </sl-button>
-          </sl-tooltip>
-          {% endfor %}
+        <sl-button-group label="Formatting" id="formatting-toolbar">
+          <!-- Buttons will be inserted dynamically -->
         </sl-button-group>
         <sl-divider vertical></sl-divider>
         <sl-button-group label="Help">
@@ -32,71 +22,10 @@
 
 <sl-dialog label="Markdown Shortcuts" class="shortcuts-dialog">
   <sl-divider></sl-divider>
-  {% for shortcut in shortcuts %}
-  <div class="shortcut-item">
-    <sl-icon name="{{ shortcut.name }}"></sl-icon>
-    <span class="shortcut-desc">{{ shortcut.desc }}</span>
-    <sl-badge variant="neutral">{{ shortcut.key }}</sl-badge>
+  <div id="shortcuts-list">
+    <!-- Shortcuts will be inserted dynamically -->
   </div>
-  {% endfor %}
 </sl-dialog>
-
-<script type="module">
-  function wrapSelectedText(textarea, prefix, suffix) {
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const before = text.substring(0, start);
-    const selection = text.substring(start, end);
-    const after = text.substring(end);
-    
-    const wrappedText = selection ? selection : 'text';
-    textarea.value = before + prefix + wrappedText + suffix + after;
-    
-    // Set cursor position
-    const newCursorPos = selection ? 
-      start + prefix.length + selection.length + suffix.length :
-      start + prefix.length + 4; // 4 is length of 'text'
-    
-    textarea.focus();
-    textarea.selectionStart = selection ? start + prefix.length : start + prefix.length;
-    textarea.selectionEnd = selection ? end + prefix.length : start + prefix.length + 4;
-    
-    textarea.dispatchEvent(new Event('input'));
-  }
-
-  const textarea = document.querySelector('.markdown-input');
-  const shortcuts = Array.from(document.querySelectorAll('sl-button[data-key]'))
-    .map(btn => ({
-      key: btn.dataset.key,
-      prefix: btn.dataset.prefix,
-      suffix: btn.dataset.suffix,
-      element: btn
-    }));
-
-  // Setup keyboard shortcuts
-  textarea.addEventListener('keydown', (e) => {
-    const key = `${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`;
-    const shortcut = shortcuts.find(s => s.key === key);
-    
-    if (shortcut) {
-      e.preventDefault();
-      wrapSelectedText(textarea, shortcut.prefix, shortcut.suffix);
-    }
-  });
-
-  // Setup toolbar buttons
-  shortcuts.forEach(shortcut => {
-    shortcut.element.addEventListener('click', () => {
-      wrapSelectedText(textarea, shortcut.prefix, shortcut.suffix);
-    });
-  });
-
-  // Setup help dialog
-  const dialog = document.querySelector('.shortcuts-dialog');
-  const helpButton = document.querySelector('#show-help');
-  helpButton.addEventListener('click', () => dialog.show());
-</script>
 
 <style>
   .toolbar {

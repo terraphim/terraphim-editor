@@ -8,11 +8,18 @@
       import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
       setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
     </script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
+    <link data-trunk rel="inline" href="public/js/shortcuts.js" />
+    <script>console.log("shortcuts.js loaded");</script>
+    <link data-trunk rel="inline" href="public/js/editor.js" />
+    <script>console.log("editor.js loaded");</script>
     <style>
         body {
             margin: 0;
@@ -26,33 +33,20 @@
             box-sizing: border-box;
         }
 
-        sl-split-panel {
-            height: calc(100vh - 40px);
-            border: 1px solid var(--sl-color-neutral-200);
-            border-radius: var(--sl-border-radius-medium);
-            --divider-width: 2px;
-        }
-
         .markdown-input {
             width: 100%;
-            height: 100%;
-            padding: 1rem;
+            height: calc(100% - 50px);
             border: none;
+            padding: 1rem;
             resize: none;
-            font-family: var(--sl-font-mono);
-            font-size: var(--sl-font-size-medium);
-            background: none;
+            font-family: monospace;
             outline: none;
-            box-sizing: border-box;
         }
 
         .markdown-preview {
-            width: 100%;
             height: 100%;
             padding: 1rem;
             overflow-y: auto;
-            background: var(--sl-color-neutral-50);
-            box-sizing: border-box;
         }
     </style>
   </head>
