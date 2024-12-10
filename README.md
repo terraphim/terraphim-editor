@@ -1,10 +1,18 @@
 # Terraphim Editor
 
-A WebAssembly project using Rust and Trunk.
+A WebAssembly-based Markdown editor built with Rust, [Shoelace](https://shoelace.style/) styles and no other dependencies. 
+Trunk is used for the build system
+
+## Features
+
+- Live Markdown preview
+- Pure Javascript for front end and WebAssembly implementation for rendering Markdown
+- Minimal external dependencies
+- Modern web components UI
 
 ## Prerequisites
 
-1. Install Rust (if you haven't already):
+1. Install Rust:
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
@@ -21,20 +29,46 @@ cargo install trunk
 
 ## Development
 
-To run the development server:
+Run the development server:
 
 ```bash
 trunk serve
 ```
 
-This will start a local server at `http://127.0.0.1:8080` by default.
+Visit `http://127.0.0.1:8080` in your browser.
+
+## Testing
+
+### Rust Tests
+Run the Rust unit tests:
+```bash
+cargo test
+```
+
+### Frontend Tests (Wasm)
+Run the frontend tests:
+```bash
+wasm-pack test --chrome
+```
 
 ## Building for Production
 
-To create a production build:
+Create a production build:
 
 ```bash
 trunk build --release
 ```
 
-The output will be in the `dist` directory. 
+The output will be in the `dist` directory.
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 

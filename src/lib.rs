@@ -80,4 +80,32 @@ fn setup_markdown_conversion(document: &Document) -> Result<(), JsValue> {
     handler.forget();
     
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_markdown_conversion() {
+        let input = "# Hello\n\nThis is a test";
+        let result = to_html_with_options(input, &Options::default());
+        assert!(result.is_ok());
+        let html = result.unwrap();
+        assert!(html.contains("<h1>Hello</h1>"));
+        assert!(html.contains("<p>This is a test</p>"));
+    }
+
+    #[test]
+    fn test_template_rendering() {
+        let template = EditorTemplate {
+            initial_content: "# Test".to_string(),
+            initial_preview: "<h1>Test</h1>".to_string(),
+        };
+        let result = template.render();
+        assert!(result.is_ok());
+        let html = result.unwrap();
+        assert!(html.contains("# Test"));
+        assert!(html.contains("<h1>Test</h1>"));
+    }
 } 
