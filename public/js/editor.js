@@ -113,19 +113,16 @@ class MarkdownEditor {
     this.commandPalette.label = 'Commands';
     this.commandPalette.classList.add('command-palette');
     
-    const searchInput = document.createElement('sl-input');
-    searchInput.placeholder = 'Search commands...';
-    searchInput.classList.add('command-search');
-    
     const commandList = document.createElement('div');
     commandList.classList.add('command-list');
+    commandList.setAttribute('tabindex', '0');
     
-    this.commandPalette.appendChild(searchInput);
     this.commandPalette.appendChild(commandList);
     document.body.appendChild(this.commandPalette);
 
     let selectedIndex = -1;
     let visibleItems = [];
+    let slashPosition = null;
 
     // Add commands to the list
     this.commands.forEach(cmd => {
@@ -137,6 +134,13 @@ class MarkdownEditor {
       `;
       
       item.addEventListener('click', () => {
+        // Remove the slash when selecting a command
+        if (slashPosition !== null) {
+          const text = this.textarea.value;
+          this.textarea.value = text.substring(0, slashPosition) + text.substring(slashPosition + 1);
+          this.textarea.selectionStart = slashPosition;
+          this.textarea.selectionEnd = slashPosition;
+        }
         cmd.action();
         this.commandPalette.hide();
       });
@@ -145,6 +149,7 @@ class MarkdownEditor {
     });
 
     const updateSelection = () => {
+      visibleItems = Array.from(commandList.querySelectorAll('.command-item'));
       visibleItems.forEach((item, index) => {
         if (index === selectedIndex) {
           item.classList.add('selected');
@@ -155,10 +160,8 @@ class MarkdownEditor {
       });
     };
 
-    // Setup search and keyboard navigation
-    searchInput.addEventListener('keydown', (e) => {
-      visibleItems = Array.from(commandList.querySelectorAll('.command-item:not([style*="display: none"])'));
-      
+    // Setup keyboard navigation
+    commandList.addEventListener('keydown', (e) => {
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
@@ -184,43 +187,45 @@ class MarkdownEditor {
           e.preventDefault();
           this.commandPalette.hide();
           break;
-          
-        default:
-          selectedIndex = -1;
-          break;
       }
-    });
-
-    // Setup search filtering
-    searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      const items = commandList.querySelectorAll('.command-item');
-      
-      items.forEach(item => {
-        const text = item.textContent.toLowerCase();
-        item.style.display = text.includes(query) ? 'flex' : 'none';
-      });
-      
-      selectedIndex = -1;
-      updateSelection();
     });
 
     // Show command palette on forward slash
     this.textarea.addEventListener('keydown', (e) => {
       if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
+        // Insert the slash character
+        const start = this.textarea.selectionStart;
+        const text = this.textarea.value;
+        this.textarea.value = text.substring(0, start) + '/' + text.substring(this.textarea.selectionEnd);
+        this.textarea.selectionStart = start + 1;
+        this.textarea.selectionEnd = start + 1;
+        
+        // Store the position of the slash
+        slashPosition = start;
+        
         this.commandPalette.show();
-        searchInput.value = '';
-        searchInput.focus();
-        selectedIndex = -1;
-        updateSelection();
       }
+    });
+
+    // Focus management when dialog opens
+    this.commandPalette.addEventListener('sl-after-show', () => {
+      selectedIndex = 0;
+      updateSelection();
+      setTimeout(() => {
+        commandList.focus();
+      }, 100);
     });
 
     // Reset selection when dialog is hidden
     this.commandPalette.addEventListener('sl-after-hide', () => {
       selectedIndex = -1;
       updateSelection();
+      this.textarea.focus();
+      // Reset slash position when dialog is closed with Escape
+      if (e.key === 'Escape') {
+        slashPosition = null;
+      }
     });
   }
 

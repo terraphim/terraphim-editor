@@ -21,6 +21,7 @@
     <script>console.log("shortcuts.js loaded");</script>
     <link data-trunk rel="inline" href="public/js/editor.js" />
     <script>console.log("editor.js loaded");</script>
+    <!-- <script data-trunk src="public/js/alert.js"></script> -->
     <style>
         body {
             margin: 0;
@@ -50,8 +51,13 @@
             overflow-y: auto;
         }
 
+        .command-palette::part(base) {
+            --sl-focus-ring: none;
+        }
+
         .command-palette::part(panel) {
             width: 300px;
+            outline: none;
         }
 
         .command-search {
@@ -63,6 +69,9 @@
             max-height: 300px;
             overflow-y: auto;
             padding: 0.5rem;
+            scroll-behavior: smooth;
+            user-select: none;
+            outline: none;
         }
 
         .command-item {
@@ -82,17 +91,8 @@
             background: var(--sl-color-primary-100);
         }
 
-        .command-list {
-            scroll-behavior: smooth;
-        }
-
-        .command-item.selected {
-            background: var(--sl-color-primary-100);
-            position: relative;
-        }
-
-        .command-list {
-            user-select: none;
+        .command-list:focus {
+            box-shadow: none;
         }
     </style>
   </head>
