@@ -162,10 +162,34 @@ class MarkdownEditor {
     const positionCommandMenu = () => {
       const caretPosition = getCaretCoordinates(this.textarea, this.textarea.selectionStart);
       const textareaRect = this.textarea.getBoundingClientRect();
+      const menuRect = commandMenu.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
       
-      commandMenu.style.position = 'absolute';
-      commandMenu.style.left = `${textareaRect.left + caretPosition.left}px`;
-      commandMenu.style.top = `${textareaRect.top + caretPosition.top + 20}px`;
+      // Calculate initial position
+      let left = textareaRect.left + caretPosition.left;
+      let top = textareaRect.top + caretPosition.top + 20;
+      
+      // Adjust horizontal position if menu would go outside viewport
+      if (left + menuRect.width > viewportWidth) {
+        left = viewportWidth - menuRect.width - 10; // 10px padding from right edge
+      }
+      if (left < 0) {
+        left = 10; // 10px padding from left edge
+      }
+      
+      // Adjust vertical position if menu would go outside viewport
+      if (top + menuRect.height > viewportHeight) {
+        // Show menu above the caret if there's not enough space below
+        top = textareaRect.top + caretPosition.top - menuRect.height - 10;
+      }
+      if (top < 0) {
+        top = 10; // 10px padding from top edge
+      }
+      
+      commandMenu.style.position = 'fixed';
+      commandMenu.style.left = `${left}px`;
+      commandMenu.style.top = `${top}px`;
     };
 
     const showCommandMenu = () => {

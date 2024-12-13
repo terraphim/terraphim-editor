@@ -17,7 +17,7 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
-    <script nonce="G8pG1bKHGvr0b6g9q7hS1A==">window.shortcuts = [
+    <script nonce="UFwPUnv7w5O298XglVUSTA==">window.shortcuts = [
     {
       "name": "type-bold",
       "key": "ctrl+b",
@@ -55,7 +55,7 @@
     }
 ]; </script>
     <script>console.log("shortcuts.js loaded");</script>
-    <script nonce="yAZ9Pt6m/UGEUEO8C2bU5w==">class MarkdownEditor {
+    <script nonce="xk79VKmscVV4Tw4Ah0UisQ==">class MarkdownEditor {
   constructor() {
     if (typeof shortcuts === 'undefined') {
       console.error('Shortcuts not loaded');
@@ -219,10 +219,34 @@
     const positionCommandMenu = () => {
       const caretPosition = getCaretCoordinates(this.textarea, this.textarea.selectionStart);
       const textareaRect = this.textarea.getBoundingClientRect();
+      const menuRect = commandMenu.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
       
-      commandMenu.style.position = 'absolute';
-      commandMenu.style.left = `${textareaRect.left + caretPosition.left}px`;
-      commandMenu.style.top = `${textareaRect.top + caretPosition.top + 20}px`;
+      // Calculate initial position
+      let left = textareaRect.left + caretPosition.left;
+      let top = textareaRect.top + caretPosition.top + 20;
+      
+      // Adjust horizontal position if menu would go outside viewport
+      if (left + menuRect.width > viewportWidth) {
+        left = viewportWidth - menuRect.width - 10; // 10px padding from right edge
+      }
+      if (left < 0) {
+        left = 10; // 10px padding from left edge
+      }
+      
+      // Adjust vertical position if menu would go outside viewport
+      if (top + menuRect.height > viewportHeight) {
+        // Show menu above the caret if there's not enough space below
+        top = textareaRect.top + caretPosition.top - menuRect.height - 10;
+      }
+      if (top < 0) {
+        top = 10; // 10px padding from top edge
+      }
+      
+      commandMenu.style.position = 'fixed';
+      commandMenu.style.left = `${left}px`;
+      commandMenu.style.top = `${top}px`;
     };
 
     const showCommandMenu = () => {
@@ -466,7 +490,7 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
   <body>
     <div id="app"></div>
   
-<script type="module" nonce="d6aqpc+Ts2tG9b8M4GXcCA==">
+<script type="module" nonce="3K0ROs/E2uOnbV/CpIN4tg==">
 import init, * as bindings from '/terraphim-editor-aa8a598878494e06.js';
 const wasm = await init({ module_or_path: '/terraphim-editor-aa8a598878494e06_bg.wasm' });
 
