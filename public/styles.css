@@ -5,6 +5,41 @@ body {
 }
 
 #app {
-    max-width: 1200px;
-    margin: 0 auto;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+} 
+
+.command-menu {
+  position: absolute;
+  background: white;
+  border: 1px solid var(--sl-color-neutral-200);
+  border-radius: var(--sl-border-radius-medium);
+  box-shadow: var(--sl-shadow-medium);
+  width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.command-list {
+  padding: 0.5rem;
+}
+
+.command-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: var(--sl-border-radius-small);
+}
+
+.command-item:hover,
+.command-item.selected {
+  background: var(--sl-color-primary-100);
+}
+
+.command-item sl-icon {
+  color: var(--sl-color-neutral-600);
 } 

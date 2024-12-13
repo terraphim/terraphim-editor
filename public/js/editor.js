@@ -108,17 +108,17 @@ class MarkdownEditor {
   }
 
   setupCommandPalette() {
-    // Create command palette dialog
-    this.commandPalette = document.createElement('sl-dialog');
-    this.commandPalette.label = 'Commands';
-    this.commandPalette.classList.add('command-palette');
+    // Create inline command menu
+    const commandMenu = document.createElement('div');
+    commandMenu.classList.add('command-menu');
+    commandMenu.style.display = 'none';
+    commandMenu.setAttribute('tabindex', '0');
     
     const commandList = document.createElement('div');
     commandList.classList.add('command-list');
-    commandList.setAttribute('tabindex', '0');
     
-    this.commandPalette.appendChild(commandList);
-    document.body.appendChild(this.commandPalette);
+    commandMenu.appendChild(commandList);
+    document.body.appendChild(commandMenu);
 
     let selectedIndex = -1;
     let visibleItems = [];
@@ -134,7 +134,6 @@ class MarkdownEditor {
       `;
       
       item.addEventListener('click', () => {
-        // Remove the slash when selecting a command
         if (slashPosition !== null) {
           const text = this.textarea.value;
           this.textarea.value = text.substring(0, slashPosition) + text.substring(slashPosition + 1);
@@ -142,7 +141,7 @@ class MarkdownEditor {
           this.textarea.selectionEnd = slashPosition;
         }
         cmd.action();
-        this.commandPalette.hide();
+        hideCommandMenu();
       });
       
       commandList.appendChild(item);
@@ -160,8 +159,32 @@ class MarkdownEditor {
       });
     };
 
-    // Setup keyboard navigation
-    commandList.addEventListener('keydown', (e) => {
+    const positionCommandMenu = () => {
+      const caretPosition = getCaretCoordinates(this.textarea, this.textarea.selectionStart);
+      const textareaRect = this.textarea.getBoundingClientRect();
+      
+      commandMenu.style.position = 'absolute';
+      commandMenu.style.left = `${textareaRect.left + caretPosition.left}px`;
+      commandMenu.style.top = `${textareaRect.top + caretPosition.top + 20}px`;
+    };
+
+    const showCommandMenu = () => {
+      commandMenu.style.display = 'block';
+      selectedIndex = 0;
+      updateSelection();
+      positionCommandMenu();
+      commandMenu.focus();
+    };
+
+    const hideCommandMenu = () => {
+      commandMenu.style.display = 'none';
+      selectedIndex = -1;
+      slashPosition = null;
+      this.textarea.focus();
+    };
+
+    // Keyboard navigation
+    commandMenu.addEventListener('keydown', (e) => {
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
@@ -185,48 +208,37 @@ class MarkdownEditor {
           
         case 'Escape':
           e.preventDefault();
-          this.commandPalette.hide();
+          hideCommandMenu();
           break;
       }
     });
 
-    // Show command palette on forward slash
+    // Show command menu on forward slash
     this.textarea.addEventListener('keydown', (e) => {
       if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        // Insert the slash character
         const start = this.textarea.selectionStart;
         const text = this.textarea.value;
         this.textarea.value = text.substring(0, start) + '/' + text.substring(this.textarea.selectionEnd);
         this.textarea.selectionStart = start + 1;
         this.textarea.selectionEnd = start + 1;
         
-        // Store the position of the slash
         slashPosition = start;
-        
-        this.commandPalette.show();
+        showCommandMenu();
       }
     });
 
-    // Focus management when dialog opens
-    this.commandPalette.addEventListener('sl-after-show', () => {
-      selectedIndex = 0;
-      updateSelection();
-      setTimeout(() => {
-        commandList.focus();
-      }, 100);
-    });
-
-    // Reset selection when dialog is hidden
-    this.commandPalette.addEventListener('sl-after-hide', () => {
-      selectedIndex = -1;
-      updateSelection();
-      this.textarea.focus();
-      // Reset slash position when dialog is closed with Escape
-      if (e.key === 'Escape') {
-        slashPosition = null;
+    // Hide menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!commandMenu.contains(e.target) && e.target !== this.textarea) {
+        hideCommandMenu();
       }
     });
+
+    // Update menu position on scroll or resize
+    window.addEventListener('scroll', positionCommandMenu);
+    window.addEventListener('resize', positionCommandMenu);
+    this.textarea.addEventListener('scroll', positionCommandMenu);
   }
 
   showCustomDialog() {
@@ -257,6 +269,41 @@ class MarkdownEditor {
     
     dialog.show();
   }
+}
+
+function getCaretCoordinates(element, position) {
+  const div = document.createElement('div');
+  const styles = getComputedStyle(element);
+  const properties = [
+    'direction', 'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize',
+    'fontSizeAdjust', 'lineHeight', 'fontFamily', 'textAlign', 'textTransform',
+    'textIndent', 'textDecoration', 'letterSpacing', 'wordSpacing'
+  ];
+
+  div.style.position = 'absolute';
+  div.style.visibility = 'hidden';
+  div.style.whiteSpace = 'pre-wrap';
+
+  properties.forEach(prop => {
+    div.style[prop] = styles[prop];
+  });
+
+  div.textContent = element.value.substring(0, position);
+  const span = document.createElement('span');
+  span.textContent = element.value.substring(position) || '.';
+  div.appendChild(span);
+  
+  document.body.appendChild(div);
+  const coordinates = {
+    top: span.offsetTop,
+    left: span.offsetLeft
+  };
+  document.body.removeChild(div);
+  
+  return coordinates;
 }
 
 // Wait for both DOM content and WASM initialization
