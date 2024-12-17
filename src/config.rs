@@ -10,6 +10,7 @@ pub struct ShortcutConfig {
     pub desc: String,
 }
 
+
 #[derive(Deserialize, Serialize)]
 pub struct EditorConfig {
     pub shortcuts: Vec<ShortcutConfig>,
@@ -58,3 +59,16 @@ impl Default for EditorConfig {
         EditorConfig { shortcuts }
     }
 } 
+
+// tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default() {
+        let config = EditorConfig::default();
+        assert_eq!(config.shortcuts.len(), 5);
+    }
+}
+
