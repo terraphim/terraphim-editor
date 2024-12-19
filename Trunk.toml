@@ -6,11 +6,6 @@ dist = "dist"
 address = "127.0.0.1"
 port = 8080
 
-[[hooks]]
-stage = "build"
-command = "sh"
-command_arguments = ["-c", "bash scripts/build-dist.sh"]
-
 # Add proper MIME types
 [serve.static_file_headers]
 "**/*.js" = { "Content-Type" = "application/javascript" }
