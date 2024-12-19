@@ -19,6 +19,8 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
     <link data-trunk rel="inline" href="public/js/shortcuts.js" />
     <script>console.log("shortcuts.js loaded");</script>
+    <link data-trunk rel="inline" href="public/js/config.js" />
+    <script>console.log("config.js loaded");</script>
     <link data-trunk rel="inline" href="public/js/editor.js" />
     <script>console.log("editor.js loaded");</script>
     <!-- <script data-trunk src="public/js/alert.js"></script> -->
@@ -53,16 +55,23 @@
 
         .command-palette::part(base) {
             --sl-focus-ring: none;
+            background: var(--sl-color-neutral-0);
+            border: 1px solid var(--sl-color-neutral-200);
+            border-radius: var(--sl-border-radius-medium);
+            box-shadow: var(--sl-shadow-large);
         }
 
         .command-palette::part(panel) {
             width: 300px;
             outline: none;
+            background: var(--sl-color-neutral-0);
+            padding: 0.5rem;
         }
 
         .command-search {
             margin-bottom: 1rem;
             width: 100%;
+            background: var(--sl-color-neutral-0);
         }
 
         .command-list {
@@ -72,6 +81,7 @@
             scroll-behavior: smooth;
             user-select: none;
             outline: none;
+            background: var(--sl-color-neutral-0);
         }
 
         .command-item {
@@ -81,6 +91,8 @@
             padding: 0.5rem;
             cursor: pointer;
             border-radius: var(--sl-border-radius-medium);
+            background: transparent;
+            transition: background-color 0.2s ease;
         }
 
         .command-item:hover {

@@ -1,21 +1,11 @@
 class MarkdownEditor {
-  constructor() {
-    if (typeof shortcuts === 'undefined') {
-      console.error('Shortcuts not loaded');
-      this.shortcuts = [];
-    } else {
-      this.shortcuts = shortcuts;
-    }
-    this.commandPalette = null;
-    this.commands = [
-      { name: 'Heading 1', icon: 'type-h1', action: () => this.wrapSelectedText('# ', '') },
-      { name: 'Heading 2', icon: 'type-h2', action: () => this.wrapSelectedText('## ', '') },
-      { name: 'Heading 3', icon: 'type-h3', action: () => this.wrapSelectedText('### ', '') },
-      { name: 'Bold', icon: 'type-bold', action: () => this.wrapSelectedText('**', '**') },
-      { name: 'Italic', icon: 'type-italic', action: () => this.wrapSelectedText('_', '_') },
-      { name: 'Underline', icon: 'type-underline', action: () => this.wrapSelectedText('<u>', '</u>') },
-      { name: 'Custom', icon: 'gear', action: () => this.showCustomDialog() }
-    ];
+  constructor(config) {
+    this.config = config;
+    this.shortcuts = config.shortcuts;
+    this.commands = config.commands.map(cmd => ({
+      ...cmd,
+      action: () => this.wrapSelectedText(cmd.prefix, cmd.suffix)
+    }));
   }
 
   initialize() {
@@ -330,7 +320,7 @@ function getCaretCoordinates(element, position) {
   return coordinates;
 }
 
-// Wait for both DOM content and WASM initialization
+// Update the initEditor function
 const initEditor = () => {
   const checkElements = () => {
     const required = [
@@ -342,7 +332,12 @@ const initEditor = () => {
     ];
 
     if (required.every(selector => document.querySelector(selector))) {
-      const editor = new MarkdownEditor();
+      // Pass the EditorConfig when initializing
+      const editor = new MarkdownEditor(window.EditorConfig || {
+        shortcuts: [],
+        commands: [],
+        styles: {}
+      });
       editor.initialize();
     } else {
       // Check again in 100ms
@@ -353,4 +348,11 @@ const initEditor = () => {
   checkElements();
 };
 
-document.addEventListener('DOMContentLoaded', initEditor); 
+// Make sure config is loaded before initializing
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.EditorConfig) {
+    initEditor();
+  } else {
+    console.error('Editor configuration not found. Make sure config.js is loaded before editor.js');
+  }
+}); 

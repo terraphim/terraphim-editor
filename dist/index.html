@@ -17,7 +17,7 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
-    <script nonce="F0vmDZ8cKtqxayQ5LSlTmw==">window.shortcuts = [
+    <script nonce="SomnvQYY4G22JnInjjjc5g==">window.shortcuts = [
     {
       "name": "type-bold",
       "key": "ctrl+b",
@@ -55,24 +55,93 @@
     }
 ]; </script>
     <script>console.log("shortcuts.js loaded");</script>
-    <script nonce="agR9iZMpsbr0+1uBaMO80w==">class MarkdownEditor {
-  constructor() {
-    if (typeof shortcuts === 'undefined') {
-      console.error('Shortcuts not loaded');
-      this.shortcuts = [];
-    } else {
-      this.shortcuts = shortcuts;
+    <script nonce="rFcpHCeEDvesgyuzLe2JSA==">const EditorConfig = {
+  shortcuts: [
+    {
+      name: "type-bold",
+      key: "ctrl+b",
+      prefix: "**",
+      suffix: "**",
+      desc: "Bold text"
+    },
+    {
+      name: "type-italic",
+      key: "ctrl+i",
+      prefix: "_",
+      suffix: "_",
+      desc: "Italic text"
+    },
+    {
+      name: "code",
+      key: "ctrl+k",
+      prefix: "`",
+      suffix: "`",
+      desc: "Inline code"
+    },
+    {
+      name: "link",
+      key: "ctrl+l",
+      prefix: "[",
+      suffix: "](url)",
+      desc: "Create link"
+    },
+    {
+      name: "type-h1",
+      key: "ctrl+h",
+      prefix: "# ",
+      suffix: "",
+      desc: "Heading"
     }
-    this.commandPalette = null;
-    this.commands = [
-      { name: 'Heading 1', icon: 'type-h1', action: () => this.wrapSelectedText('# ', '') },
-      { name: 'Heading 2', icon: 'type-h2', action: () => this.wrapSelectedText('## ', '') },
-      { name: 'Heading 3', icon: 'type-h3', action: () => this.wrapSelectedText('### ', '') },
-      { name: 'Bold', icon: 'type-bold', action: () => this.wrapSelectedText('**', '**') },
-      { name: 'Italic', icon: 'type-italic', action: () => this.wrapSelectedText('_', '_') },
-      { name: 'Underline', icon: 'type-underline', action: () => this.wrapSelectedText('<u>', '</u>') },
-      { name: 'Custom', icon: 'gear', action: () => this.showCustomDialog() }
-    ];
+  ],
+  
+  commands: [
+    { name: 'Heading 1', icon: 'type-h1', prefix: '# ', suffix: '' },
+    { name: 'Heading 2', icon: 'type-h2', prefix: '## ', suffix: '' },
+    { name: 'Heading 3', icon: 'type-h3', prefix: '### ', suffix: '' },
+    { name: 'Bold', icon: 'type-bold', prefix: '**', suffix: '**' },
+    { name: 'Italic', icon: 'type-italic', prefix: '_', suffix: '_' },
+    { name: 'Underline', icon: 'type-underline', prefix: '<u>', suffix: '</u>' }
+  ],
+
+  initialContent: `# Welcome to Markdown Editor!
+
+This is a simple markdown editor built with:
+- Rust
+- WebAssembly
+- Shoelace components
+
+## Try it out
+1. Edit this text on the left
+2. See the preview on the right
+3. Use **bold**, *italic*, or \`code\` formatting
+
+---
+
+> Made with ❤️ using Rust and WASM`,
+
+  styles: {
+    editorWidth: '100%',
+    editorHeight: '100%',
+    previewWidth: '100%',
+    previewHeight: '100%',
+    defaultSplitPosition: 50
+  }
+};
+
+if (typeof exports !== 'undefined') {
+  exports.EditorConfig = EditorConfig;
+} else {
+  window.EditorConfig = EditorConfig;
+} </script>
+    <script>console.log("config.js loaded");</script>
+    <script nonce="IWIOsNENHVcoGssHuiDRJA==">class MarkdownEditor {
+  constructor(config) {
+    this.config = config;
+    this.shortcuts = config.shortcuts;
+    this.commands = config.commands.map(cmd => ({
+      ...cmd,
+      action: () => this.wrapSelectedText(cmd.prefix, cmd.suffix)
+    }));
   }
 
   initialize() {
@@ -387,7 +456,7 @@ function getCaretCoordinates(element, position) {
   return coordinates;
 }
 
-// Wait for both DOM content and WASM initialization
+// Update the initEditor function
 const initEditor = () => {
   const checkElements = () => {
     const required = [
@@ -399,7 +468,12 @@ const initEditor = () => {
     ];
 
     if (required.every(selector => document.querySelector(selector))) {
-      const editor = new MarkdownEditor();
+      // Pass the EditorConfig when initializing
+      const editor = new MarkdownEditor(window.EditorConfig || {
+        shortcuts: [],
+        commands: [],
+        styles: {}
+      });
       editor.initialize();
     } else {
       // Check again in 100ms
@@ -410,7 +484,14 @@ const initEditor = () => {
   checkElements();
 };
 
-document.addEventListener('DOMContentLoaded', initEditor); </script>
+// Make sure config is loaded before initializing
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.EditorConfig) {
+    initEditor();
+  } else {
+    console.error('Editor configuration not found. Make sure config.js is loaded before editor.js');
+  }
+}); </script>
     <script>console.log("editor.js loaded");</script>
     <!-- <script data-trunk src="public/js/alert.js"></script> -->
     <style>
@@ -444,16 +525,23 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
 
         .command-palette::part(base) {
             --sl-focus-ring: none;
+            background: var(--sl-color-neutral-0);
+            border: 1px solid var(--sl-color-neutral-200);
+            border-radius: var(--sl-border-radius-medium);
+            box-shadow: var(--sl-shadow-large);
         }
 
         .command-palette::part(panel) {
             width: 300px;
             outline: none;
+            background: var(--sl-color-neutral-0);
+            padding: 0.5rem;
         }
 
         .command-search {
             margin-bottom: 1rem;
             width: 100%;
+            background: var(--sl-color-neutral-0);
         }
 
         .command-list {
@@ -463,6 +551,7 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
             scroll-behavior: smooth;
             user-select: none;
             outline: none;
+            background: var(--sl-color-neutral-0);
         }
 
         .command-item {
@@ -472,6 +561,8 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
             padding: 0.5rem;
             cursor: pointer;
             border-radius: var(--sl-border-radius-medium);
+            background: transparent;
+            transition: background-color 0.2s ease;
         }
 
         .command-item:hover {
@@ -490,7 +581,7 @@ document.addEventListener('DOMContentLoaded', initEditor); </script>
   <body>
     <div id="app"></div>
   
-<script type="module" nonce="fgduYGv8tpXv6hfF6bv5HA==">
+<script type="module" nonce="Bc+b4B0ac/O0zuVorKcU+Q==">
 import init, * as bindings from '/terraphim-editor-aa8a598878494e06.js';
 const wasm = await init({ module_or_path: '/terraphim-editor-aa8a598878494e06_bg.wasm' });
 
