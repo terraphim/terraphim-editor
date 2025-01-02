@@ -1,0 +1,48 @@
+.terraphim-editor {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #fff;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.terraphim-editor .toolbar {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    gap: 4px;
+}
+
+.terraphim-editor .editor-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.terraphim-editor .markdown-input {
+    flex: 1;
+    padding: 16px;
+    border: none;
+    resize: none;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    outline: none;
+    background: #f8f9fa;
+}
+
+.terraphim-editor .markdown-preview {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    border-left: 1px solid #eee;
+}
+
+.terraphim-editor sl-button::part(base) {
+    font-size: 14px;
+}
+
+.terraphim-editor sl-tooltip {
+    --sl-tooltip-arrow-size: 8px;
+} 

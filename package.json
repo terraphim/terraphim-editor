@@ -1,0 +1,32 @@
+{
+  "name": "terraphim-editor",
+  "version": "1.0.0",
+  "type": "module",
+  "files": [
+    "dist",
+    "wasm",
+    "js",
+    "css"
+  ],
+  "main": "./js/terraphim-editor.umd.cjs",
+  "module": "./js/terraphim-editor.js",
+  "exports": {
+    ".": {
+      "import": "./js/terraphim-editor.js",
+      "require": "./js/terraphim-editor.umd.cjs"
+    },
+    "./style.css": "./css/terraphim-editor.css",
+    "./wasm": "./wasm/terraphim_editor_bg.wasm",
+    "./wasm.js": "./js/terraphim_editor.js"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.10",
+    "vite-plugin-wasm": "^3.3.0",
+    "vite-plugin-top-level-await": "^1.4.1"
+  }
+} 

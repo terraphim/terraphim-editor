@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Terraphim Editor Example</title>
+    <!-- Shoelace Components -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+    <script type="module">
+        import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+        setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+    </script>
+    <!-- Required Shoelace components -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/input/input.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
+
+    <!-- Load configuration first -->
+    <script src="js/config.js"></script>
+
+    <!-- Terraphim Editor styles -->
+    <link rel="stylesheet" href="css/terraphim-editor.css">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .editor-container {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 40px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        .editor-container > div {
+            flex: 1;
+            min-height: 0;
+        }
+        .terraphim-editor {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .editor-area {
+            flex: 1;
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Terraphim Editor Examples</h1>
+
+    <h2>ES Module Example</h2>
+    <div id="editor-container-esm" class="editor-container"></div>
+
+    <h2>UMD Example</h2>
+    <div id="editor-container-umd" class="editor-container"></div>
+
+    <!-- ES Module Example -->
+    <script type="module">
+        import init from './js/terraphim_editor.js';
+        import { TeraphimEditor } from './js/terraphim-editor.js';
+
+        async function initializeESMEditor() {
+            try {
+                await init('./wasm/terraphim_editor_bg.wasm');
+                const editor = new TeraphimEditor({
+                    container: document.getElementById('editor-container-esm'),
+                    config: window.EditorConfig
+                });
+                await editor.initialize();
+            } catch (error) {
+                console.error('Failed to initialize ESM editor:', error);
+            }
+        }
+
+        initializeESMEditor();
+    </script>
+
+    <!-- UMD Example -->
+    <script src="js/terraphim-editor.umd.cjs"></script>
+    <script src="js/umd-example.js"></script>
+</body>
+</html> 
