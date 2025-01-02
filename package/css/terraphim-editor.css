@@ -2,47 +2,48 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #fff;
-    border-radius: 4px;
-    overflow: hidden;
+    width: 100%;
 }
 
-.terraphim-editor .toolbar {
+.editor-toolbar {
     padding: 8px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    gap: 4px;
+    border-bottom: 1px solid #ccc;
 }
 
-.terraphim-editor .editor-area {
-    flex: 1;
+.editor-content {
     display: flex;
-    overflow: hidden;
-}
-
-.terraphim-editor .markdown-input {
     flex: 1;
+    gap: 16px;
     padding: 16px;
-    border: none;
+}
+
+.editor-input,
+.editor-preview {
+    flex: 1;
+    min-height: 0;
+}
+
+.markdown-input {
+    width: 100%;
+    height: 100%;
     resize: none;
-    font-family: monospace;
-    font-size: 14px;
-    line-height: 1.6;
-    outline: none;
-    background: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px;
 }
 
-.terraphim-editor .markdown-preview {
-    flex: 1;
-    padding: 16px;
+.markdown-preview {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px;
     overflow-y: auto;
-    border-left: 1px solid #eee;
 }
 
-.terraphim-editor sl-button::part(base) {
-    font-size: 14px;
+#formatting-toolbar {
+    display: flex;
+    gap: 8px;
 }
 
-.terraphim-editor sl-tooltip {
-    --sl-tooltip-arrow-size: 8px;
+#formatting-toolbar sl-button::part(base) {
+    padding: 4px 8px;
 } 

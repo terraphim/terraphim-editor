@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Teraphim Editor - UMD Example</title>
+  <!-- Load Shoelace components -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+  <script type="module">
+    import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+    setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+  </script>
+  <link rel="stylesheet" href="css/terraphim-editor.css">
+</head>
+<body>
+  <h1>Teraphim Editor - UMD Example</h1>
+  <div id="editor-container" class="editor-container"></div>
+
+  <!-- Load configuration first -->
+  <script src="js/config.js"></script>
+  <script src="js/terraphim-editor.umd.cjs"></script>
+  <script>
+    async function initializeEditor() {
+      if (!window.TeraphimEditor) {
+        console.error('TeraphimEditor not loaded!');
+        return;
+      }
+
+      try {
+        const editor = new TeraphimEditor({
+          container: document.getElementById('editor-container'),
+          config: window.EditorConfig
+        });
+        await editor.initialize();
+      } catch (error) {
+        console.error('Failed to initialize editor:', error);
+      }
+    }
+
+    window.addEventListener('load', initializeEditor);
+  </script>
+</body>
+</html>

@@ -1,0 +1,480 @@
+(function (exports) {
+    'use strict';
+
+    var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
+    let wasm;
+
+    const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
+
+    if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); }
+    let cachedUint8ArrayMemory0 = null;
+
+    function getUint8ArrayMemory0() {
+        if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
+            cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
+        }
+        return cachedUint8ArrayMemory0;
+    }
+
+    function getStringFromWasm0(ptr, len) {
+        ptr = ptr >>> 0;
+        return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+    }
+
+    function addToExternrefTable0(obj) {
+        const idx = wasm.__externref_table_alloc();
+        wasm.__wbindgen_export_2.set(idx, obj);
+        return idx;
+    }
+
+    function handleError(f, args) {
+        try {
+            return f.apply(this, args);
+        } catch (e) {
+            const idx = addToExternrefTable0(e);
+            wasm.__wbindgen_exn_store(idx);
+        }
+    }
+
+    function isLikeNone(x) {
+        return x === undefined || x === null;
+    }
+
+    let WASM_VECTOR_LEN = 0;
+
+    const cachedTextEncoder = (typeof TextEncoder !== 'undefined' ? new TextEncoder('utf-8') : { encode: () => { throw Error('TextEncoder not available') } } );
+
+    const encodeString = (typeof cachedTextEncoder.encodeInto === 'function'
+        ? function (arg, view) {
+        return cachedTextEncoder.encodeInto(arg, view);
+    }
+        : function (arg, view) {
+        const buf = cachedTextEncoder.encode(arg);
+        view.set(buf);
+        return {
+            read: arg.length,
+            written: buf.length
+        };
+    });
+
+    function passStringToWasm0(arg, malloc, realloc) {
+
+        if (realloc === undefined) {
+            const buf = cachedTextEncoder.encode(arg);
+            const ptr = malloc(buf.length, 1) >>> 0;
+            getUint8ArrayMemory0().subarray(ptr, ptr + buf.length).set(buf);
+            WASM_VECTOR_LEN = buf.length;
+            return ptr;
+        }
+
+        let len = arg.length;
+        let ptr = malloc(len, 1) >>> 0;
+
+        const mem = getUint8ArrayMemory0();
+
+        let offset = 0;
+
+        for (; offset < len; offset++) {
+            const code = arg.charCodeAt(offset);
+            if (code > 0x7F) break;
+            mem[ptr + offset] = code;
+        }
+
+        if (offset !== len) {
+            if (offset !== 0) {
+                arg = arg.slice(offset);
+            }
+            ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
+            const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
+            const ret = encodeString(arg, view);
+
+            offset += ret.written;
+            ptr = realloc(ptr, len, offset, 1) >>> 0;
+        }
+
+        WASM_VECTOR_LEN = offset;
+        return ptr;
+    }
+
+    let cachedDataViewMemory0 = null;
+
+    function getDataViewMemory0() {
+        if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+            cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+        }
+        return cachedDataViewMemory0;
+    }
+
+    const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
+        ? { register: () => {}, unregister: () => {} }
+        : new FinalizationRegistry(state => {
+        wasm.__wbindgen_export_6.get(state.dtor)(state.a, state.b);
+    });
+
+    function makeMutClosure(arg0, arg1, dtor, f) {
+        const state = { a: arg0, b: arg1, cnt: 1, dtor };
+        const real = (...args) => {
+            // First up with a closure we increment the internal reference
+            // count. This ensures that the Rust closure environment won't
+            // be deallocated while we're invoking it.
+            state.cnt++;
+            const a = state.a;
+            state.a = 0;
+            try {
+                return f(a, state.b, ...args);
+            } finally {
+                if (--state.cnt === 0) {
+                    wasm.__wbindgen_export_6.get(state.dtor)(a, state.b);
+                    CLOSURE_DTORS.unregister(state);
+                } else {
+                    state.a = a;
+                }
+            }
+        };
+        real.original = state;
+        CLOSURE_DTORS.register(real, state, state);
+        return real;
+    }
+
+    function __wbg_adapter_18(arg0, arg1, arg2) {
+        wasm.closure2_externref_shim(arg0, arg1, arg2);
+    }
+
+    async function __wbg_load(module, imports) {
+        if (typeof Response === 'function' && module instanceof Response) {
+            if (typeof WebAssembly.instantiateStreaming === 'function') {
+                try {
+                    return await WebAssembly.instantiateStreaming(module, imports);
+
+                } catch (e) {
+                    if (module.headers.get('Content-Type') != 'application/wasm') {
+                        console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
+
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+
+            const bytes = await module.arrayBuffer();
+            return await WebAssembly.instantiate(bytes, imports);
+
+        } else {
+            const instance = await WebAssembly.instantiate(module, imports);
+
+            if (instance instanceof WebAssembly.Instance) {
+                return { instance, module };
+
+            } else {
+                return instance;
+            }
+        }
+    }
+
+    function __wbg_get_imports() {
+        const imports = {};
+        imports.wbg = {};
+        imports.wbg.__wbg_addEventListener_b9481c2c2cab6047 = function() { return handleError(function (arg0, arg1, arg2, arg3) {
+            arg0.addEventListener(getStringFromWasm0(arg1, arg2), arg3);
+        }, arguments) };
+        imports.wbg.__wbg_call_b0d8e36992d9900d = function() { return handleError(function (arg0, arg1) {
+            const ret = arg0.call(arg1);
+            return ret;
+        }, arguments) };
+        imports.wbg.__wbg_document_f11bc4f7c03e1745 = function(arg0) {
+            const ret = arg0.document;
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        };
+        imports.wbg.__wbg_error_7534b8e9a36f1ab4 = function(arg0, arg1) {
+            let deferred0_0;
+            let deferred0_1;
+            try {
+                deferred0_0 = arg0;
+                deferred0_1 = arg1;
+                console.error(getStringFromWasm0(arg0, arg1));
+            } finally {
+                wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
+            }
+        };
+        imports.wbg.__wbg_getElementById_dcc9f1f3cfdca0bc = function(arg0, arg1, arg2) {
+            const ret = arg0.getElementById(getStringFromWasm0(arg1, arg2));
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        };
+        imports.wbg.__wbg_instanceof_HtmlDivElement_5853ec72f4da3564 = function(arg0) {
+            let result;
+            try {
+                result = arg0 instanceof HTMLDivElement;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        };
+        imports.wbg.__wbg_instanceof_HtmlTextAreaElement_88347fc269bfb466 = function(arg0) {
+            let result;
+            try {
+                result = arg0 instanceof HTMLTextAreaElement;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        };
+        imports.wbg.__wbg_instanceof_Window_d2514c6a7ee7ba60 = function(arg0) {
+            let result;
+            try {
+                result = arg0 instanceof Window;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        };
+        imports.wbg.__wbg_new_8a6f238a6ece86ea = function() {
+            const ret = new Error();
+            return ret;
+        };
+        imports.wbg.__wbg_newnoargs_fd9e4bf8be2bc16d = function(arg0, arg1) {
+            const ret = new Function(getStringFromWasm0(arg0, arg1));
+            return ret;
+        };
+        imports.wbg.__wbg_querySelector_7b4362006fdeda68 = function() { return handleError(function (arg0, arg1, arg2) {
+            const ret = arg0.querySelector(getStringFromWasm0(arg1, arg2));
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        }, arguments) };
+        imports.wbg.__wbg_setinnerHTML_2d75307ba8832258 = function(arg0, arg1, arg2) {
+            arg0.innerHTML = getStringFromWasm0(arg1, arg2);
+        };
+        imports.wbg.__wbg_stack_0ed75d68575b0f3c = function(arg0, arg1) {
+            const ret = arg1.stack;
+            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        };
+        imports.wbg.__wbg_static_accessor_GLOBAL_0be7472e492ad3e3 = function() {
+            const ret = typeof global === 'undefined' ? null : global;
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        };
+        imports.wbg.__wbg_static_accessor_GLOBAL_THIS_1a6eb482d12c9bfb = function() {
+            const ret = typeof globalThis === 'undefined' ? null : globalThis;
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        };
+        imports.wbg.__wbg_static_accessor_SELF_1dc398a895c82351 = function() {
+            const ret = typeof self === 'undefined' ? null : self;
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        };
+        imports.wbg.__wbg_static_accessor_WINDOW_ae1c80c7eea8d64a = function() {
+            const ret = typeof window === 'undefined' ? null : window;
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        };
+        imports.wbg.__wbg_target_a8fe593e7ee79c21 = function(arg0) {
+            const ret = arg0.target;
+            return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
+        };
+        imports.wbg.__wbg_value_a8b8b65bc31190d6 = function(arg0, arg1) {
+            const ret = arg1.value;
+            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        };
+        imports.wbg.__wbindgen_cb_drop = function(arg0) {
+            const obj = arg0.original;
+            if (obj.cnt-- == 1) {
+                obj.a = 0;
+                return true;
+            }
+            const ret = false;
+            return ret;
+        };
+        imports.wbg.__wbindgen_closure_wrapper30 = function(arg0, arg1, arg2) {
+            const ret = makeMutClosure(arg0, arg1, 3, __wbg_adapter_18);
+            return ret;
+        };
+        imports.wbg.__wbindgen_init_externref_table = function() {
+            const table = wasm.__wbindgen_export_2;
+            const offset = table.grow(4);
+            table.set(0, undefined);
+            table.set(offset + 0, undefined);
+            table.set(offset + 1, null);
+            table.set(offset + 2, true);
+            table.set(offset + 3, false);
+        };
+        imports.wbg.__wbindgen_is_undefined = function(arg0) {
+            const ret = arg0 === undefined;
+            return ret;
+        };
+        imports.wbg.__wbindgen_rethrow = function(arg0) {
+            throw arg0;
+        };
+        imports.wbg.__wbindgen_string_new = function(arg0, arg1) {
+            const ret = getStringFromWasm0(arg0, arg1);
+            return ret;
+        };
+        imports.wbg.__wbindgen_throw = function(arg0, arg1) {
+            throw new Error(getStringFromWasm0(arg0, arg1));
+        };
+
+        return imports;
+    }
+
+    function __wbg_finalize_init(instance, module) {
+        wasm = instance.exports;
+        __wbg_init.__wbindgen_wasm_module = module;
+        cachedDataViewMemory0 = null;
+        cachedUint8ArrayMemory0 = null;
+
+
+        wasm.__wbindgen_start();
+        return wasm;
+    }
+
+    async function __wbg_init(module_or_path) {
+        if (wasm !== undefined) return wasm;
+
+
+        if (typeof module_or_path !== 'undefined') {
+            if (Object.getPrototypeOf(module_or_path) === Object.prototype) {
+                ({module_or_path} = module_or_path);
+            } else {
+                console.warn('using deprecated parameters for the initialization function; pass a single object instead');
+            }
+        }
+
+        if (typeof module_or_path === 'undefined') {
+            module_or_path = new URL("terraphim_editor_bg.wasm", (_documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === 'SCRIPT' && _documentCurrentScript.src || new URL('js/terraphim-editor.iife.js', document.baseURI).href));
+        }
+        const imports = __wbg_get_imports();
+
+        if (typeof module_or_path === 'string' || (typeof Request === 'function' && module_or_path instanceof Request) || (typeof URL === 'function' && module_or_path instanceof URL)) {
+            module_or_path = fetch(module_or_path);
+        }
+
+        const { instance, module } = await __wbg_load(await module_or_path, imports);
+
+        return __wbg_finalize_init(instance, module);
+    }
+
+    class TeraphimEditor {
+        constructor(options) {
+            console.log('TeraphimEditor constructor called with options:', options);
+            
+            if (!options || !options.container) {
+                throw new Error('Container element is required');
+            }
+            
+            this.container = options.container;
+            this.config = options.config || {};
+            
+            // Add an 'app' id to the container temporarily for WASM initialization
+            this.originalId = this.container.id;
+            this.container.id = 'app';
+            
+            console.log('Container element:', this.container);
+            console.log('Configuration:', this.config);
+        }
+
+        async initialize() {
+            try {
+                console.log('Initializing editor...');
+                
+                // Initialize WASM
+                console.log('Initializing WASM...');
+                await __wbg_init({
+                    module_or_path: './wasm/terraphim_editor_bg.wasm'
+                });
+                console.log('WASM initialized successfully');
+
+                // Verify container exists
+                if (!this.container) {
+                    throw new Error('Container element not found');
+                }
+
+                console.log('Creating editor structure...');
+                // Create editor structure directly in the provided container
+                this.container.innerHTML = `
+                <div class="terraphim-editor">
+                    <div class="editor-toolbar">
+                        <div id="formatting-toolbar"></div>
+                    </div>
+                    <div class="editor-content">
+                        <div class="editor-input">
+                            <textarea class="markdown-input">${this.config.initialContent || ''}</textarea>
+                        </div>
+                        <div class="editor-preview markdown-preview"></div>
+                    </div>
+                </div>
+            `;
+
+                // Restore the original ID after WASM initialization
+                this.container.id = this.originalId;
+
+                console.log('Setting up editor components...');
+                await this.setupEditor();
+                console.log('Editor initialized successfully');
+            } catch (error) {
+                // Restore the original ID even if initialization fails
+                this.container.id = this.originalId;
+                console.error('Editor initialization failed:', error);
+                throw error;
+            }
+        }
+
+        async setupEditor() {
+            const input = this.container.querySelector('.markdown-input');
+            const preview = this.container.querySelector('.markdown-preview');
+            const toolbar = this.container.querySelector('#formatting-toolbar');
+
+            if (!input || !preview || !toolbar) {
+                throw new Error('Required editor elements not found');
+            }
+
+            // Setup toolbar
+            if (this.config.commands) {
+                this.config.commands.forEach(command => {
+                    const button = document.createElement('sl-button');
+                    button.innerHTML = `<sl-icon name="${command.icon}"></sl-icon>`;
+                    button.setAttribute('size', 'small');
+                    button.setAttribute('title', command.name);
+                    toolbar.appendChild(button);
+                });
+            }
+
+            // Setup input handlers
+            input.addEventListener('input', () => {
+                // Add your markdown processing here
+                preview.innerHTML = input.value;
+            });
+
+            // Initial content
+            if (this.config.initialContent) {
+                input.value = this.config.initialContent;
+                preview.innerHTML = this.config.initialContent;
+            }
+        }
+
+        // Cleanup method to ensure proper teardown
+        destroy() {
+            if (this.container) {
+                // Restore original ID if needed
+                if (this.originalId) {
+                    this.container.id = this.originalId;
+                }
+                // Clear the container
+                this.container.innerHTML = '';
+            }
+        }
+    }
+
+    // For IIFE and UMD builds
+    if (typeof window !== 'undefined') {
+        window.TeraphimEditor = TeraphimEditor;
+    }
+
+    exports.TeraphimEditor = TeraphimEditor;
+
+    Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+
+})(this.TeraphimEditor = this.TeraphimEditor || {});
+//# sourceMappingURL=terraphim-editor.iife.js.map

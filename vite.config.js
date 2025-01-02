@@ -10,7 +10,6 @@ try {
   mkdirSync('public/js', { recursive: true });
   copyFileSync('pkg/terraphim_editor_bg.wasm', 'public/wasm/terraphim_editor_bg.wasm');
   copyFileSync('pkg/terraphim_editor.js', 'public/js/terraphim_editor.js');
-  copyFileSync('public/js/umd-example.js', 'package/js/umd-example.js');
 } catch (error) {
   console.error('Error copying files:', error);
 }
@@ -26,32 +25,35 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'public/js/terraphim-editor.js'),
       name: 'TeraphimEditor',
-      formats: ['es', 'umd'],
-      fileName: (format) => format === 'umd' ? 'terraphim-editor.umd.cjs' : 'terraphim-editor.js'
+      formats: ['es', 'umd', 'iife'],
+      fileName: (format) => {
+        if (format === 'umd') return 'js/terraphim-editor.umd.cjs'
+        if (format === 'iife') return 'js/terraphim-editor.iife.js'
+        return 'js/terraphim-editor.js'
+      }
     },
     rollupOptions: {
       output: {
-        dir: 'package',
-        assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'style.css') return 'css/terraphim-editor.css';
-          if (assetInfo.name.endsWith('.wasm')) return 'wasm/[name][extname]';
-          return 'js/[name][extname]';
+        extend: true,
+        name: 'TeraphimEditor',
+        format: 'iife',
+        exports: 'named',
+        globals: {
+          TeraphimEditor: 'TeraphimEditor'
         },
-        entryFileNames: 'js/[name].[format].js'
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'style.css') return 'css/terraphim-editor.css'
+          if (assetInfo.name.endsWith('.wasm')) return 'wasm/[name][extname]'
+          return 'js/[name][extname]'
+        }
       }
     },
     sourcemap: true,
-    minify: 'esbuild'
+    minify: false // Disable minification for debugging
   },
   preview: {
     port: 5173,
-    open: 'example.html',
+    open: 'example-iife.html',
     root: resolve(__dirname, 'package')
-  },
-  server: {
-    fs: {
-      strict: false,
-      allow: ['..']
-    }
   }
 })

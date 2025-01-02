@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Teraphim Editor - ESM Example</title>
+  <!-- Load Shoelace components -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+  <script type="module">
+    import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+    setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+  </script>
+  <link rel="stylesheet" href="css/terraphim-editor.css">
+</head>
+<body>
+  <h1>Teraphim Editor - ESM Example</h1>
+  <div id="editor-container" class="editor-container"></div>
+
+  <!-- Load configuration first -->
+  <script src="js/config.js"></script>
+  
+  <script type="module">
+    import { TeraphimEditor } from './js/terraphim-editor.js';
+    
+    async function initializeEditor() {
+      try {
+        const editor = new TeraphimEditor({
+          container: document.getElementById('editor-container'),
+          config: window.EditorConfig
+        });
+        await editor.initialize();
+      } catch (error) {
+        console.error('Failed to initialize editor:', error);
+      }
+    }
+
+    initializeEditor();
+  </script>
+</body>
+</html>

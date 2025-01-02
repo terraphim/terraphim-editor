@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Teraphim Editor - IIFE Example</title>
+  <!-- Load Shoelace components -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+  <script type="module">
+    import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+    setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+  </script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+  
+  <link rel="stylesheet" href="css/terraphim-editor.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .editor-container {
+      width: 100%;
+      height: 600px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+    .error {
+      color: red;
+      padding: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Teraphim Editor - IIFE Example</h1>
+  <div id="editor-container" class="editor-container"></div>
+
+  <!-- Load configuration first -->
+  <script src="js/config.js"></script>
+  <!-- Load the IIFE bundle -->
+  <script src="js/terraphim-editor.iife.js"></script>
+  <script>
+    async function initializeEditor() {
+      console.log('Initializing editor...');
+      console.log('TeraphimEditor available:', !!window.TeraphimEditor);
+      console.log('EditorConfig available:', !!window.EditorConfig);
+
+      try {
+        if (!window.TeraphimEditor) {
+          throw new Error('TeraphimEditor not loaded');
+        }
+
+        if (!window.EditorConfig) {
+          throw new Error('Editor configuration not loaded');
+        }
+
+        const container = document.getElementById('editor-container');
+        if (!container) {
+          throw new Error('Editor container not found');
+        }
+
+        console.log('Creating editor instance...');
+        const editor = new window.TeraphimEditor({
+          container: container,
+          config: window.EditorConfig
+        });
+
+        console.log('Initializing editor instance...');
+        await editor.initialize();
+        console.log('Editor initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize editor:', error);
+        const container = document.getElementById('editor-container');
+        if (container) {
+          container.innerHTML = `<div class="error">Failed to initialize editor: ${error.message}</div>`;
+        }
+      }
+    }
+
+    // Initialize when everything is loaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeEditor);
+    } else {
+      initializeEditor();
+    }
+  </script>
+</body>
+</html>
