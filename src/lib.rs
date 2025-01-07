@@ -35,7 +35,7 @@ pub fn run() -> Result<(), JsValue> {
         .ok_or_else(|| JsValue::from_str("No window found"))?;
     let document: Document = window.document()
         .ok_or_else(|| JsValue::from_str("No document found"))?;
-    let app: Element = document.get_element_by_id("app")
+    let app: Element = document.get_element_by_id("editor-container")
         .ok_or_else(|| JsValue::from_str("No element with id 'app' found"))?;
 
     let initial_preview = to_html_with_options(INITIAL_MARKDOWN, &Options::default())
