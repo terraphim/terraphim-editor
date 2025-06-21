@@ -3,16 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <title>Terraphim Editor - UMD Example</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
   <link rel="stylesheet" href="dist/css/terraphim-editor.css">
+  <script type="module">
+    import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+    setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+  </script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/input/input.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
   <script src="dist/js/terraphim-editor.umd.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: system-ui, sans-serif;
+    }
+    #editor {
+      height: 80vh;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+  </style>
 </head>
 <body>
+  <h1>Terraphim Editor - UMD Example</h1>
   <div id="editor"></div>
   <script>
     async function initEditor() {
       const editor = new TeraphimEditor({
         container: document.getElementById('editor'),
-        wasmUrl: './dist/wasm/terraphim_editor_bg.wasm'
+        wasmUrl: './dist/wasm/terraphim_editor_bg.wasm',
+        config: {
+          initialContent: '# Hello from UMD!\n\nThis is the **UMD** module example.\n\n- Edit me\n- See live preview\n- Try `code` formatting',
+          commands: [
+            { name: 'Bold', icon: 'type-bold', prefix: '**', suffix: '**' },
+            { name: 'Italic', icon: 'type-italic', prefix: '_', suffix: '_' },
+            { name: 'Code', icon: 'code', prefix: '`', suffix: '`' }
+          ]
+        }
       });
       
       await editor.initialize();

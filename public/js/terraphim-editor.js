@@ -1,4 +1,4 @@
-import init, { run, render_markdown } from './terraphim_editor.js';
+import init, { render_markdown } from './terraphim_editor.js';
 
 class TeraphimEditor {
     constructor(options) {
@@ -19,16 +19,14 @@ class TeraphimEditor {
     async initialize() {
         try {
             console.log('Initializing editor...');
-            
-            // Initialize WASM with the correct URL
-            console.log('Initializing WASM from:', this.wasmUrl);
-            await init(this.wasmUrl);
 
-            // Ensure a single editor-container exists inside provided container
+            // Insert the placeholder element *before* loading WASM so the
+            // Rust `#[wasm_bindgen(start)]` function can find it.
             this.container.innerHTML = `<div id="editor-container"></div>`;
 
-            // Call into WASM to render the editor UI
-            run();
+            // Initialize WASM; the start function will render the template.
+            console.log('Initializing WASM from:', this.wasmUrl);
+            await init(this.wasmUrl);
 
             console.log('WASM rendered editor template');
 
