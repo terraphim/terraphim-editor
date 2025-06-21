@@ -36,7 +36,7 @@ pub fn run() -> Result<(), JsValue> {
     let document: Document = window.document()
         .ok_or_else(|| JsValue::from_str("No document found"))?;
     let app: Element = document.get_element_by_id("editor-container")
-        .ok_or_else(|| JsValue::from_str("No element with id 'app' found"))?;
+        .ok_or_else(|| JsValue::from_str("No element with id 'editor-container' found"))?;
 
     let initial_preview = to_html_with_options(INITIAL_MARKDOWN, &Options::default())
         .map_err(|e| JsValue::from_str(&format!("Failed to convert markdown: {}", e)))?;
@@ -80,6 +80,12 @@ fn setup_markdown_conversion(document: &Document) -> Result<(), JsValue> {
     handler.forget();
     
     Ok(())
+}
+
+#[wasm_bindgen]
+pub fn render_markdown(input: &str) -> Result<String, JsValue> {
+    to_html_with_options(input, &Options::default())
+        .map_err(|e| JsValue::from_str(&format!("Failed to convert markdown: {}", e)))
 }
 
 #[cfg(test)]

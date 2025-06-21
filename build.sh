@@ -17,6 +17,7 @@ mkdir -p package/dist/{js,css,wasm}
 cp -r dist/* package/dist/
 cp -r public/wasm/* package/dist/wasm/
 cp -r public/js/config.js package/dist/js/
+cp -r public/css/terraphim-editor.css package/dist/css/
 cp README.md LICENSE package/
 
 # Extract version from Cargo.toml

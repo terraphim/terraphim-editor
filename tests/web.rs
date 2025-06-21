@@ -40,7 +40,7 @@ fn test_editor_initialization() {
     
     // Create test container
     let app = document.create_element("div").unwrap();
-    app.set_id("app");
+    app.set_id("editor-container");
     document.body().unwrap().append_child(&app).unwrap();
     
     // Initialize the editor
@@ -61,7 +61,7 @@ fn test_markdown_conversion() {
     
     // Initialize editor
     let app = document.create_element("div").unwrap();
-    app.set_id("app");
+    app.set_id("editor-container");
     document.body().unwrap().append_child(&app).unwrap();
     terraphim_editor::run().expect("Editor should initialize");
     
@@ -96,7 +96,7 @@ fn bench_markdown_conversion_in_browser() {
     
     // Initialize editor
     let app = document.create_element("div").unwrap();
-    app.set_id("app");
+    app.set_id("editor-container");
     document.body().unwrap().append_child(&app).unwrap();
     terraphim_editor::run().expect("Editor should initialize");
     
