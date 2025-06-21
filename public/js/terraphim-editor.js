@@ -1,4 +1,4 @@
-import init, { Editor } from './terraphim_editor.js';
+import init, { run } from './terraphim_editor.js';
 
 class TeraphimEditor {
     constructor(options) {
@@ -10,6 +10,7 @@ class TeraphimEditor {
         
         this.container = options.container;
         this.config = options.config || {};
+        this.wasmUrl = options.wasmUrl || '/wasm/terraphim_editor_bg.wasm';
         
         // Ensure the container has an ID for WASM to reference
         if (!this.container.id) {
@@ -24,17 +25,10 @@ class TeraphimEditor {
         try {
             console.log('Initializing editor...');
             
-            // Initialize WASM
-            console.log('Initializing WASM...');
-            await init();
+            // Initialize WASM with the correct URL
+            console.log('Initializing WASM from:', this.wasmUrl);
+            await init(this.wasmUrl);
             
-            // Create WASM editor instance
-            this.editor = new Editor(this.container.id);
-            await this.editor.init();
-            
-            console.log('WASM initialized successfully');
-
-            console.log('Creating editor structure...');
             // Create editor structure directly in the provided container
             this.container.innerHTML = `
                 <div class="terraphim-editor">
@@ -50,6 +44,9 @@ class TeraphimEditor {
                 </div>
             `;
 
+            // Initialize WASM editor
+            run();
+            
             console.log('Setting up editor components...');
             await this.setupEditor();
             console.log('Editor initialized successfully');
@@ -82,20 +79,17 @@ class TeraphimEditor {
         // Setup input handlers
         input.addEventListener('input', () => {
             // Use WASM to render markdown
-            this.editor.render_markdown(input.value);
+            run();
         });
 
         // Initial content
         if (this.config.initialContent) {
             input.value = this.config.initialContent;
-            this.editor.render_markdown(this.config.initialContent);
+            run();
         }
     }
 
     destroy() {
-        if (this.editor) {
-            // Add any necessary WASM cleanup here
-        }
         if (this.container) {
             this.container.innerHTML = '';
         }

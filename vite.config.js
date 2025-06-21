@@ -20,40 +20,42 @@ export default defineConfig({
     topLevelAwait()
   ],
   build: {
-    outDir: 'package',
+    outDir: 'dist',
     target: 'esnext',
     lib: {
       entry: resolve(__dirname, 'public/js/terraphim-editor.js'),
       name: 'TeraphimEditor',
       formats: ['es', 'umd', 'iife'],
       fileName: (format) => {
-        if (format === 'umd') return 'js/terraphim-editor.umd.cjs'
-        if (format === 'iife') return 'js/terraphim-editor.iife.js'
-        return 'js/terraphim-editor.js'
+        switch (format) {
+          case 'es':
+            return 'js/terraphim-editor.mjs'
+          case 'umd':
+            return 'js/terraphim-editor.umd.js'
+          case 'iife':
+            return 'js/terraphim-editor.iife.js'
+          default:
+            return 'js/terraphim-editor.js'
+        }
       }
     },
     rollupOptions: {
+      external: ['./config.js'],
       output: {
-        extend: true,
-        name: 'TeraphimEditor',
-        format: 'iife',
-        exports: 'named',
         globals: {
-          TeraphimEditor: 'TeraphimEditor'
+          './config.js': 'TeraphimConfig'
         },
         assetFileNames: (assetInfo) => {
           if (assetInfo.name === 'style.css') return 'css/terraphim-editor.css'
           if (assetInfo.name.endsWith('.wasm')) return 'wasm/[name][extname]'
-          return 'js/[name][extname]'
+          return '[ext]/[name][extname]'
         }
       }
     },
     sourcemap: true,
-    minify: false // Disable minification for debugging
+    minify: 'esbuild'
   },
-  preview: {
-    port: 5173,
-    open: 'example-iife.html',
-    root: resolve(__dirname, 'package')
+  optimizeDeps: {
+    exclude: ['./config.js']
   }
 })

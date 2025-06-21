@@ -1,16 +1,12 @@
 {
   "name": "terraphim-editor",
-  "version": "1.0.0",
-  "type": "module",
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "version": "0.1.0",
+  "description": "WebAssembly-based Markdown editor component built with Rust",
   "main": "./dist/js/terraphim-editor.umd.js",
   "module": "./dist/js/terraphim-editor.mjs",
   "unpkg": "./dist/js/terraphim-editor.iife.js",
   "types": "./dist/js/terraphim-editor.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
   "exports": {
     ".": {
       "types": "./dist/js/terraphim-editor.d.ts",
@@ -20,18 +16,7 @@
     },
     "./style.css": "./dist/css/terraphim-editor.css"
   },
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "prepublishOnly": "npm run build"
-  },
-  "devDependencies": {
-    "vite": "^5.0.10",
-    "vite-plugin-wasm": "^3.3.0",
-    "vite-plugin-top-level-await": "^1.4.1"
-  },
   "peerDependencies": {
     "@shoelace-style/shoelace": "^2.12.0"
   }
-} 
+}
