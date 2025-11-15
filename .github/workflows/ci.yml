@@ -63,6 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-wasm
     strategy:
+      fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
     steps:
@@ -91,8 +92,17 @@ jobs:
           mkdir -p public/wasm public/js
           cp pkg/terraphim_editor_bg.wasm public/wasm/
           cp pkg/terraphim_editor.js public/js/
+          ls -la public/wasm/ public/js/terraphim_editor.js
+
+      - name: Verify WASM files
+        run: |
+          test -f public/wasm/terraphim_editor_bg.wasm || (echo "WASM file missing!" && exit 1)
+          test -f public/js/terraphim_editor.js || (echo "JS file missing!" && exit 1)
+          echo "✓ WASM files present"
 
       - name: Run Playwright tests
+        env:
+          CI: true
         run: npx playwright test --project=${{ matrix.browser }}
 
       - name: Upload test results

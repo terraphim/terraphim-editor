@@ -82,9 +82,10 @@ npm run test:e2e:ui
 
 ### Test Coverage
 
-- ✅ **46 automated tests** covering all functionality
+- ✅ **49 automated tests** covering all functionality (47 E2E + 2 Rust)
 - ✅ **3 browser engines** (Chromium, Firefox, WebKit)
 - ✅ **All 3 UI variants** (Shoelace, Vanilla, Web Awesome)
+- ✅ **Dynamic script loading** tested and verified
 - ✅ **CI/CD pipeline** with GitHub Actions
 
 📖 **[Read the Testing Guide](TESTING.md)** for detailed documentation

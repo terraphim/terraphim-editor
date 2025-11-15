@@ -63,7 +63,8 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://127.0.0.1:8080',
     reuseExistingServer: !process.env.CI,
-    stdout: 'ignore',
+    timeout: 120 * 1000,
+    stdout: 'pipe',
     stderr: 'pipe',
   },
 });
