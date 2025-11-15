@@ -62,17 +62,32 @@ Visit `http://127.0.0.1:8080` in your browser.
 
 ## Testing
 
-### Rust Tests
-Run the Rust unit tests:
+Terraphim Editor has comprehensive test coverage including unit tests, integration tests, and end-to-end tests for all three style variants.
+
+### Quick Start
+
 ```bash
-cargo test
+# Run all tests (Rust + E2E)
+npm test
+
+# Run only Rust unit tests
+npm run test:rust
+
+# Run only E2E tests
+npm run test:e2e
+
+# Run E2E tests with interactive UI
+npm run test:e2e:ui
 ```
 
-### Frontend Tests (Wasm)
-Run the frontend tests:
-```bash
-wasm-pack test --chrome
-```
+### Test Coverage
+
+- ✅ **46 automated tests** covering all functionality
+- ✅ **3 browser engines** (Chromium, Firefox, WebKit)
+- ✅ **All 3 UI variants** (Shoelace, Vanilla, Web Awesome)
+- ✅ **CI/CD pipeline** with GitHub Actions
+
+📖 **[Read the Testing Guide](TESTING.md)** for detailed documentation
 
 ## Building for Production
 

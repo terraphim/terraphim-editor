@@ -28,3 +28,8 @@ desktop/src-tauri/Cargo.lock
 docs/src/thesaurus.json
 docs/src/*.json
 dist/
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+playwright/.cache/
