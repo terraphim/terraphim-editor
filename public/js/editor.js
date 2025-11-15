@@ -348,11 +348,19 @@ const initEditor = () => {
   checkElements();
 };
 
-// Make sure config is loaded before initializing
-document.addEventListener('DOMContentLoaded', () => {
+// Initialize editor - works with both static and dynamic script loading
+function initializeEditor() {
   if (window.EditorConfig) {
     initEditor();
   } else {
     console.error('Editor configuration not found. Make sure config.js is loaded before editor.js');
   }
-}); 
+}
+
+// Run immediately if DOM is ready, otherwise wait for DOMContentLoaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeEditor);
+} else {
+  // DOM is already ready, initialize immediately (handles dynamic script loading)
+  initializeEditor();
+} 
