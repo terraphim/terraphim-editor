@@ -25,6 +25,7 @@ export default defineConfig({
   // Use public as the root for dev server (for E2E tests)
   root: 'public',
   server: {
+    host: '127.0.0.1',
     port: 8080,
     strictPort: true,
     fs: {
