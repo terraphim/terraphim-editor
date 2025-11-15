@@ -1,4 +1,4 @@
-class MarkdownEditor {
+class MarkdownEditorVanilla {
   constructor(config) {
     this.config = config;
     this.shortcuts = config.shortcuts;
@@ -6,6 +6,7 @@ class MarkdownEditor {
       ...cmd,
       action: () => this.wrapSelectedText(cmd.prefix, cmd.suffix)
     }));
+    this.isDragging = false;
   }
 
   initialize() {
@@ -15,6 +16,8 @@ class MarkdownEditor {
     this.shortcutsList = document.querySelector('#shortcuts-list');
     this.dialog = document.querySelector('.shortcuts-dialog');
     this.helpButton = document.querySelector('#show-help');
+    this.closeButton = document.querySelector('#close-help');
+    this.divider = document.querySelector('#panel-divider');
 
     // Check if elements exist
     if (!this.textarea || !this.toolbar || !this.shortcutsList || !this.dialog || !this.helpButton) {
@@ -30,6 +33,7 @@ class MarkdownEditor {
     this.setupShortcuts();
     this.setupHelpDialog();
     this.setupCommandPalette();
+    this.setupResizablePanels();
   }
 
   wrapSelectedText(prefix, suffix) {
@@ -39,41 +43,66 @@ class MarkdownEditor {
     const before = text.substring(0, start);
     const selection = text.substring(start, end);
     const after = text.substring(end);
-    
+
     const wrappedText = selection ? selection : 'text';
     this.textarea.value = before + prefix + wrappedText + suffix + after;
-    
+
     this.textarea.focus();
     this.textarea.selectionStart = selection ? start + prefix.length : start + prefix.length;
     this.textarea.selectionEnd = selection ? end + prefix.length : start + prefix.length + 4;
-    
+
     this.textarea.dispatchEvent(new Event('input'));
+  }
+
+  getIconSymbol(iconName) {
+    // Map shoelace icon names to simple text symbols
+    const iconMap = {
+      'type-bold': 'B',
+      'type-italic': 'I',
+      'type-strikethrough': 'S',
+      'code-slash': '</>',
+      'type-h1': 'H1',
+      'type-h2': 'H2',
+      'type-h3': 'H3',
+      'list-ul': '•',
+      'list-ol': '1.',
+      'link-45deg': '🔗',
+      'image': '🖼',
+      'quote': '"',
+      'question-circle': '?'
+    };
+    return iconMap[iconName] || iconName.charAt(0).toUpperCase();
   }
 
   setupShortcuts() {
     // Create toolbar buttons
     this.shortcuts.forEach(shortcut => {
-      const button = document.createElement('sl-tooltip');
-      button.setAttribute('content', shortcut.key);
-      
-      button.innerHTML = `
-        <sl-button size="small" variant="default">
-          <sl-icon name="${shortcut.name}"></sl-icon>
-        </sl-button>
-      `;
-      
-      button.querySelector('sl-button').addEventListener('click', () => {
+      const tooltip = document.createElement('div');
+      tooltip.className = 'tooltip';
+
+      const button = document.createElement('button');
+      button.className = 'btn btn-sm';
+      button.innerHTML = `<span class="icon">${this.getIconSymbol(shortcut.name)}</span>`;
+
+      const tooltipText = document.createElement('span');
+      tooltipText.className = 'tooltip-text';
+      tooltipText.textContent = shortcut.key;
+
+      tooltip.appendChild(button);
+      tooltip.appendChild(tooltipText);
+
+      button.addEventListener('click', () => {
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
       });
-      
-      this.toolbar.appendChild(button);
+
+      this.toolbar.appendChild(tooltip);
     });
 
     // Setup keyboard shortcuts
     this.textarea.addEventListener('keydown', (e) => {
       const key = `${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`;
       const shortcut = this.shortcuts.find(s => s.key === key);
-      
+
       if (shortcut) {
         e.preventDefault();
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
@@ -87,14 +116,71 @@ class MarkdownEditor {
       const item = document.createElement('div');
       item.className = 'shortcut-item';
       item.innerHTML = `
-        <sl-icon name="${shortcut.name}"></sl-icon>
+        <span class="shortcut-icon">${this.getIconSymbol(shortcut.name)}</span>
         <span class="shortcut-desc">${shortcut.desc}</span>
-        <sl-badge variant="neutral">${shortcut.key}</sl-badge>
+        <span class="badge">${shortcut.key}</span>
       `;
       this.shortcutsList.appendChild(item);
     });
 
-    this.helpButton.addEventListener('click', () => this.dialog.show());
+    this.helpButton.addEventListener('click', () => this.openDialog());
+    this.closeButton.addEventListener('click', () => this.closeDialog());
+
+    // Close dialog when clicking overlay
+    this.dialog.querySelector('.dialog-overlay').addEventListener('click', () => {
+      this.closeDialog();
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.dialog.classList.contains('open')) {
+        this.closeDialog();
+      }
+    });
+  }
+
+  openDialog() {
+    this.dialog.classList.add('open');
+  }
+
+  closeDialog() {
+    this.dialog.classList.remove('open');
+  }
+
+  setupResizablePanels() {
+    let startX, startWidth;
+    const panel = this.divider.previousElementSibling;
+
+    this.divider.addEventListener('mousedown', (e) => {
+      this.isDragging = true;
+      startX = e.clientX;
+      startWidth = panel.offsetWidth;
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+
+      e.preventDefault();
+    });
+
+    const onMouseMove = (e) => {
+      if (!this.isDragging) return;
+
+      const deltaX = e.clientX - startX;
+      const container = this.divider.parentElement;
+      const newWidth = ((startWidth + deltaX) / container.offsetWidth) * 100;
+
+      // Limit between 20% and 80%
+      if (newWidth >= 20 && newWidth <= 80) {
+        panel.style.flex = `0 0 ${newWidth}%`;
+        this.divider.nextElementSibling.style.flex = `0 0 ${100 - newWidth}%`;
+      }
+    };
+
+    const onMouseUp = () => {
+      this.isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
   }
 
   setupCommandPalette() {
@@ -103,10 +189,10 @@ class MarkdownEditor {
     commandMenu.classList.add('command-menu');
     commandMenu.style.display = 'none';
     commandMenu.setAttribute('tabindex', '0');
-    
+
     const commandList = document.createElement('div');
     commandList.classList.add('command-list');
-    
+
     commandMenu.appendChild(commandList);
     document.body.appendChild(commandMenu);
 
@@ -119,10 +205,10 @@ class MarkdownEditor {
       const item = document.createElement('div');
       item.classList.add('command-item');
       item.innerHTML = `
-        <sl-icon name="${cmd.icon}"></sl-icon>
+        <span class="icon">${this.getIconSymbol(cmd.icon)}</span>
         <span>${cmd.name}</span>
       `;
-      
+
       item.addEventListener('click', () => {
         if (slashPosition !== null) {
           const text = this.textarea.value;
@@ -133,7 +219,7 @@ class MarkdownEditor {
         cmd.action();
         hideCommandMenu();
       });
-      
+
       commandList.appendChild(item);
     });
 
@@ -155,28 +241,27 @@ class MarkdownEditor {
       const menuRect = commandMenu.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      
+
       // Calculate initial position
       let left = textareaRect.left + caretPosition.left;
       let top = textareaRect.top + caretPosition.top + 20;
-      
+
       // Adjust horizontal position if menu would go outside viewport
       if (left + menuRect.width > viewportWidth) {
-        left = viewportWidth - menuRect.width - 10; // 10px padding from right edge
+        left = viewportWidth - menuRect.width - 10;
       }
       if (left < 0) {
-        left = 10; // 10px padding from left edge
+        left = 10;
       }
-      
+
       // Adjust vertical position if menu would go outside viewport
       if (top + menuRect.height > viewportHeight) {
-        // Show menu above the caret if there's not enough space below
         top = textareaRect.top + caretPosition.top - menuRect.height - 10;
       }
       if (top < 0) {
-        top = 10; // 10px padding from top edge
+        top = 10;
       }
-      
+
       commandMenu.style.position = 'fixed';
       commandMenu.style.left = `${left}px`;
       commandMenu.style.top = `${top}px`;
@@ -206,20 +291,20 @@ class MarkdownEditor {
           if (selectedIndex === -1 && visibleItems.length > 0) selectedIndex = 0;
           updateSelection();
           break;
-          
+
         case 'ArrowUp':
           e.preventDefault();
           selectedIndex = Math.max(selectedIndex - 1, 0);
           updateSelection();
           break;
-          
+
         case 'Enter':
           e.preventDefault();
           if (selectedIndex >= 0 && selectedIndex < visibleItems.length) {
             visibleItems[selectedIndex].click();
           }
           break;
-          
+
         case 'Escape':
           e.preventDefault();
           hideCommandMenu();
@@ -236,7 +321,7 @@ class MarkdownEditor {
         this.textarea.value = text.substring(0, start) + '/' + text.substring(this.textarea.selectionEnd);
         this.textarea.selectionStart = start + 1;
         this.textarea.selectionEnd = start + 1;
-        
+
         slashPosition = start;
         showCommandMenu();
       }
@@ -253,35 +338,6 @@ class MarkdownEditor {
     window.addEventListener('scroll', positionCommandMenu);
     window.addEventListener('resize', positionCommandMenu);
     this.textarea.addEventListener('scroll', positionCommandMenu);
-  }
-
-  showCustomDialog() {
-    const dialog = document.createElement('sl-dialog');
-    dialog.label = 'Custom Formatting';
-    
-    dialog.innerHTML = `
-      <sl-input label="Prefix" id="prefix-input"></sl-input>
-      <sl-input label="Suffix" id="suffix-input"></sl-input>
-      <sl-button slot="footer" variant="primary">Apply</sl-button>
-      <sl-button slot="footer" variant="default">Cancel</sl-button>
-    `;
-    
-    document.body.appendChild(dialog);
-    
-    const [applyBtn, cancelBtn] = dialog.querySelectorAll('sl-button');
-    const prefixInput = dialog.querySelector('#prefix-input');
-    const suffixInput = dialog.querySelector('#suffix-input');
-    
-    applyBtn.addEventListener('click', () => {
-      this.wrapSelectedText(prefixInput.value, suffixInput.value);
-      dialog.hide();
-    });
-    
-    cancelBtn.addEventListener('click', () => dialog.hide());
-    
-    dialog.addEventListener('sl-after-hide', () => dialog.remove());
-    
-    dialog.show();
   }
 }
 
@@ -309,14 +365,14 @@ function getCaretCoordinates(element, position) {
   const span = document.createElement('span');
   span.textContent = element.value.substring(position) || '.';
   div.appendChild(span);
-  
+
   document.body.appendChild(div);
   const coordinates = {
     top: span.offsetTop,
     left: span.offsetLeft
   };
   document.body.removeChild(div);
-  
+
   return coordinates;
 }
 
@@ -333,7 +389,7 @@ const initEditor = () => {
 
     if (required.every(selector => document.querySelector(selector))) {
       // Pass the EditorConfig when initializing
-      const editor = new MarkdownEditor(window.EditorConfig || {
+      const editor = new MarkdownEditorVanilla(window.EditorConfig || {
         shortcuts: [],
         commands: [],
         styles: {}
@@ -353,7 +409,7 @@ function initializeEditor() {
   if (window.EditorConfig) {
     initEditor();
   } else {
-    console.error('Editor configuration not found. Make sure config.js is loaded before editor.js');
+    console.error('Editor configuration not found. Make sure config.js is loaded before editor-vanilla.js');
   }
 }
 
@@ -363,4 +419,4 @@ if (document.readyState === 'loading') {
 } else {
   // DOM is already ready, initialize immediately (handles dynamic script loading)
   initializeEditor();
-} 
+}

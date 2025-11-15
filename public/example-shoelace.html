@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Terraphim Editor - Shoelace</title>
+
+    <!-- Shoelace Components -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+    <script type="module">
+        import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+        setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+    </script>
+
+    <!-- Required Shoelace components -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
+
+    <!-- Load configuration first -->
+    <script src="js/config.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #fafafa;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+        #editor-container {
+            width: 100%;
+            height: 600px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Terraphim Editor - Shoelace</h1>
+        <p class="description">
+            This version uses Shoelace web components for a polished, modern UI.
+            Beautiful and accessible by default!
+        </p>
+
+        <div id="editor-container"></div>
+    </div>
+
+    <!-- Load WASM and Editor -->
+    <script type="module">
+        import init from './js/terraphim_editor.js';
+
+        async function initializeEditor() {
+            try {
+                // Initialize WASM module
+                const wasm = await init('./wasm/terraphim_editor_bg.wasm');
+
+                // Run editor with Shoelace style (default)
+                wasm.run_with_style(wasm.EditorStyle.Shoelace);
+
+                // Load the shoelace editor JavaScript
+                const script = document.createElement('script');
+                script.src = './js/editor.js';
+                document.body.appendChild(script);
+
+            } catch (error) {
+                console.error('Failed to initialize editor:', error);
+                document.getElementById('editor-container').innerHTML =
+                    '<div style="padding: 2rem; color: red;">Failed to load editor: ' + error.message + '</div>';
+            }
+        }
+
+        initializeEditor();
+    </script>
+</body>
+</html>

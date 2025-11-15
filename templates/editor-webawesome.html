@@ -1,0 +1,135 @@
+<div class="editor-container">
+  <wa-split-panel position="50">
+    <div slot="start">
+      <div class="toolbar">
+        <wa-button-group label="Formatting" id="formatting-toolbar">
+          <!-- Buttons will be inserted dynamically -->
+        </wa-button-group>
+        <wa-divider vertical></wa-divider>
+        <wa-button-group label="Help">
+          <wa-button size="small" id="show-help">
+            <wa-icon name="circle-question"></wa-icon>
+          </wa-button>
+        </wa-button-group>
+      </div>
+      <textarea class="markdown-input" placeholder="Enter markdown here...">{{ initial_content }}</textarea>
+    </div>
+    <div slot="end">
+      <div class="markdown-preview">{{ initial_preview|safe }}</div>
+    </div>
+  </wa-split-panel>
+</div>
+
+<wa-dialog label="Markdown Shortcuts" class="shortcuts-dialog">
+  <wa-divider></wa-divider>
+  <div id="shortcuts-list">
+    <!-- Shortcuts will be inserted dynamically -->
+  </div>
+</wa-dialog>
+
+<style>
+  .editor-container {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem;
+    background: var(--wa-color-neutral-50);
+    border-bottom: 1px solid var(--wa-color-neutral-200);
+  }
+
+  .markdown-input {
+    width: 100%;
+    height: calc(100% - 60px);
+    border: 1px solid var(--wa-color-neutral-300);
+    border-radius: var(--wa-border-radius-medium);
+    padding: 1rem;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+  }
+
+  .markdown-input:focus {
+    border-color: var(--wa-color-primary-600);
+    box-shadow: 0 0 0 var(--wa-focus-ring-width) var(--wa-focus-ring-color-primary);
+  }
+
+  .markdown-preview {
+    height: 100%;
+    padding: 1rem;
+    overflow-y: auto;
+    border: 1px solid var(--wa-color-neutral-300);
+    border-radius: var(--wa-border-radius-medium);
+    background: var(--wa-color-neutral-0);
+  }
+
+  .shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0;
+  }
+
+  .shortcut-desc {
+    flex: 1;
+  }
+
+  wa-divider {
+    margin: 0.5rem 0;
+  }
+
+  wa-split-panel {
+    height: 100%;
+  }
+
+  wa-split-panel::part(divider) {
+    background-color: var(--wa-color-neutral-200);
+  }
+
+  wa-split-panel::part(divider):hover {
+    background-color: var(--wa-color-primary-300);
+  }
+
+  /* Command menu styles */
+  .command-menu {
+    position: fixed;
+    background: var(--wa-panel-background-color);
+    border: 1px solid var(--wa-panel-border-color);
+    border-radius: var(--wa-border-radius-medium);
+    box-shadow: var(--wa-shadow-large);
+    min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+  }
+
+  .command-list {
+    padding: 0.25rem;
+  }
+
+  .command-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    border-radius: var(--wa-border-radius-small);
+    color: var(--wa-color-neutral-700);
+  }
+
+  .command-item:hover,
+  .command-item.selected {
+    background: var(--wa-color-primary-50);
+    color: var(--wa-color-primary-700);
+  }
+
+  .command-item wa-icon {
+    font-size: 1.2rem;
+  }
+</style>

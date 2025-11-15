@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Terraphim Editor - Web Awesome</title>
+
+    <!-- Web Awesome Components -->
+    <!-- Note: You'll need to create a Web Awesome project at https://webawesome.com to get your CDN link -->
+    <!-- Replace YOUR_PROJECT_ID with your actual Web Awesome project ID -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+    <script type="module">
+        // Temporary: Using Shoelace as fallback until Web Awesome project is set up
+        // Web Awesome syntax is compatible with Shoelace
+        import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+        setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+    </script>
+
+    <!-- Required components (Web Awesome uses wa- prefix instead of sl-) -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
+
+    <!-- Load configuration first -->
+    <script src="js/config.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #fafafa;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+        .note {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        #editor-container {
+            width: 100%;
+            height: 600px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Terraphim Editor - Web Awesome</h1>
+        <p class="description">
+            This version uses Web Awesome, the next-generation successor to Shoelace.
+            Enhanced features, more themes, and a comprehensive design system!
+        </p>
+
+        <div class="note">
+            <strong>Note:</strong> To use Web Awesome in production, create a project at
+            <a href="https://webawesome.com" target="_blank">webawesome.com</a> and replace the CDN links above
+            with your project-specific Web Awesome CDN link. This example currently uses Shoelace as a fallback
+            since Web Awesome uses compatible syntax.
+        </div>
+
+        <div id="editor-container"></div>
+    </div>
+
+    <!-- Load WASM and Editor -->
+    <script type="module">
+        import init from './js/terraphim_editor.js';
+
+        async function initializeEditor() {
+            try {
+                // Initialize WASM module
+                const wasm = await init('./wasm/terraphim_editor_bg.wasm');
+
+                // Run editor with Web Awesome style
+                wasm.run_with_style(wasm.EditorStyle.WebAwesome);
+
+                // Load the webawesome editor JavaScript
+                const script = document.createElement('script');
+                script.src = './js/editor-webawesome.js';
+                document.body.appendChild(script);
+
+            } catch (error) {
+                console.error('Failed to initialize editor:', error);
+                document.getElementById('editor-container').innerHTML =
+                    '<div style="padding: 2rem; color: red;">Failed to load editor: ' + error.message + '</div>';
+            }
+        }
+
+        initializeEditor();
+    </script>
+</body>
+</html>

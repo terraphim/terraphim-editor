@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Terraphim Editor - Multi-Style Demo</title>
+
+    <!-- Shoelace Components (for UI controls) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+    <script type="module">
+        import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
+        setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+    </script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
+
+    <!-- Load configuration first -->
+    <script src="js/config.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin: 0 0 0.5rem 0;
+            color: #333;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+            margin: 0 0 1.5rem 0;
+        }
+
+        .style-selector {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+
+        .style-selector label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        sl-button-group {
+            --sl-spacing-x-small: 0.5rem;
+        }
+
+        sl-button::part(base) {
+            font-weight: 500;
+        }
+
+        .editor-wrapper {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        #editor-container {
+            width: 100%;
+            height: 70vh;
+            min-height: 500px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .info-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .info-panel h3 {
+            margin: 0 0 0.5rem 0;
+            color: #333;
+        }
+
+        .info-panel p {
+            margin: 0;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #555;
+        }
+
+        .feature::before {
+            content: '✓';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: #4caf50;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .style-selector {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            #editor-container {
+                height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🎨 Terraphim Editor</h1>
+            <p class="subtitle">Choose Your Style: Three Ways to Build</p>
+
+            <div class="style-selector">
+                <label>Select UI Framework:</label>
+                <sl-button-group label="Style Selection">
+                    <sl-button variant="primary" id="btn-shoelace">Shoelace</sl-button>
+                    <sl-button variant="default" id="btn-vanilla">Vanilla</sl-button>
+                    <sl-button variant="default" id="btn-webawesome">Web Awesome</sl-button>
+                </sl-button-group>
+            </div>
+        </div>
+    </div>
+
+    <div class="editor-wrapper">
+        <div class="info-panel" id="style-info">
+            <h3>Shoelace Components</h3>
+            <p>Beautiful, accessible web components with a comprehensive design system.</p>
+            <div class="features">
+                <div class="feature">Professional UI components</div>
+                <div class="feature">Accessibility built-in</div>
+                <div class="feature">Theme customization</div>
+            </div>
+        </div>
+
+        <div id="editor-container"></div>
+    </div>
+
+    <!-- Load WASM and Editor -->
+    <script type="module">
+        import init from './js/terraphim_editor.js';
+
+        let wasm;
+        let currentStyle = 'Shoelace';
+        let currentScript = null;
+
+        const styleInfo = {
+            Shoelace: {
+                title: 'Shoelace Components',
+                description: 'Beautiful, accessible web components with a comprehensive design system.',
+                features: [
+                    'Professional UI components',
+                    'Accessibility built-in',
+                    'Theme customization'
+                ]
+            },
+            Vanilla: {
+                title: 'Pure HTML/CSS',
+                description: 'Zero dependencies, maximum performance. Just HTML, CSS, and JavaScript.',
+                features: [
+                    'No external dependencies',
+                    'Lightweight & fast',
+                    'Full control over styling'
+                ]
+            },
+            WebAwesome: {
+                title: 'Web Awesome',
+                description: 'Next-generation web components from Font Awesome with enhanced features.',
+                features: [
+                    '11 built-in themes',
+                    'Font Awesome integration',
+                    'Advanced design system'
+                ]
+            }
+        };
+
+        async function loadEditor(style) {
+            const container = document.getElementById('editor-container');
+            container.innerHTML = '<div style="padding: 2rem; text-align: center;">Loading...</div>';
+
+            // Remove old script if exists
+            if (currentScript && currentScript.parentNode) {
+                currentScript.parentNode.removeChild(currentScript);
+            }
+
+            // Render new template
+            wasm.run_with_style(wasm.EditorStyle[style]);
+
+            // Load appropriate JavaScript
+            const scriptMap = {
+                'Shoelace': './js/editor.js',
+                'Vanilla': './js/editor-vanilla.js',
+                'WebAwesome': './js/editor-webawesome.js'
+            };
+
+            currentScript = document.createElement('script');
+            currentScript.src = scriptMap[style];
+            document.body.appendChild(currentScript);
+
+            currentStyle = style;
+            updateStyleInfo(style);
+        }
+
+        function updateStyleInfo(style) {
+            const info = styleInfo[style];
+            const infoPanel = document.getElementById('style-info');
+
+            infoPanel.innerHTML = `
+                <h3>${info.title}</h3>
+                <p>${info.description}</p>
+                <div class="features">
+                    ${info.features.map(f => `<div class="feature">${f}</div>`).join('')}
+                </div>
+            `;
+        }
+
+        function setActiveButton(style) {
+            document.querySelectorAll('sl-button-group sl-button').forEach(btn => {
+                btn.variant = 'default';
+            });
+
+            const buttonMap = {
+                'Shoelace': 'btn-shoelace',
+                'Vanilla': 'btn-vanilla',
+                'WebAwesome': 'btn-webawesome'
+            };
+
+            const activeBtn = document.getElementById(buttonMap[style]);
+            if (activeBtn) {
+                activeBtn.variant = 'primary';
+            }
+        }
+
+        async function initializeEditor() {
+            try {
+                // Initialize WASM module
+                wasm = await init('./wasm/terraphim_editor_bg.wasm');
+
+                // Set up style switchers
+                document.getElementById('btn-shoelace').addEventListener('click', () => {
+                    loadEditor('Shoelace');
+                    setActiveButton('Shoelace');
+                });
+
+                document.getElementById('btn-vanilla').addEventListener('click', () => {
+                    loadEditor('Vanilla');
+                    setActiveButton('Vanilla');
+                });
+
+                document.getElementById('btn-webawesome').addEventListener('click', () => {
+                    loadEditor('WebAwesome');
+                    setActiveButton('WebAwesome');
+                });
+
+                // Load default style (Shoelace)
+                await loadEditor('Shoelace');
+
+            } catch (error) {
+                console.error('Failed to initialize editor:', error);
+                document.getElementById('editor-container').innerHTML =
+                    '<div style="padding: 2rem; color: red;">Failed to load editor: ' + error.message + '</div>';
+            }
+        }
+
+        initializeEditor();
+    </script>
+</body>
+</html>

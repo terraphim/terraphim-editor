@@ -1,4 +1,4 @@
-class MarkdownEditor {
+class MarkdownEditorWebAwesome {
   constructor(config) {
     this.config = config;
     this.shortcuts = config.shortcuts;
@@ -39,33 +39,53 @@ class MarkdownEditor {
     const before = text.substring(0, start);
     const selection = text.substring(start, end);
     const after = text.substring(end);
-    
+
     const wrappedText = selection ? selection : 'text';
     this.textarea.value = before + prefix + wrappedText + suffix + after;
-    
+
     this.textarea.focus();
     this.textarea.selectionStart = selection ? start + prefix.length : start + prefix.length;
     this.textarea.selectionEnd = selection ? end + prefix.length : start + prefix.length + 4;
-    
+
     this.textarea.dispatchEvent(new Event('input'));
+  }
+
+  // Map Shoelace icon names to Web Awesome icon names
+  mapIconName(shoelaceIcon) {
+    const iconMap = {
+      'type-bold': 'bold',
+      'type-italic': 'italic',
+      'type-strikethrough': 'strikethrough',
+      'code-slash': 'code',
+      'type-h1': 'heading',
+      'type-h2': 'heading',
+      'type-h3': 'heading',
+      'list-ul': 'list-ul',
+      'list-ol': 'list-ol',
+      'link-45deg': 'link',
+      'image': 'image',
+      'quote': 'quote-right',
+      'question-circle': 'circle-question'
+    };
+    return iconMap[shoelaceIcon] || shoelaceIcon;
   }
 
   setupShortcuts() {
     // Create toolbar buttons
     this.shortcuts.forEach(shortcut => {
-      const button = document.createElement('sl-tooltip');
+      const button = document.createElement('wa-tooltip');
       button.setAttribute('content', shortcut.key);
-      
+
       button.innerHTML = `
-        <sl-button size="small" variant="default">
-          <sl-icon name="${shortcut.name}"></sl-icon>
-        </sl-button>
+        <wa-button size="small" variant="default">
+          <wa-icon name="${this.mapIconName(shortcut.name)}"></wa-icon>
+        </wa-button>
       `;
-      
-      button.querySelector('sl-button').addEventListener('click', () => {
+
+      button.querySelector('wa-button').addEventListener('click', () => {
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
       });
-      
+
       this.toolbar.appendChild(button);
     });
 
@@ -73,7 +93,7 @@ class MarkdownEditor {
     this.textarea.addEventListener('keydown', (e) => {
       const key = `${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`;
       const shortcut = this.shortcuts.find(s => s.key === key);
-      
+
       if (shortcut) {
         e.preventDefault();
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
@@ -87,9 +107,9 @@ class MarkdownEditor {
       const item = document.createElement('div');
       item.className = 'shortcut-item';
       item.innerHTML = `
-        <sl-icon name="${shortcut.name}"></sl-icon>
+        <wa-icon name="${this.mapIconName(shortcut.name)}"></wa-icon>
         <span class="shortcut-desc">${shortcut.desc}</span>
-        <sl-badge variant="neutral">${shortcut.key}</sl-badge>
+        <wa-badge variant="neutral">${shortcut.key}</wa-badge>
       `;
       this.shortcutsList.appendChild(item);
     });
@@ -103,10 +123,10 @@ class MarkdownEditor {
     commandMenu.classList.add('command-menu');
     commandMenu.style.display = 'none';
     commandMenu.setAttribute('tabindex', '0');
-    
+
     const commandList = document.createElement('div');
     commandList.classList.add('command-list');
-    
+
     commandMenu.appendChild(commandList);
     document.body.appendChild(commandMenu);
 
@@ -119,10 +139,10 @@ class MarkdownEditor {
       const item = document.createElement('div');
       item.classList.add('command-item');
       item.innerHTML = `
-        <sl-icon name="${cmd.icon}"></sl-icon>
+        <wa-icon name="${this.mapIconName(cmd.icon)}"></wa-icon>
         <span>${cmd.name}</span>
       `;
-      
+
       item.addEventListener('click', () => {
         if (slashPosition !== null) {
           const text = this.textarea.value;
@@ -133,7 +153,7 @@ class MarkdownEditor {
         cmd.action();
         hideCommandMenu();
       });
-      
+
       commandList.appendChild(item);
     });
 
@@ -155,28 +175,27 @@ class MarkdownEditor {
       const menuRect = commandMenu.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      
+
       // Calculate initial position
       let left = textareaRect.left + caretPosition.left;
       let top = textareaRect.top + caretPosition.top + 20;
-      
+
       // Adjust horizontal position if menu would go outside viewport
       if (left + menuRect.width > viewportWidth) {
-        left = viewportWidth - menuRect.width - 10; // 10px padding from right edge
+        left = viewportWidth - menuRect.width - 10;
       }
       if (left < 0) {
-        left = 10; // 10px padding from left edge
+        left = 10;
       }
-      
+
       // Adjust vertical position if menu would go outside viewport
       if (top + menuRect.height > viewportHeight) {
-        // Show menu above the caret if there's not enough space below
         top = textareaRect.top + caretPosition.top - menuRect.height - 10;
       }
       if (top < 0) {
-        top = 10; // 10px padding from top edge
+        top = 10;
       }
-      
+
       commandMenu.style.position = 'fixed';
       commandMenu.style.left = `${left}px`;
       commandMenu.style.top = `${top}px`;
@@ -206,20 +225,20 @@ class MarkdownEditor {
           if (selectedIndex === -1 && visibleItems.length > 0) selectedIndex = 0;
           updateSelection();
           break;
-          
+
         case 'ArrowUp':
           e.preventDefault();
           selectedIndex = Math.max(selectedIndex - 1, 0);
           updateSelection();
           break;
-          
+
         case 'Enter':
           e.preventDefault();
           if (selectedIndex >= 0 && selectedIndex < visibleItems.length) {
             visibleItems[selectedIndex].click();
           }
           break;
-          
+
         case 'Escape':
           e.preventDefault();
           hideCommandMenu();
@@ -236,7 +255,7 @@ class MarkdownEditor {
         this.textarea.value = text.substring(0, start) + '/' + text.substring(this.textarea.selectionEnd);
         this.textarea.selectionStart = start + 1;
         this.textarea.selectionEnd = start + 1;
-        
+
         slashPosition = start;
         showCommandMenu();
       }
@@ -256,31 +275,31 @@ class MarkdownEditor {
   }
 
   showCustomDialog() {
-    const dialog = document.createElement('sl-dialog');
+    const dialog = document.createElement('wa-dialog');
     dialog.label = 'Custom Formatting';
-    
+
     dialog.innerHTML = `
-      <sl-input label="Prefix" id="prefix-input"></sl-input>
-      <sl-input label="Suffix" id="suffix-input"></sl-input>
-      <sl-button slot="footer" variant="primary">Apply</sl-button>
-      <sl-button slot="footer" variant="default">Cancel</sl-button>
+      <wa-input label="Prefix" id="prefix-input"></wa-input>
+      <wa-input label="Suffix" id="suffix-input"></wa-input>
+      <wa-button slot="footer" variant="primary">Apply</wa-button>
+      <wa-button slot="footer" variant="default">Cancel</wa-button>
     `;
-    
+
     document.body.appendChild(dialog);
-    
-    const [applyBtn, cancelBtn] = dialog.querySelectorAll('sl-button');
+
+    const [applyBtn, cancelBtn] = dialog.querySelectorAll('wa-button');
     const prefixInput = dialog.querySelector('#prefix-input');
     const suffixInput = dialog.querySelector('#suffix-input');
-    
+
     applyBtn.addEventListener('click', () => {
       this.wrapSelectedText(prefixInput.value, suffixInput.value);
       dialog.hide();
     });
-    
+
     cancelBtn.addEventListener('click', () => dialog.hide());
-    
-    dialog.addEventListener('sl-after-hide', () => dialog.remove());
-    
+
+    dialog.addEventListener('wa-after-hide', () => dialog.remove());
+
     dialog.show();
   }
 }
@@ -309,14 +328,14 @@ function getCaretCoordinates(element, position) {
   const span = document.createElement('span');
   span.textContent = element.value.substring(position) || '.';
   div.appendChild(span);
-  
+
   document.body.appendChild(div);
   const coordinates = {
     top: span.offsetTop,
     left: span.offsetLeft
   };
   document.body.removeChild(div);
-  
+
   return coordinates;
 }
 
@@ -333,7 +352,7 @@ const initEditor = () => {
 
     if (required.every(selector => document.querySelector(selector))) {
       // Pass the EditorConfig when initializing
-      const editor = new MarkdownEditor(window.EditorConfig || {
+      const editor = new MarkdownEditorWebAwesome(window.EditorConfig || {
         shortcuts: [],
         commands: [],
         styles: {}
@@ -353,7 +372,7 @@ function initializeEditor() {
   if (window.EditorConfig) {
     initEditor();
   } else {
-    console.error('Editor configuration not found. Make sure config.js is loaded before editor.js');
+    console.error('Editor configuration not found. Make sure config.js is loaded before editor-webawesome.js');
   }
 }
 
@@ -363,4 +382,4 @@ if (document.readyState === 'loading') {
 } else {
   // DOM is already ready, initialize immediately (handles dynamic script loading)
   initializeEditor();
-} 
+}
