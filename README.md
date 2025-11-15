@@ -1,14 +1,37 @@
 # Terraphim Editor
 
-A WebAssembly-based Markdown editor built with Rust, [Shoelace](https://shoelace.style/) styles and no other dependencies. 
-Trunk is used for the build system
+A WebAssembly-based Markdown editor built with Rust, supporting **three different UI styles**: Shoelace, Pure HTML/CSS, and Web Awesome.
 
 ## Features
 
-- Live Markdown preview
-- Pure Javascript for front end and WebAssembly implementation for rendering Markdown
-- Minimal external dependencies
-- Modern web components UI
+- **🎨 Three UI Styles** - Choose between Shoelace, Vanilla HTML/CSS, or Web Awesome
+- **⚡ Live Markdown Preview** - Instant rendering powered by Rust/WASM
+- **🎯 Zero to Minimal Dependencies** - Vanilla style has no external dependencies
+- **♿ Accessible** - Built with web standards and accessibility in mind
+- **📦 Multiple Module Formats** - ESM, UMD, and IIFE support
+- **🔧 Framework Agnostic** - Works with any JavaScript framework or none at all
+
+## UI Styles
+
+### 1. Shoelace (Default)
+Professional web components with comprehensive design system
+- Professional UI components
+- Built-in accessibility
+- Theme customization
+
+### 2. Vanilla HTML/CSS
+Pure HTML/CSS with zero dependencies
+- No external libraries
+- Lightweight (~3KB)
+- Maximum control
+
+### 3. Web Awesome
+Next-generation web components from Font Awesome
+- 11 built-in themes
+- Font Awesome integration
+- Advanced design system
+
+📖 **[Read the Multi-Style Guide](MULTI_STYLE_GUIDE.md)** for detailed documentation
 
 ## Prerequisites
 
@@ -53,13 +76,67 @@ wasm-pack test --chrome
 
 ## Building for Production
 
-Create a production build:
+### Option 1: Using build.sh (Recommended)
+
+Build WASM package and distribution files:
+
+```bash
+./build.sh
+```
+
+This creates:
+- `pkg/` - WASM package
+- `dist/` - Distribution bundle
+- `package/` - NPM package ready for distribution
+
+### Option 2: Manual build
+
+```bash
+# Build WASM module (includes all three style templates)
+wasm-pack build --target web --out-dir pkg
+
+# Build JavaScript bundles (ESM, UMD, IIFE)
+npm run build
+```
+
+### Option 3: Development build with Trunk
 
 ```bash
 trunk build --release
 ```
 
 The output will be in the `dist` directory.
+
+## Quick Start Examples
+
+### Shoelace Style
+```html
+<script type="module">
+  import init from './js/terraphim_editor.js';
+  const wasm = await init('./wasm/terraphim_editor_bg.wasm');
+  wasm.run_with_style(wasm.EditorStyle.Shoelace);
+</script>
+```
+
+### Vanilla Style (No Dependencies!)
+```html
+<script type="module">
+  import init from './js/terraphim_editor.js';
+  const wasm = await init('./wasm/terraphim_editor_bg.wasm');
+  wasm.run_with_style(wasm.EditorStyle.Vanilla);
+</script>
+```
+
+### Web Awesome Style
+```html
+<script type="module">
+  import init from './js/terraphim_editor.js';
+  const wasm = await init('./wasm/terraphim_editor_bg.wasm');
+  wasm.run_with_style(wasm.EditorStyle.WebAwesome);
+</script>
+```
+
+See `public/example-*.html` for complete working examples.
 
 ## Contributing
 

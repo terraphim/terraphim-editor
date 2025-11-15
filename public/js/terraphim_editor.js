@@ -133,10 +133,6 @@ function makeMutClosure(arg0, arg1, dtor, f) {
     return real;
 }
 
-export function run() {
-    wasm.run();
-}
-
 function takeFromExternrefTable0(idx) {
     const value = wasm.__wbindgen_export_2.get(idx);
     wasm.__externref_table_dealloc(idx);
@@ -167,9 +163,58 @@ export function render_markdown(input) {
     }
 }
 
-function __wbg_adapter_18(arg0, arg1, arg2) {
-    wasm.closure2_externref_shim(arg0, arg1, arg2);
+/**
+ * @param {EditorStyle} style
+ */
+export function run_with_style(style) {
+    const ret = wasm.run_with_style(style);
+    if (ret[1]) {
+        throw takeFromExternrefTable0(ret[0]);
+    }
 }
+
+export function run() {
+    wasm.run();
+}
+
+/**
+ * @param {EditorStyle} style
+ * @param {string} content
+ * @returns {string}
+ */
+export function render_editor_html(style, content) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(content, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.render_editor_html(style, ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+function __wbg_adapter_18(arg0, arg1, arg2) {
+    wasm.closure17_externref_shim(arg0, arg1, arg2);
+}
+
+/**
+ * @enum {0 | 1 | 2}
+ */
+export const EditorStyle = Object.freeze({
+    Shoelace: 0, "0": "Shoelace",
+    Vanilla: 1, "1": "Vanilla",
+    WebAwesome: 2, "2": "WebAwesome",
+});
 
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
@@ -319,8 +364,8 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper30 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 3, __wbg_adapter_18);
+    imports.wbg.__wbindgen_closure_wrapper60 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 18, __wbg_adapter_18);
         return ret;
     };
     imports.wbg.__wbindgen_init_externref_table = function() {
