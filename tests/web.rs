@@ -969,6 +969,135 @@ fn test_init_editor_replaces_previous_instance() {
     assert_eq!(result, "");
 }
 
+#[wasm_bindgen_test]
+fn test_undo_redo_replays_exact_edits_in_repeated_text() {
+    let _document = fresh_full_editor();
+    // Undo and redo must reverse/replay the recorded edit, not a re-diff of
+    // the text, so decorations after the edit and the caret land correctly.
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const s = teTest.surface();
+          const state = () => JSON.stringify({
+            text: s.getText(),
+            decorations: s.getDecorations().map((d) => [d.id, d.start, d.end]),
+            caret: [s.getSelectionOffsets().start, s.getSelectionOffsets().end],
+          });
+          const want = (text, decorations, caret) => JSON.stringify({ text, decorations, caret: [caret, caret] });
+          const check = (name, expected) => {
+            const got = state();
+            if (got !== expected) out.push(name + ': ' + got);
+            if (!teTest.canonical()) out.push(name + ': not canonical');
+          };
+          // Fresh history so coalescing cannot join a previous case.
+          const setup = (text, decos, start, end) => {
+            s.setText(text);
+            s.history = [];
+            s.historyIndex = -1;
+            s.record('init', { start: 0, end: 0 });
+            s.setDecorations(decos);
+            s.focus();
+            s.setSelectionOffsets(start, end);
+          };
+          const ins = (t) => document.execCommand('insertText', false, t);
+          const undo = () => { if (!teTest.key(s.root, 'z', { ctrlKey: true })) out.push('ctrl+z not handled'); };
+          const redo = () => { if (!teTest.key(s.root, 'z', { ctrlKey: true, shiftKey: true })) out.push('ctrl+shift+z not handled'); };
+
+          // 1. Single insertion in "aaaa"; the undo change is reported exactly.
+          setup('aaaa', [{ id: 'd', start: 2, end: 4 }], 1, 1);
+          ins('a');
+          check('insert', want('aaaaa', [['d', 3, 5]], 2));
+          const changes = [];
+          const off = s.onChange((c) => changes.push(c.edit));
+          undo();
+          off();
+          check('insert undo', want('aaaa', [['d', 2, 4]], 1));
+          if (changes.length !== 1 || changes[0].start !== 1 || changes[0].deletedLength !== 1 || changes[0].insertedText !== '') {
+            out.push('undo change ' + JSON.stringify(changes));
+          }
+          redo();
+          check('insert redo', want('aaaaa', [['d', 3, 5]], 2));
+          undo();
+          check('insert undo again', want('aaaa', [['d', 2, 4]], 1));
+
+          // 2. Repeated word.
+          setup('one one one', [{ id: 'd', start: 8, end: 11 }], 4, 4);
+          ins('one ');
+          check('word', want('one one one one', [['d', 12, 15]], 8));
+          undo();
+          check('word undo', want('one one one', [['d', 8, 11]], 4));
+          redo();
+          check('word redo', want('one one one one', [['d', 12, 15]], 8));
+
+          // 3. Merged typing burst: three keystrokes, one undo step.
+          setup('aaaa', [{ id: 'd', start: 2, end: 4 }], 1, 1);
+          const depth = s.history.length;
+          ins('a'); ins('a'); ins('a');
+          if (s.history.length !== depth + 1) out.push('burst not coalesced: ' + (s.history.length - depth));
+          const top = s.history[s.historyIndex];
+          if (!top.edits || top.edits.length !== 1) out.push('burst steps ' + JSON.stringify(top.edits));
+          check('burst', want('aaaaaaa', [['d', 5, 7]], 4));
+          undo();
+          check('burst undo', want('aaaa', [['d', 2, 4]], 1));
+          redo();
+          check('burst redo', want('aaaaaaa', [['d', 5, 7]], 4));
+
+          // 4. Merged burst at two separate places stays exact.
+          setup('aaaa', [{ id: 'd', start: 3, end: 4 }], 1, 1);
+          ins('a');
+          s.setSelectionOffsets(5);
+          ins('a');
+          check('split burst', want('aaaaaa', [['d', 4, 5]], 6));
+          if (s.history[s.historyIndex].edits.length !== 2) out.push('split burst steps ' + JSON.stringify(s.history[s.historyIndex].edits));
+          undo();
+          check('split burst undo', want('aaaa', [['d', 3, 4]], 1));
+          redo();
+          check('split burst redo', want('aaaaaa', [['d', 4, 5]], 6));
+
+          // 5. Merged backspace burst.
+          setup('aaaa', [{ id: 'd', start: 3, end: 4 }], 3, 3);
+          document.execCommand('delete');
+          document.execCommand('delete');
+          check('backspace burst', want('aa', [['d', 1, 2]], 1));
+          undo();
+          check('backspace burst undo', want('aaaa', [['d', 3, 4]], 3));
+          redo();
+          check('backspace burst redo', want('aa', [['d', 1, 2]], 1));
+
+          // 6. Replacement over a selection: the replaced character's
+          // decoration is gone, the later one maps both ways.
+          setup('aaaa', [{ id: 'x', start: 1, end: 2 }, { id: 'd', start: 3, end: 4 }], 1, 2);
+          ins('aa');
+          check('replace', want('aaaaa', [['d', 4, 5]], 3));
+          undo();
+          check('replace undo', want('aaaa', [['d', 3, 4]], 2));
+          redo();
+          check('replace redo', want('aaaaa', [['d', 4, 5]], 3));
+
+          // 7. Programmatic edits (shortcuts) are replayed exactly too.
+          setup('ab ab ab', [{ id: 'd', start: 6, end: 8 }], 3, 5);
+          teTest.key(s.root, 'b', { ctrlKey: true });
+          if (s.getText() !== 'ab **ab** ab') out.push('bold ' + JSON.stringify(s.getText()));
+          undo();
+          check('bold undo', want('ab ab ab', [['d', 6, 8]], 5));
+
+          // 8. Guarded fallback: an entry without edit data still restores
+          // the text through the minimal diff.
+          setup('abc', [], 3, 3);
+          ins('d');
+          s.history[s.historyIndex].edits = null;
+          undo();
+          if (s.getText() !== 'abc') out.push('fallback undo ' + JSON.stringify(s.getText()));
+          redo();
+          if (s.getText() !== 'abcd') out.push('fallback redo ' + JSON.stringify(s.getText()));
+          // Steps that do not match the text are rejected, not applied.
+          if (EditorSurface.replaySteps('abc', [{ start: 0, deletedText: 'x', insertedText: '' }], 'bc') !== null) out.push('mismatched step applied');
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
 /// Roughly 5,000 words of Markdown.
 fn five_thousand_words() -> String {
     let paragraph = "The quick brown fox jumps over the lazy dog while **bold** words and \

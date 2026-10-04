@@ -164,7 +164,7 @@ class EditorSurface {
     const selStart = options.selectStart === undefined ? s + inserted.length : options.selectStart;
     const selEnd = options.selectEnd === undefined ? selStart : options.selectEnd;
     this.setSelectionOffsets(selStart, selEnd);
-    this.record(source, this.lastSelection);
+    this.record(source, this.lastSelection, edit);
     this.emitChange(edit, source);
     this.dispatchInput(source === 'paste' ? 'insertFromPaste' : 'insertReplacementText', inserted);
     return edit;
@@ -339,15 +339,18 @@ class EditorSurface {
 
   undo() {
     if (!this.canUndo()) return false;
+    const undone = this.history[this.historyIndex];
     this.historyIndex -= 1;
-    this.restore(this.history[this.historyIndex], 'undo');
+    const steps = undone.edits ? undone.edits.slice().reverse().map(EditorSurface.invertStep) : null;
+    this.restore(this.history[this.historyIndex], 'undo', steps);
     return true;
   }
 
   redo() {
     if (!this.canRedo()) return false;
     this.historyIndex += 1;
-    this.restore(this.history[this.historyIndex], 'redo');
+    const entry = this.history[this.historyIndex];
+    this.restore(entry, 'redo', entry.edits);
     return true;
   }
 
@@ -589,19 +592,30 @@ class EditorSurface {
       this.pendingSelection = null;
     }
     if (edit) {
-      this.record(source, this.lastSelection);
+      this.record(source, this.lastSelection, edit);
       this.emitChange(edit, source);
     }
   }
 
-  record(source, sel) {
+  /**
+   * Record the current state in the undo history. `edit` is the exact edit
+   * that produced it from the previous state. Each entry keeps the forward
+   * edits (in order) that lead to it from the entry before, so undo and redo
+   * replay exactly what happened instead of re-diffing the text, which is
+   * ambiguous in repeated text and would mis-map decorations and the caret.
+   */
+  record(source, sel, edit = null) {
     const now = performance.now();
+    const step = edit
+      ? { start: edit.start, deletedText: edit.deletedText, insertedText: edit.insertedText }
+      : null;
     const entry = {
       text: this.text,
       start: sel ? sel.start : this.text.length,
       end: sel ? sel.end : this.text.length,
       source,
       time: now,
+      edits: step ? [step] : null,
     };
     const top = this.history[this.historyIndex];
     if (top && top.text === entry.text) {
@@ -617,6 +631,8 @@ class EditorSurface {
       top.source === source &&
       now - top.time < this.coalesceMs;
     if (coalesce) {
+      // The burst's entry keeps every step; contiguous steps are combined.
+      entry.edits = top.edits && step ? EditorSurface.appendStep(top.edits, step, top.text) : null;
       this.history[this.historyIndex] = entry;
     } else {
       this.history.push(entry);
@@ -625,13 +641,35 @@ class EditorSurface {
     }
   }
 
-  restore(entry, source) {
-    const edit = EditorSurface.diff(this.text, entry.text);
-    if (edit) this.decorations = EditorSurface.mapRanges(this.decorations, edit);
-    this.text = entry.text;
+  /**
+   * Move the model to history `entry`, replaying `steps` (exact edits from
+   * the current text to entry.text). Decorations are mapped and change
+   * listeners notified once per step, each with the text after that step.
+   * After an undo the caret goes to the end of the restored text; after a
+   * redo the recorded selection is restored. If the steps are missing or do
+   * not reproduce entry.text, the minimal diff is the fallback.
+   */
+  restore(entry, source, steps) {
+    const applied = steps ? EditorSurface.replaySteps(this.text, steps, entry.text) : null;
+    let caret = null;
+    if (applied) {
+      for (let i = 0; i < applied.length; i++) {
+        const edit = applied[i].edit;
+        this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+        this.text = applied[i].text;
+        caret = edit.start + edit.insertedText.length;
+        this.emitChange(edit, source);
+      }
+      this.text = entry.text;
+    } else {
+      const edit = EditorSurface.diff(this.text, entry.text);
+      if (edit) this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+      this.text = entry.text;
+      if (edit) this.emitChange(edit, source);
+    }
     this.render();
-    this.setSelectionOffsets(entry.start, entry.end);
-    if (edit) this.emitChange(edit, source);
+    if (source === 'undo' && caret !== null) this.setSelectionOffsets(caret);
+    else this.setSelectionOffsets(entry.start, entry.end);
     this.dispatchInput(source === 'undo' ? 'historyUndo' : 'historyRedo', null);
   }
 
@@ -914,6 +952,61 @@ class EditorSurface {
       deletedText: a.slice(p, a.length - s),
       insertedText: b.slice(p, b.length - s),
     };
+  }
+
+  /** The step that undoes `step` ({ start, deletedText, insertedText }). */
+  static invertStep(step) {
+    return { start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
+  }
+
+  /**
+   * Append `next` (an edit of the text `before`, which is the result of
+   * `steps`) to a burst's steps. When it touches or overlaps the region
+   * written by the last step, the two are combined into one step covering
+   * both, which is exact; otherwise it is kept as a separate step.
+   */
+  static appendStep(steps, next, before) {
+    const last = steps[steps.length - 1];
+    if (!last) return [next];
+    const lastEnd = last.start + last.insertedText.length;
+    const nextEnd = next.start + next.deletedText.length;
+    if (next.start > lastEnd || nextEnd < last.start) return [...steps, next];
+    // Union of both regions, in the coordinates of `before`.
+    const lo = Math.min(last.start, next.start);
+    const hi = Math.max(lastEnd, nextEnd);
+    const combined = {
+      start: lo,
+      // The region's content before `last` ...
+      deletedText: before.slice(lo, last.start) + last.deletedText + before.slice(lastEnd, hi),
+      // ... and after `next`.
+      insertedText: before.slice(lo, next.start) + next.insertedText + before.slice(nextEnd, hi),
+    };
+    return [...steps.slice(0, -1), combined];
+  }
+
+  /**
+   * Apply `steps` to `text`, checking each one against the text it edits.
+   * Returns [{ edit, text }] (text after each step) if every step matches
+   * and the result is `expected`, otherwise null.
+   */
+  static replaySteps(text, steps, expected) {
+    const out = [];
+    let t = text;
+    for (const step of steps) {
+      const end = step.start + step.deletedText.length;
+      if (step.start < 0 || end > t.length || t.slice(step.start, end) !== step.deletedText) return null;
+      t = t.slice(0, step.start) + step.insertedText + t.slice(end);
+      out.push({
+        edit: {
+          start: step.start,
+          deletedLength: step.deletedText.length,
+          deletedText: step.deletedText,
+          insertedText: step.insertedText,
+        },
+        text: t,
+      });
+    }
+    return t === expected ? out : null;
   }
 
   /**
