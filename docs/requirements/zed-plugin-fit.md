@@ -72,7 +72,7 @@ Summary: of the 12 spec sections, **§8.2 and §8.6 carry over almost intact**, 
 - `textDocument/codeAction` with `WorkspaceEdit` (alternative swap, a/an fix-up, ghost/revive, stash, keep/cut).
 - `workspace/executeCommand` (add alternative, run Lab mark, run trim level).
 - `textDocument/inlayHint` (optional `[i/n]` indicator).
-- `DiagnosticTag::Unnecessary` on diagnostics for ghosted spans and trim candidates.
+- `DiagnosticTag::Unnecessary` on diagnostics for ghost ranges and trim candidates.
 - Annotation-block parse/write plus re-anchoring on `didChange`, excluding the block itself.
 
 None of this is in the current Z0–Z4 phases of `zed-terraphim#1`. Z2 only says "Integrate the released LSP binary/interface for language and knowledge features."
@@ -92,7 +92,7 @@ The span model should **not** go into `EngineEvent`. That contract (`crates/terr
 - **Concept id to synonyms index** ([terraphim/terraphim-core#75](https://git.terraphim.cloud/terraphim/terraphim-core/issues/75)). Match positions already exist through `find_matches(.., true)`, as validated on 2026-10-02. Only the reverse index (concept id to synonyms) is new.
 - **`terraphim_lsp` split into a WASM-buildable core plus a server** ([terraphim/terraphim-ai#3409](https://git.terraphim.cloud/terraphim/terraphim-ai/issues/3409)). The core is the main engine for every client: spans, alternatives from the index, re-anchoring and diagnostics. The server wraps it for Zed and other LSP clients.
 - **Browser editor** ([terraphim/terraphim-editor#13](https://git.terraphim.cloud/terraphim/terraphim-editor/issues/13)) consumes the `terraphim_lsp` core compiled to WASM. No alternatives provider is written in this repo.
-- **`terraphim_alternatives`** ([terraphim/terraphim-editor#2](https://git.terraphim.cloud/terraphim/terraphim-editor/issues/2)) keeps its name but is scoped to non-KG state only: human-written alternatives, ghost flags, overflow and the annotation block (R-9.2 schema, serialised as the trailing fenced block). It is not the shared cross-client model, and it lives in this repo as `crates/terraphim_alternatives`.
+- **`terraphim_alternatives`** ([terraphim/terraphim-editor#2](https://git.terraphim.cloud/terraphim/terraphim-editor/issues/2)) keeps its name but is scoped to non-KG state only: human-written alternatives, ghost ranges, overflow and the annotation block (R-9.2 schema, serialised as the trailing fenced block). It is not the shared cross-client model, and it lives in this repo as `crates/terraphim_alternatives`.
 
 **Sequencing (cross-repo):**
 
@@ -107,10 +107,10 @@ Fields that must stay portable across all clients. "Source" marks where each fie
 | Field | Source | Purpose |
 |---|---|---|
 | `version` | Block | Schema version, for N/N-1 negotiation |
-| `spans[].id`, `kind`, `anchor{text,start,end}` | KG (matches and positions), Block (spans with human or ghost state) | Identity and re-anchoring |
+| `spans[].id`, `kind`, `anchor{text,start,end}` | KG (matches and positions), Block (spans with human alternatives) | Identity and re-anchoring |
 | `spans[].alts[]{text, source: original\|kg\|human\|ai, model?}` | KG (`kg` synonyms), Block (`human`, `ai`, and `original`) | List and provenance (R-4.4) |
 | `spans[].active` | Block | Active index (R-2.2, R-3.3) |
-| `spans[].ghost` | Block | Ghost attribute (R-5.3) |
+| `ghosts[]{id, anchor{text,start,end}}` | Block | Ghost ranges (R-5.3). An independent layer that may cover or partially overlap alternative spans; ghosts never overlap each other (decision 2026-10-04) |
 | `overflow` | Block | Stash (R-6) |
 
 The `kg` value for `alts[].source` is new under this plan: KG synonyms are recomputed from the index, so they are not written to the block.
