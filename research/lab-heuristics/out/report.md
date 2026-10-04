@@ -13,10 +13,10 @@
 | walden-economy | 670 | Tighten more | 20% | 134 | 133 | 19.9% | -0.1 | yes |
 | walden-economy | 670 | Even sharper | 30% | 201 | 200 | 29.9% | -0.1 | yes |
 | walden-economy | 670 | Cut in half | 50% | 335 | 335 | 50.0% | +0.0 | yes |
-| zed-plugin-fit | 401 | Slight trim | 10% | 40 | 39 | 9.7% | -0.3 | yes |
-| zed-plugin-fit | 401 | Tighten more | 20% | 80 | 79 | 19.7% | -0.3 | yes |
-| zed-plugin-fit | 401 | Even sharper | 30% | 120 | 122 | 30.4% | +0.4 | yes |
-| zed-plugin-fit | 401 | Cut in half | 50% | 201 | 201 | 50.1% | +0.1 | yes |
+| zed-plugin-fit | 401 | Slight trim | 10% | 40 | 42 | 10.5% | +0.5 | yes |
+| zed-plugin-fit | 401 | Tighten more | 20% | 80 | 86 | 21.4% | +1.4 | yes |
+| zed-plugin-fit | 401 | Even sharper | 30% | 120 | 114 | 28.4% | -1.6 | yes |
+| zed-plugin-fit | 401 | Cut in half | 50% | 201 | 202 | 50.4% | +0.4 | yes |
 
 All levels within +/-3pp: yes
 
@@ -32,10 +32,10 @@ All levels within +/-3pp: yes
 | walden-economy | Tighten more | -0.1pp | +0.0pp | +0.7pp |
 | walden-economy | Even sharper | -0.1pp | +0.0pp | +11.3pp |
 | walden-economy | Cut in half | +0.0pp | -0.6pp | +1.2pp |
-| zed-plugin-fit | Slight trim | -0.3pp | -0.3pp | +1.2pp |
-| zed-plugin-fit | Tighten more | -0.3pp | -0.8pp | +0.4pp |
-| zed-plugin-fit | Even sharper | +0.4pp | +1.4pp | +0.4pp |
-| zed-plugin-fit | Cut in half | +0.1pp | +0.6pp | +0.1pp |
+| zed-plugin-fit | Slight trim | +0.5pp | -2.0pp | +1.7pp |
+| zed-plugin-fit | Tighten more | +1.4pp | +1.7pp | +1.4pp |
+| zed-plugin-fit | Even sharper | -1.6pp | -0.8pp | +3.7pp |
+| zed-plugin-fit | Cut in half | +0.4pp | -2.6pp | +0.4pp |
 
 ## three-men-ch1
 
@@ -147,7 +147,7 @@ Mark hits: filler 3, hedge 1, hedge-phrase 2, tone 0.
 
 ## zed-plugin-fit
 
-401 words, 24 sentences, 38 trim candidates.
+401 words, 24 sentences, 21 trim candidates.
 
 Mark hits: filler 1, hedge 0, hedge-phrase 0, tone 0.
 
@@ -164,27 +164,24 @@ Mark hits: filler 1, hedge 0, hedge-phrase 0, tone 0.
 
 | Level | Granularity | Words | Reason | Span |
 |---|---|---:|---|---|
-| Slight trim | Clause | 2 | parenthetical | (`terraphim/zed-terraphim#1`) |
 | Slight trim | Clause | 2 | parenthetical | (§3–§7) |
 | Slight trim | Clause | 4 | aside "which" | , which owns its DOM |
 | Slight trim | Clause | 4 | parenthetical | (see "Shared model" below) |
 | Slight trim | Clause | 1 | parenthetical | (R-8.7) |
-| Slight trim | Clause | 1 | parenthetical | (`crates/terraphim_engine_events`) |
-| Slight trim | Clause | 2 | parenthetical | (`EvolutionProposed/Approved/Rejected/Applied`, `AllowOnce/AllowAlways/Reject/RejectAlways... |
+| Slight trim | Clause | 8 | aside "which" | , which the extension starts as a language server |
 | Slight trim | Clause | 1 | parenthetical | (#3325) |
-| Slight trim | Clause | 3 | parenthetical | (`crates/terraphim_alternatives`, `terraphim/terraphim-editor#2`) |
-| Slight trim | Clause | 7 | parenthetical | (`terraphim/terraphim-editor#16`, server work in `terraphim/terraphim-ai#3409`) |
-| Slight trim | Clause | 8 | parenthetical | (e.g. `AlternativesProposed { doc, span_id, alts, source: ai, model }`) |
+| Slight trim | Sentence | 12 | weak sentence | That is optional and can wait until an agent actually produces them. |
 | Slight trim | Word | 1 | filler "actually" | actually |
 | Slight trim | Clause | 3 | parenthetical | (not a sidecar) |
-| Tighten more | Clause | 8 | aside "which" | , which the extension starts as a language server |
-| Tighten more | Sentence | 13 | weak sentence | That contract (`crates/terraphim_engine_events`) covers agent evolution and approvals (`Ev... |
-| Tighten more | Sentence | 14 | weak sentence | So the crate starts as a workspace crate inside this repo (`crates/terraphim_alternatives`... |
-| Tighten more | Sentence | 12 | weak sentence | That is optional and can wait until an agent actually produces them. |
-| Even sharper | Sentence | 18 | weak sentence | `terraphim-editor`, which owns its DOM, is the only existing target where the spec can be ... |
-| Even sharper | Sentence | 13 | weak sentence | Zed's Z2 is blocked behind #3224, and terraphim-ai main CI is red (#3325). |
-| Even sharper | Sentence | 17 | weak sentence | It is extracted and published only when `terraphim_lsp` adopts it (`terraphim/terraphim-ed... |
-| Even sharper | Sentence | 7 | weak sentence | The shared crate still owns the schema. |
-| Cut in half | Sentence | 17 | weak sentence | It now also parses and writes the trailing fenced block and splits the body from the annot... |
-| Cut in half | Sentence | 34 | weak sentence | `terraphim_lsp` must therefore (a) exclude the block from diagnostics, marks and re-anchor... |
-| Cut in half | Sentence | 28 | weak sentence | An LSP `foldingRange` for the block would hide it in clients that honour folding; whether ... |
+| Slight trim | Sentence | 7 | weak sentence | The shared crate still owns the schema. |
+| Tighten more | Sentence | 19 | weak sentence | That only works if the span model and annotation format are shared between both targets (s... |
+| Tighten more | Sentence | 13 | weak sentence | Zed's Z2 is blocked behind #3224, and terraphim-ai main CI is red (#3325). |
+| Tighten more | Sentence | 17 | weak sentence | It now also parses and writes the trailing fenced block and splits the body from the annot... |
+| Even sharper | Sentence | 30 | weak sentence | Zed's extension API has no way to draw span decorations, add panels, bind hover-plus-arrow... |
+| Cut in half | Sentence | 1 | paragraph-opening sentence | **No.** |
+| Cut in half | Sentence | 16 | paragraph-opening sentence | Because of the last non-goal, even the thesaurus-backed alternatives provider (R-8.7) cann... |
+| Cut in half | Sentence | 21 | paragraph-opening sentence | There are no hooks for editor decorations, gutter rendering, panels or views, keymaps or i... |
+| Cut in half | Sentence | 19 | weak sentence | Inside Zed, the extension can only add UI through an LSP server, using whatever LSP featur... |
+| Cut in half | Sentence | 8 | paragraph-opening sentence | **Sequencing:** today there is only one committed consumer. |
+| Cut in half | Sentence | 6 | paragraph-opening sentence | **Embedded trailing block (not a sidecar).** |
+| Cut in half | Sentence | 21 | weak sentence | In Zed and other LSP clients the block will be visible as raw text, and edits to it are us... |

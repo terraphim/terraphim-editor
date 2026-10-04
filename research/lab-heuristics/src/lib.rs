@@ -1021,7 +1021,11 @@ fn clause_candidates(doc: &Doc, scores: &[SentenceScore], out: &mut Vec<Candidat
                             while a > s.start && prev_char(text, a) == Some(' ') {
                                 a -= 1;
                             }
-                            if !single_char && a > s.start && ok_size(a, p + 1) {
+                            if !single_char
+                                && a > s.start
+                                && ok_size(a, p + 1)
+                                && !is_protected(doc, a, p + 1)
+                            {
                                 out.push(Candidate {
                                     start: a,
                                     end: p + 1,
@@ -1137,6 +1141,11 @@ fn sentence_candidates(doc: &Doc, scores: &[SentenceScore], out: &mut Vec<Candid
             let prev_end = doc.sentences[si - 1].end;
             (prev_end, s.end)
         };
+        // A sentence holding inline code is kept whole: cutting it would
+        // cut the code span with it.
+        if is_protected(doc, a, b) {
+            continue;
+        }
         out.push(Candidate {
             start: a,
             end: b,

@@ -204,6 +204,47 @@ fn headings_code_and_tables_are_never_cut() {
     }
 }
 
+/// Every candidate of every tier, selected or not, must avoid protected
+/// text (headings, fences, tables, block quotes, inline code) on every
+/// fixture, so no future level or ablation can fade it.
+#[test]
+fn no_candidate_of_any_tier_overlaps_protected_text() {
+    let lists = lists();
+    let mut checked = [0usize; 4];
+    for (name, doc) in fixtures() {
+        let scores = score_sentences(&doc, &lists);
+        for c in ranked_candidates(&doc, &lists, &scores) {
+            checked[c.tier as usize] += 1;
+            assert!(
+                !doc.protected[c.start..c.end].iter().any(|&p| p),
+                "{name}: tier {} candidate ({}) touches protected text: {:?}",
+                c.tier,
+                c.reason,
+                &doc.text[c.start..c.end]
+            );
+        }
+    }
+    // the guard must be exercised on every tier, not vacuously true
+    assert!(checked.iter().all(|&n| n > 0), "tiers checked: {checked:?}");
+}
+
+#[test]
+fn parentheticals_holding_inline_code_are_not_candidates() {
+    let lists = lists();
+    let doc = Doc::parse(
+        "The plan is tracked upstream (`terraphim/zed-terraphim#1`) and \
+         the rest of this sentence is long enough to allow a clause cut \
+         (see the issue for details) here.\n",
+    );
+    let scores = score_sentences(&doc, &lists);
+    let parens: Vec<&str> = ranked_candidates(&doc, &lists, &scores)
+        .into_iter()
+        .filter(|c| c.reason == "parenthetical")
+        .map(|c| &doc.text[c.start..c.end])
+        .collect();
+    assert_eq!(parens, vec![" (see the issue for details)"]);
+}
+
 // ------------------------------------------------------------ words and sentences
 
 #[test]

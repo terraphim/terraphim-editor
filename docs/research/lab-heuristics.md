@@ -30,10 +30,10 @@ weakness = 0.35 * hedge_filler_density      (KG lists, normalised to the doc max
 3. Each level starts from the previous level's selection, so the levels are nested. Pass 1 walks the ranked list and accepts a candidate only if it does not overshoot the target word count. Pass 2 then repeatedly accepts whichever remaining candidate brings the count closer to the target: the best-ranked one that lands within 1% of the document, otherwise the closest one.
 4. Cuts are counted as a union of words, so a faded filler inside a later-faded sentence is not counted twice. Percentages use the same word definition as the status card.
 
-**Result:** every level on all three fixtures came within 0.4 percentage points of its target. The acceptance criterion was +/-3pp.
+**Result:** every level on all three fixtures came within 1.6 percentage points of its target. The acceptance criterion was +/-3pp. On whole repository documents dense with inline code, "Cut in half" falls well short of 50% (§6.5).
 
 Why this pair:
-- **One score drives both features.** The weakest-sentence mark and the sentence tier of the trim use the same `weakness` score. A sentence the Lab marks as weak is therefore one of the first whole sentences a trim fades, and the two features never contradict each other.
+- **One score drives both features.** The weakest-sentence mark and the sentence tier of the trim use the same `weakness` score. A sentence the Lab marks as weak is therefore one of the first whole sentences a trim fades, and the two features never contradict each other. The one exception is a sentence holding inline code: it can be marked, but trim never fades it (§5.1). In `zed-plugin-fit` the third-weakest sentence is such a case.
 - **Deterministic and explainable.** Each mark and each cut has a `reason` the UI can show (`filler "quite"`, `aside "which"`, `weak sentence`).
 - **Mapped onto `terraphim_automata` already.** The lists are KG markdown files, and the matcher uses the same automaton configuration as `terraphim_automata::find_matches`. The one gap is the word-boundary filter (§3.3).
 - **The light levels behave like the demo.** At ~10% the cut is mostly faded words and asides, not whole sentences, which is what the demo shows ("Faded words would go", R-8.4).
@@ -134,7 +134,7 @@ Below are the top three marks per fixture, with my judgement of each. The full t
 |---:|---:|---|---|
 | 1 | 0.747 | That is optional and can wait until an agent actually produces them. | Good: a hedge on a hedge |
 | 2 | 0.450 | **Sequencing:** today there is only one committed consumer. | Poor: it is a section lead-in |
-| 3 | 0.389 | That contract (`crates/terraphim_engine_events`) covers agent evolution and approvals (...), not document state. | Good: supporting detail that can go |
+| 3 | 0.389 | That contract (`crates/terraphim_engine_events`) covers agent evolution and approvals (...), not document state. | Good: supporting detail that can go (but trim keeps it, because it holds inline code) |
 
 Overall, the hedge and filler feature produces the convincing marks. Centrality catches tangents in essay prose, but it penalises lead-in sentences that introduce new vocabulary.
 
@@ -149,7 +149,7 @@ Overall, the hedge and filler feature produces the convincing marks. Centrality 
 
 ### 5.1 Span conventions (what "Make the cuts" deletes)
 
-Each span is a byte range into the document body that can be deleted verbatim:
+Each span is a byte range into the document body that can be deleted verbatim. In the prototype, "the document body" is the **normalised** text that `Doc::parse` builds, not the file as written: hard-wrapped prose lines (the Gutenberg fixtures wrap at about 70 columns) are trimmed and joined with single spaces, list-item continuation lines are joined to their item, and blocks are separated by exactly one blank line (test `gutenberg_hard_wraps_are_unwrapped`). That normalisation exists for fixture analysis only. Word counts are unaffected, but the offsets are not offsets into the original file, so the product must map them back (§7).
 
 | Granularity | Span covers | Example |
 |---|---|---|
@@ -161,7 +161,7 @@ Each span is a byte range into the document body that can be deleted verbatim:
 | Comma aside | leading comma + aside, up to the next comma or terminator; skipped when the next clause starts with *but* or *yet* | `my mode of life~~, which some would call impertinent~~, though` |
 | Sentence | the gap before it + the sentence (an opener takes the gap after it instead; a list item's opener also takes its marker) | |
 
-Headings, fenced code, tables, block quotes and inline code are never cut. List items are treated as prose: without that, documents that are mostly lists could not reach 50% (see §6.4).
+Headings, fenced code, tables, block quotes and inline code are never cut, at any granularity: a candidate whose span overlaps protected text is dropped. For inline code this means a parenthetical holding a code span is not a candidate, and neither is a whole sentence that holds one. (The first version of this spike only guarded word, dash and comma candidates, so parentheticals and sentences holding inline code were faded; the test `no_candidate_of_any_tier_overlaps_protected_text` now checks every candidate on every fixture.) List items are treated as prose: without that, documents that are mostly lists could not reach 50% (see §6.5).
 
 ### 5.2 Why the fit step matters (ablation)
 
@@ -177,13 +177,13 @@ All values are deltas from the target, measured by the prototype:
 | walden-economy | Tighten more | -0.1pp | +0.0pp | +0.7pp |
 | walden-economy | Even sharper | -0.1pp | +0.0pp | **+11.3pp** |
 | walden-economy | Cut in half | +0.0pp | -0.6pp | +1.2pp |
-| zed-plugin-fit | Slight trim | -0.3pp | -0.3pp | +1.2pp |
-| zed-plugin-fit | Tighten more | -0.3pp | -0.8pp | +0.4pp |
-| zed-plugin-fit | Even sharper | +0.4pp | +1.4pp | +0.4pp |
-| zed-plugin-fit | Cut in half | +0.1pp | +0.6pp | +0.1pp |
+| zed-plugin-fit | Slight trim | +0.5pp | -2.0pp | +1.7pp |
+| zed-plugin-fit | Tighten more | +1.4pp | +1.7pp | +1.4pp |
+| zed-plugin-fit | Even sharper | -1.6pp | -0.8pp | **+3.7pp** |
+| zed-plugin-fit | Cut in half | +0.4pp | -2.6pp | +0.4pp |
 
 Two findings:
-- **The fit step is what hits the tolerance.** Taking the ranked list in order until the target is passed fails on two cells, because Walden has a single 114-word sentence (+11.3pp at 30%) and Three Men overshoots at 50% (+3.5pp). With the skip-and-fit passes, even a sentence-only trim lands within 1.4pp.
+- **The fit step is what hits the tolerance.** Taking the ranked list in order until the target is passed fails on three cells: Walden has a single 114-word sentence (+11.3pp at 30%), Three Men overshoots at 50% (+3.5pp), and `zed-plugin-fit`, which has only 21 candidates once code-holding spans are excluded, overshoots at 30% (+3.7pp). With the skip-and-fit passes, even a sentence-only trim lands within 2.6pp. The coarser `zed-plugin-fit` candidate set is also why its recommended-method deltas (up to 1.6pp) are larger than the Gutenberg ones (up to 0.3pp).
 - **Mixed granularity is about quality, not accuracy.** Sentence-only trims also hit the numbers, but at ~10% they delete whole sentences where the recommended method fades fillers and asides. Fading at the smaller granularity is what makes "Slight trim" feel slight.
 
 ### 5.3 Nesting
@@ -216,34 +216,34 @@ Copied from `cargo run` output:
 | walden-economy | 670 | Tighten more | 20% | 134 | 133 | 19.9% | -0.1 | yes |
 | walden-economy | 670 | Even sharper | 30% | 201 | 200 | 29.9% | -0.1 | yes |
 | walden-economy | 670 | Cut in half | 50% | 335 | 335 | 50.0% | +0.0 | yes |
-| zed-plugin-fit | 401 | Slight trim | 10% | 40 | 39 | 9.7% | -0.3 | yes |
-| zed-plugin-fit | 401 | Tighten more | 20% | 80 | 79 | 19.7% | -0.3 | yes |
-| zed-plugin-fit | 401 | Even sharper | 30% | 120 | 122 | 30.4% | +0.4 | yes |
-| zed-plugin-fit | 401 | Cut in half | 50% | 201 | 201 | 50.1% | +0.1 | yes |
+| zed-plugin-fit | 401 | Slight trim | 10% | 40 | 42 | 10.5% | +0.5 | yes |
+| zed-plugin-fit | 401 | Tighten more | 20% | 80 | 86 | 21.4% | +1.4 | yes |
+| zed-plugin-fit | 401 | Even sharper | 30% | 120 | 114 | 28.4% | -1.6 | yes |
+| zed-plugin-fit | 401 | Cut in half | 50% | 201 | 202 | 50.4% | +0.4 | yes |
 
-**The acceptance criterion is met: all 12 cells are within +/-3pp, and the largest deviation is 0.4pp.** The test `every_fixture_level_within_three_points` asserts this. A second test, `reported_cut_matches_text_after_make_the_cuts`, checks that the word count of the text after deleting the spans equals `total - cut`, so the status-card number is honest.
+**The acceptance criterion is met: all 12 cells are within +/-3pp, and the largest deviation is 1.6pp (`zed-plugin-fit` at 30%).** The test `every_fixture_level_within_three_points` asserts this. A second test, `reported_cut_matches_text_after_make_the_cuts`, checks that the word count of the text after deleting the spans equals `total - cut`, so the status-card number is honest.
 
 ### 6.3 The cuts at "Tighten more" (~20%)
 
 ~~Struck~~ text is what the editor would fade. Full renders for every level are in `research/lab-heuristics/out/<fixture>-<pct>.md`.
 
-**zed-plugin-fit**: 401 -> 322 words, -19.7%
+**zed-plugin-fit**: 401 -> 315 words, -21.4%
 
-> **No.** The Zed plan ~~(`terraphim/zed-terraphim#1`)~~ is a thin `wasm32-wasip2` adapter over LSP, MCP and ACP. Zed's extension API has no way to draw span decorations, add panels, bind hover-plus-arrow keys or set per-span opacity, so most of the spec ~~(§3–§7)~~ cannot be built there. `terraphim-editor`~~, which owns its DOM~~, is the only existing target where the spec can be built as written.
+> **No.** The Zed plan (`terraphim/zed-terraphim#1`) is a thin `wasm32-wasip2` adapter over LSP, MCP and ACP. Zed's extension API has no way to draw span decorations, add panels, bind hover-plus-arrow keys or set per-span opacity, so most of the spec ~~(§3–§7)~~ cannot be built there. `terraphim-editor`~~, which owns its DOM~~, is the only existing target where the spec can be built as written.
 >
-> Zed can still get a reduced version through `terraphim_lsp`: AI alternatives as code actions, Lab "mark" results as diagnostics, and an approximate trim preview. That only works if the span model and annotation format are shared between both targets ~~(see "Shared model" below)~~.
+> Zed can still get a reduced version through `terraphim_lsp`: AI alternatives as code actions, Lab "mark" results as diagnostics, and an approximate trim preview. ~~That only works if the span model and annotation format are shared between both targets (see "Shared model" below).~~
 >
 > Because of the last non-goal, even the thesaurus-backed alternatives provider ~~(R-8.7)~~ cannot run inside the extension. It would have to live in `terraphim_lsp`~~, which the extension starts as a language server~~.
 >
 > There are no hooks for editor decorations, gutter rendering, panels or views, keymaps or input handling, context-menu items, or text opacity. Inside Zed, the extension can only add UI through an LSP server, using whatever LSP features Zed itself renders.
 >
-> The span model should **not** go into `EngineEvent`. ~~That contract (`crates/terraphim_engine_events`) covers agent evolution and approvals (`EvolutionProposed/Approved/Rejected/Applied`, `AllowOnce/AllowAlways/Reject/RejectAlways`), not document state.~~
+> The span model should **not** go into `EngineEvent`. That contract (`crates/terraphim_engine_events`) covers agent evolution and approvals (`EvolutionProposed/Approved/Rejected/Applied`, `AllowOnce/AllowAlways/Reject/RejectAlways`), not document state.
 >
-> **Sequencing:** today there is only one committed consumer. Zed's Z2 is blocked behind #3224, and terraphim-ai main CI is red ~~(#3325)~~. ~~So the crate starts as a workspace crate inside this repo (`crates/terraphim_alternatives`, `terraphim/terraphim-editor#2`).~~ It is extracted and published only when `terraphim_lsp` adopts it ~~(`terraphim/terraphim-editor#16`, server work in `terraphim/terraphim-ai#3409`)~~.
+> **Sequencing:** today there is only one committed consumer. ~~Zed's Z2 is blocked behind #3224, and terraphim-ai main CI is red (#3325).~~ So the crate starts as a workspace crate inside this repo (`crates/terraphim_alternatives`, `terraphim/terraphim-editor#2`). It is extracted and published only when `terraphim_lsp` adopts it (`terraphim/terraphim-editor#16`, server work in `terraphim/terraphim-ai#3409`).
 >
-> TACP/`EngineEvent` only needs an event if alternatives can come from an *agent* rather than the editor ~~(e.g. `AlternativesProposed { doc, span_id, alts, source: ai, model }`)~~. ~~That is optional and can wait until an agent actually produces them.~~
+> TACP/`EngineEvent` only needs an event if alternatives can come from an *agent* rather than the editor (e.g. `AlternativesProposed { doc, span_id, alts, source: ai, model }`). ~~That is optional and can wait until an agent actually produces them.~~
 >
-> **Embedded trailing block ~~(not a sidecar)~~.** The shared crate still owns the schema. It now also parses and writes the trailing fenced block and splits the body from the annotations. In Zed and other LSP clients the block will be visible as raw text, and edits to it are user edits. `terraphim_lsp` must therefore (a) exclude the block from diagnostics, marks and re-anchoring, and (b) treat a hand-edited or malformed block as recoverable: keep the body, report one diagnostic, and do not drop annotations silently. An LSP `foldingRange` for the block would hide it in clients that honour folding; whether Zed collapses LSP folding ranges by default needs checking in the Z0 spike.
+> **Embedded trailing block ~~(not a sidecar)~~.** ~~The shared crate still owns the schema. It now also parses and writes the trailing fenced block and splits the body from the annotations.~~ In Zed and other LSP clients the block will be visible as raw text, and edits to it are user edits. `terraphim_lsp` must therefore (a) exclude the block from diagnostics, marks and re-anchoring, and (b) treat a hand-edited or malformed block as recoverable: keep the body, report one diagnostic, and do not drop annotations silently. An LSP `foldingRange` for the block would hide it in clients that honour folding; whether Zed collapses LSP folding ranges by default needs checking in the Z0 spike.
 
 **walden-economy**: 670 -> 537 words, -19.9%
 
@@ -279,30 +279,29 @@ A reading note on the Three Men render: in "too,~~—began ... alphabetically~~�
 
 | First level | Granularity | Words | Reason | Span |
 |---|---|---:|---|---|
-| Slight trim | Clause | 2 | parenthetical | (`terraphim/zed-terraphim#1`) |
 | Slight trim | Clause | 2 | parenthetical | (§3–§7) |
 | Slight trim | Clause | 4 | aside "which" | , which owns its DOM |
 | Slight trim | Clause | 4 | parenthetical | (see "Shared model" below) |
 | Slight trim | Clause | 1 | parenthetical | (R-8.7) |
-| Slight trim | Clause | 1 | parenthetical | (`crates/terraphim_engine_events`) |
-| Slight trim | Clause | 2 | parenthetical | (`EvolutionProposed/Approved/Rejected/Applied`, ...) |
+| Slight trim | Clause | 8 | aside "which" | , which the extension starts as a language server |
 | Slight trim | Clause | 1 | parenthetical | (#3325) |
-| Slight trim | Clause | 3 | parenthetical | (`crates/terraphim_alternatives`, `terraphim/terraphim-editor#2`) |
-| Slight trim | Clause | 7 | parenthetical | (`terraphim/terraphim-editor#16`, server work in `terraphim/terraphim-ai#3409`) |
-| Slight trim | Clause | 8 | parenthetical | (e.g. `AlternativesProposed { ... }`) |
+| Slight trim | Sentence | 12 | weak sentence | That is optional and can wait until an agent actually produces them. |
 | Slight trim | Word | 1 | filler "actually" | actually |
 | Slight trim | Clause | 3 | parenthetical | (not a sidecar) |
-| Tighten more | Clause | 8 | aside "which" | , which the extension starts as a language server |
-| Tighten more | Sentence | 13 | weak sentence | That contract (`crates/terraphim_engine_events`) covers agent evolution ... |
-| Tighten more | Sentence | 14 | weak sentence | So the crate starts as a workspace crate inside this repo ... |
-| Tighten more | Sentence | 12 | weak sentence | That is optional and can wait until an agent actually produces them. |
-| Even sharper | Sentence | 18 | weak sentence | `terraphim-editor`, which owns its DOM, is the only existing target ... |
-| Even sharper | Sentence | 13 | weak sentence | Zed's Z2 is blocked behind #3224, and terraphim-ai main CI is red (#3325). |
-| Even sharper | Sentence | 17 | weak sentence | It is extracted and published only when `terraphim_lsp` adopts it ... |
-| Even sharper | Sentence | 7 | weak sentence | The shared crate still owns the schema. |
-| Cut in half | Sentence | 17 | weak sentence | It now also parses and writes the trailing fenced block ... |
-| Cut in half | Sentence | 34 | weak sentence | `terraphim_lsp` must therefore (a) exclude the block from diagnostics ... |
-| Cut in half | Sentence | 28 | weak sentence | An LSP `foldingRange` for the block would hide it in clients ... |
+| Slight trim | Sentence | 7 | weak sentence | The shared crate still owns the schema. |
+| Tighten more | Sentence | 19 | weak sentence | That only works if the span model and annotation format are shared between both targets ... |
+| Tighten more | Sentence | 13 | weak sentence | Zed's Z2 is blocked behind #3224, and terraphim-ai main CI is red (#3325). |
+| Tighten more | Sentence | 17 | weak sentence | It now also parses and writes the trailing fenced block ... |
+| Even sharper | Sentence | 30 | weak sentence | Zed's extension API has no way to draw span decorations, add panels, ... |
+| Cut in half | Sentence | 1 | paragraph-opening sentence | **No.** |
+| Cut in half | Sentence | 16 | paragraph-opening sentence | Because of the last non-goal, even the thesaurus-backed alternatives provider (R-8.7) ... |
+| Cut in half | Sentence | 21 | paragraph-opening sentence | There are no hooks for editor decorations, gutter rendering, ... |
+| Cut in half | Sentence | 19 | weak sentence | Inside Zed, the extension can only add UI through an LSP server, ... |
+| Cut in half | Sentence | 8 | paragraph-opening sentence | **Sequencing:** today there is only one committed consumer. |
+| Cut in half | Sentence | 6 | paragraph-opening sentence | **Embedded trailing block (not a sidecar).** |
+| Cut in half | Sentence | 21 | weak sentence | In Zed and other LSP clients the block will be visible as raw text, ... |
+
+Only 21 of the document's candidates survive the protected-range guard (38 before it): 11 of its 24 sentences, holding 211 of its 401 words, contain inline code, and so do most of its parentheticals. Nothing that contains a backticked path or identifier is faded any more, but to reach 50% the trim has to fall back to tier 3 and fades five paragraph openers, including `**No.**`, the one-word answer to the whole document. Every one of the 21 is selected by "Cut in half": the level is reached only by exhausting the candidate list.
 
 ### 6.5 Robustness on whole repository documents (not fixtures)
 
@@ -310,24 +309,29 @@ A reading note on the Three Men render: in "too,~~—began ... alphabetically~~�
 
 | File | Words | 10% | 20% | 30% | 50% |
 |---|---:|---:|---:|---:|---:|
-| `docs/requirements/alternative-control.md` | 2497 | 10.0% | 20.0% | 29.9% | 50.0% |
-| `docs/requirements/zed-plugin-fit.md` | 1621 | 9.9% | 19.9% | 30.1% | 50.0% |
-| `README.md` | 187 | 9.6% | 19.8% | 29.9% | 50.3% |
+| `docs/requirements/alternative-control.md` | 2497 | 10.1% | 20.0% | 30.0% | **33.5%** |
+| `docs/requirements/zed-plugin-fit.md` | 1621 | 9.9% | 20.0% | 29.0% | **29.0%** |
+| `README.md` | 187 | 9.6% | 19.8% | 29.4% | **46.0%** |
 
-An earlier version protected list items. With that version, `zed-plugin-fit.md` and `README.md` reached only about 33% at "Cut in half", because protected words count in the denominator but cannot be cut. A document made mostly of tables or code can still fall short. In that case the status card must report the achieved percentage honestly (for example `-38%` on "Cut in half") instead of pretending to hit 50%.
+**"Cut in half" misses badly on technical documents.** Protected words count in the denominator but cannot be cut, and since the protected-range guard (§5.1) every sentence that holds inline code is protected along with the code. In `zed-plugin-fit.md`, 699 of 1621 words are protected outright (tables, code, headings) and 44 of the 77 prose sentences hold inline code, so it runs out of candidates at 29.0% (the same value at 30% and 50%). In `alternative-control.md`, 60 of 144 sentences (1536 of 2497 words) hold inline code, and it stops at 33.5%. Before the guard these documents reached 50%, but only by fading code spans, which the spec does not allow. An earlier version also protected list items; with that version `zed-plugin-fit.md` and `README.md` reached only about 33%.
+
+Two consequences. First, the status card must report the achieved percentage honestly (for example `-29%` on "Cut in half") instead of pretending to hit 50%. Second, if 50% matters for technical prose, the candidate rules need a finer cut that keeps code: for example, fading the prose around an inline code span (the clause before or after it) rather than the whole sentence. That is not attempted here; the acceptance fixtures still pass (§6.2), and this is reported rather than tuned.
 
 ### 6.6 Trim failure modes seen on the fixtures
 
 - **Dependent clauses.** In Walden, removing ", considering the circumstances" and "very" leaves "impertinent, but, natural and pertinent", which has a stray comma. Two guards came out of this spike: resumptive dash tails are skipped (before that guard, the main clause "—even these forms of conscious penance are ..." was cut and left a fragment), and comma asides followed by *but* or *yet* are skipped. A punctuation tidy-up when the cuts are applied (collapse `, ,` and drop a comma left after a conjunction) would be a mechanical fix-up of the same kind as the a/an rule (R-2.6), and needs a decision because it edits text outside the spans.
 - **Capitalisation.** Fading a sentence-initial hedge ("~~Perhaps~~ these pages") leaves a lower-case start after "Make the cuts". The fix-up is the same kind as above.
-- **References in technical prose.** In `zed-plugin-fit`, parentheticals holding issue numbers and paths are the first things faded. For a requirements document that removes traceability. A rule worth adding: never fade a parenthetical that contains `#\d+`, `R-\d`, or a backticked identifier, or make it a per-role setting.
+- **References in technical prose.** Parentheticals holding backticked paths or identifiers (for example ``(`terraphim/zed-terraphim#1`)``) are no longer faded, because inline code is protected. Bare references still are: in `zed-plugin-fit`, `(R-8.7)` and `(#3325)` are among the first spans faded at "Slight trim". For a requirements document that removes traceability. A rule worth adding: never fade a parenthetical that contains `#\d+` or `R-\d`, or make it a per-role setting.
+- **Paragraph openers in code-dense prose.** Because so few spans in `zed-plugin-fit` are cuttable, "Cut in half" exhausts tiers 0 to 2 and falls back to tier 3, fading five paragraph openers. One of them is `**No.**`, the answer the whole document gives. The tier-3 fallback is doing what it was designed to do, but on technical prose it reaches the sentences that matter most.
 - **Voice.** Comic sentences ("I crawled out a decrepit wreck.", "Then, all of a sudden, it seemed to start off.") read as weak to every feature. The user's "Click one to keep it" is the intended safety net, which is why the review UI matters as much as the heuristic.
 
-- **Fixture-shaped aside openers.** Six entries in `ASIDE_OPENERS` (`src/lib.rs`) were added after reading these fixtures and are not general connectives: "i fancy", "as i expected", "so far as", "in respect to", "in its most", "if any". They influence *which* clauses are faded, not whether the targets are hit. Ablation (2026-10-04, from the structural review of PR #25): with those six removed, all 12 cells stay within +/-3pp (largest deviation -0.6pp, Walden at 10%), and the 20 tests pass. The production list should start from the general connectives only and grow from labelled documents, not from these fixtures.
+- **Fixture-shaped aside openers.** Six entries in `ASIDE_OPENERS` (`src/lib.rs`) were added after reading these fixtures and are not general connectives: "i fancy", "as i expected", "so far as", "in respect to", "in its most", "if any". They influence *which* clauses are faded, not whether the targets are hit. Ablation (first run 2026-10-04 from the structural review of PR #25; re-run 2026-10-05 after the protected-range fix): with those six removed, all 12 cells stay within +/-3pp, and the 22 tests pass. The largest deviation is -1.6pp (`zed-plugin-fit` at 30%), which the six openers do not affect: that fixture's numbers are identical with and without them. On the two Gutenberg fixtures the largest deviation is -0.6pp (Walden at 10%). The production list should start from the general connectives only and grow from labelled documents, not from these fixtures.
 
 ## 7. What the UI needs from the API (#14, #15)
 
-The heuristics belong on the Rust side (in `crates/terraphim_alternatives`, compiled to WASM), in line with spec §11. The surface below is a proposal. The prototype implements everything except `kept`, `SpanId` and the `mark` entry point.
+The heuristics belong on the Rust side (in `crates/terraphim_alternatives`, compiled to WASM), in line with spec §11. The surface below is a proposal. The prototype implements everything except `kept`, `SpanId`, the `mark` entry point and original-offset spans.
+
+**Requirement for #14 and #15: spans must be computed on original offsets.** The prototype's offsets index the normalised text from `Doc::parse` (hard wraps joined, lines trimmed, blank lines collapsed; §5.1), which is fine for measuring fixtures but not for the product. If the editor faded or deleted those ranges against the buffer the user is editing, it would hit the wrong characters, and "Make the cuts" would in effect rewrite whitespace and line breaks outside the faded spans, breaking "fades, never rewrites" (R-8.2, R-8.4). The production implementation must either analyse the original text directly or keep an offset map from normalised to original positions and translate every span back before returning it. In both cases a span's `start..end` must index `body` exactly as the editor holds it, and deleting it must leave every byte outside it untouched. A test for this: for every span, `body[..start] + body[end..]` equals the editor's own result of "Make the cuts" on that span.
 
 ```rust
 pub struct LabInput<'a> {
@@ -340,7 +344,7 @@ pub enum Granularity { Word, Clause, Sentence }
 
 pub struct LabSpan {
     pub id: SpanId,             // stable: hash of (granularity, anchor text, occurrence index)
-    pub start: usize,           // byte offsets into `body`, on char boundaries
+    pub start: usize,           // byte offsets into the original `body` (not a normalised copy), on char boundaries
     pub end: usize,
     pub granularity: Granularity,
     pub reason: Reason,         // Filler("quite") | Hedge("perhaps") | Aside("which") | Parenthetical | DashAside | WeakSentence | ...
@@ -373,7 +377,8 @@ What the UI gets from this:
 ## 8. Open questions for review
 
 1. Should "Make the cuts" apply a punctuation and capitalisation tidy-up (§6.6)? That would edit a character or two outside the faded spans.
-2. Should parentheticals with references be protected by default, or only for a "technical" role?
+2. Parentheticals with backticked references are now protected, as inline code. Should bare references (`#123`, `R-8.7`) be protected by default too, or only for a "technical" role?
+6. Should "Cut in half" on code-dense prose fade the prose around inline code (finer clause cuts) to get closer to 50%, or is reporting the shortfall (§6.5) enough?
 3. Is 15% the right share for "Mark the weakest sentences", or should it be a fixed count per 500 words?
 4. Should paragraph openers be protected for the weakest-sentence mark as well as for trim?
 5. When an LLM provider arrives (after v1), should it re-rank these deterministic candidates (keeping the never-rewrite guarantee), or propose its own spans?
@@ -382,7 +387,7 @@ What the UI gets from this:
 
 ```bash
 # from the repository root; the crate is outside the workspace ([workspace] table in its Cargo.toml)
-cargo test --manifest-path research/lab-heuristics/Cargo.toml   # 20 tests, no mocks
+cargo test --manifest-path research/lab-heuristics/Cargo.toml   # 22 tests, no mocks
 cargo run  --manifest-path research/lab-heuristics/Cargo.toml   # prints the table, writes research/lab-heuristics/out/
 cargo run  --manifest-path research/lab-heuristics/Cargo.toml -- README.md docs/requirements/alternative-control.md
 ```
