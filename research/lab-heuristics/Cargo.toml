@@ -1,0 +1,17 @@
+[package]
+name = "lab-heuristics"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Research prototype for issue #3: deterministic weakest-sentence ranking and trim selection"
+license = "MIT"
+
+# Empty workspace table: this crate is deliberately NOT a member of the
+# terraphim-editor workspace. Build it with
+#   cargo run --manifest-path research/lab-heuristics/Cargo.toml
+[workspace]
+
+[dependencies]
+# Same matcher and configuration that terraphim_automata::find_matches uses
+# (LeftmostLongest, ascii_case_insensitive).
+aho-corasick = "1"
