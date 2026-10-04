@@ -155,7 +155,7 @@ Menu is a dark rounded panel, monospace labels left, dim shortcut text right, ho
 Spans carry no `ghost` field; ghosting lives in the separate `ghosts` list of non-overlapping ranges, which may overlap spans **(decision 2026-10-04: ghost layer)**.
 Anchors must survive edits elsewhere in the document: store `text` and re-anchor by search on load, with `start/end` as a hint. **Inferred.**
 
-**R-9.3 Export.** Plain export emits only the active alternatives, drops ghosted spans **(inferred — ask: should ghosted text export?)**, and omits overflow.
+**R-9.3 Export.** Plain export emits only the active alternatives, drops ghosted text, i.e. every ghost range including any spans inside it **(decision 2026-10-04: ghost layer)**, **(inferred — ask: should ghosted text export?)**, and omits overflow.
 
 ## 10. Visual design tokens
 
