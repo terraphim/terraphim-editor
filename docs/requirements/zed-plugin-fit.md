@@ -6,7 +6,7 @@ Companion to `alternative-control.md` (the Write_On requirements). Written 2026-
 
 **No.** The Zed plan (`terraphim/zed-terraphim#1`) is a thin `wasm32-wasip2` adapter over LSP, MCP and ACP. Zed's extension API has no way to draw span decorations, add panels, bind hover-plus-arrow keys or set per-span opacity, so most of the spec (§3–§7) cannot be built there. `terraphim-editor`, which owns its DOM, is the only existing target where the spec can be built as written.
 
-Zed can still get a reduced version through `terraphim_lsp`: AI alternatives as code actions, Lab "mark" results as diagnostics, and an approximate trim preview. That only works if the span model and annotation format are shared between both targets (see "Shared model" below).
+Zed can still get a reduced version through `terraphim_lsp`: AI alternatives as code actions, Lab "mark" results as diagnostics, and an approximate trim preview. That only works if both targets share the `terraphim_lsp` core and the annotation format (see "Shared model" below).
 
 ## The plan that was compared
 
@@ -87,41 +87,46 @@ None of this is in the current Z0–Z4 phases of `zed-terraphim#1`. Z2 only says
 
 The span model should **not** go into `EngineEvent`. That contract (`crates/terraphim_engine_events`) covers agent evolution and approvals (`EvolutionProposed/Approved/Rejected/Applied`, `AllowOnce/AllowAlways/Reject/RejectAlways`), not document state.
 
-Recommended instead: one small shared Rust crate (working name `terraphim_alternatives`) that owns:
+**Plan (updated 2026-10-04): KG synonyms are the alternatives.** An earlier plan proposed a shared crate, `terraphim_alternatives`, owning the whole span model for both clients (with a later extraction when `terraphim_lsp` adopted it, `terraphim/terraphim-editor#16`). That plan is superseded: #16 is closed. The shared model is now the knowledge graph plus `terraphim_lsp`:
 
-- the span model (`kind` word/sentence/paragraph, `anchor` = text plus start/end hint);
-- re-anchoring after edits;
-- the a/an fix-up;
-- the trim/ghost span set;
-- the versioned annotation schema from R-9.2, serialised as the trailing fenced block.
+- **Concept id to synonyms index** ([terraphim/terraphim-core#75](https://git.terraphim.cloud/terraphim/terraphim-core/issues/75)). Match positions already exist through `find_matches(.., true)`, as validated on 2026-10-02. Only the reverse index (concept id to synonyms) is new.
+- **`terraphim_lsp` split into a WASM-buildable core plus a server** ([terraphim/terraphim-ai#3409](https://git.terraphim.cloud/terraphim/terraphim-ai/issues/3409)). The core is the main engine for every client: spans, alternatives from the index, re-anchoring and diagnostics. The server wraps it for Zed and other LSP clients.
+- **Browser editor** ([terraphim/terraphim-editor#13](https://git.terraphim.cloud/terraphim/terraphim-editor/issues/13)) consumes the `terraphim_lsp` core compiled to WASM. No alternatives provider is written in this repo.
+- **`terraphim_alternatives`** ([terraphim/terraphim-editor#2](https://git.terraphim.cloud/terraphim/terraphim-editor/issues/2)) keeps its name but is scoped to non-KG state only: human-written alternatives, ghost flags, overflow and the annotation block (R-9.2 schema, serialised as the trailing fenced block). It is not the shared cross-client model, and it lives in this repo as `crates/terraphim_alternatives`.
 
-`terraphim_lsp` would use it natively. `terraphim-editor` would compile it to WASM. With two committed consumers, it meets #3224's rule of shipping WASM only where at least two consumers justify it, and its annotation schema version falls under #3224's N/N-1 contract rule.
+**Sequencing (cross-repo):**
 
-**Sequencing:** today there is only one committed consumer. Zed's Z2 is blocked behind #3224, and terraphim-ai main CI is red (#3325). So the crate starts as a workspace crate inside this repo (`crates/terraphim_alternatives`, `terraphim/terraphim-editor#2`). It is extracted and published only when `terraphim_lsp` adopts it (`terraphim/terraphim-editor#16`, server work in `terraphim/terraphim-ai#3409`).
+1. [terraphim-core#75](https://git.terraphim.cloud/terraphim/terraphim-core/issues/75): concept id to synonyms index.
+2. [terraphim-ai#3409](https://git.terraphim.cloud/terraphim/terraphim-ai/issues/3409): `terraphim_lsp` core/server split, using the index.
+3. [terraphim-editor#13](https://git.terraphim.cloud/terraphim/terraphim-editor/issues/13): browser editor consumes the core.
 
-Fields that must stay portable across all clients:
+[terraphim-editor#2](https://git.terraphim.cloud/terraphim/terraphim-editor/issues/2) is independent of this order, because it holds only state the KG cannot derive. Zed's Z2 remains blocked behind #3224, and terraphim-ai main CI is red (#3325).
 
-| Field | Purpose |
-|---|---|
-| `version` | Schema version, for N/N-1 negotiation |
-| `spans[].id`, `kind`, `anchor{text,start,end}` | Identity and re-anchoring |
-| `spans[].alts[]{text, source: original\|human\|ai, model?}` | List and provenance (R-4.4) |
-| `spans[].active` | Active index (R-2.2, R-3.3) |
-| `spans[].ghost` | Ghost attribute (R-5.3) |
-| `overflow` | Stash (R-6) |
+Fields that must stay portable across all clients. "Source" marks where each field comes from: **KG** means derived from the knowledge graph on demand and never persisted; **Block** means persisted in the annotation block (#2).
+
+| Field | Source | Purpose |
+|---|---|---|
+| `version` | Block | Schema version, for N/N-1 negotiation |
+| `spans[].id`, `kind`, `anchor{text,start,end}` | KG (matches and positions), Block (spans with human or ghost state) | Identity and re-anchoring |
+| `spans[].alts[]{text, source: original\|kg\|human\|ai, model?}` | KG (`kg` synonyms), Block (`human`, `ai`, and `original`) | List and provenance (R-4.4) |
+| `spans[].active` | Block | Active index (R-2.2, R-3.3) |
+| `spans[].ghost` | Block | Ghost attribute (R-5.3) |
+| `overflow` | Block | Stash (R-6) |
+
+The `kg` value for `alts[].source` is new under this plan: KG synonyms are recomputed from the index, so they are not written to the block.
 
 TACP/`EngineEvent` only needs an event if alternatives can come from an *agent* rather than the editor (e.g. `AlternativesProposed { doc, span_id, alts, source: ai, model }`). That is optional and can wait until an agent actually produces them.
 
 ## Effect of the decisions (`alternative-control.md` §12, answered 2026-10-02)
 
-- **Embedded trailing block (not a sidecar).** The shared crate still owns the schema. It now also parses and writes the trailing fenced block and splits the body from the annotations. In Zed and other LSP clients the block will be visible as raw text, and edits to it are user edits. `terraphim_lsp` must therefore (a) exclude the block from diagnostics, marks and re-anchoring, and (b) treat a hand-edited or malformed block as recoverable: keep the body, report one diagnostic, and do not drop annotations silently. An LSP `foldingRange` for the block would hide it in clients that honour folding; whether Zed collapses LSP folding ranges by default needs checking in the Z0 spike.
+- **Embedded trailing block (not a sidecar).** `terraphim_alternatives` (#2) owns the schema for non-KG state, and parses and writes the trailing fenced block, splitting the body from the annotations. In Zed and other LSP clients the block will be visible as raw text, and edits to it are user edits. `terraphim_lsp` must therefore (a) exclude the block from diagnostics, marks and re-anchoring, and (b) treat a hand-edited or malformed block as recoverable: keep the body, report one diagnostic, and do not drop annotations silently. An LSP `foldingRange` for the block would hide it in clients that honour folding; whether Zed collapses LSP folding ranges by default needs checking in the Z0 spike.
 - **Thesaurus first.** This fits both targets, because `terraphim_lsp` already loads KG/thesaurus data for hover, completion and diagnostics.
 - **The Lab in v1 includes marks and trim.** The marks carry over to Zed as diagnostics. Trim carries over only approximately, through `Unnecessary` fading.
 
 ## Evidence
 
 - Gitea: `terraphim/zed-terraphim#1`, `terraphim/terraphim-ai#3224`, `#3338`, `#3328`, repo metadata for `terraphim/zed` and `terraphim/zed-terraphim` (read 2026-10-02 via API).
-- Tracking: epic `terraphim/terraphim-editor#1` (children #2-#16); `terraphim/terraphim-ai#3409` (LSP); Z0 evidence comment on `terraphim/zed-terraphim#1`.
+- Tracking: epic `terraphim/terraphim-editor#1` (children #2-#16; #16 closed as superseded); `terraphim/terraphim-ai#3409` (LSP); Z0 evidence comment on `terraphim/zed-terraphim#1`.
 - `zed_extension_api` 0.7.0 crate source, `wit/since_v0.6.0/extension.wit`.
 - `terraphim/zed` mirror, `assets/settings/default.json` at `main`.
 - `terraphim-ai/crates/terraphim_lsp/src/server.rs`, `crates/terraphim_engine_events/src/`.
