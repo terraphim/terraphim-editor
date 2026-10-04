@@ -24,7 +24,7 @@ Out of scope for this spec: collaboration, cloud sync, publishing to X/LinkedIn 
 
 **R-2.6 Grammar fix-ups on swap.** When the active alternative starts with a vowel sound, a preceding indefinite article is automatically switched between "a" and "an" (`a paperclip` → `an eraser` → `a thumbtack`) `[T 1:50–2:00, F 1:55]`. The rule must be reversible and must not touch text outside the article immediately preceding the span.
 
-**R-2.7 Emptying removes the indicator.** Deleting all non-original alternatives removes the underline and dots; the span reverts to plain text `[T 3:10–3:20]`.
+**R-2.7 Emptying removes the indicator.** Deleting all non-original alternatives removes the underline and dots; the span reverts to plain text `[T 3:10–3:20]`. Any ghost over that text is unaffected; a ghost no longer keeps an emptied span alive **(decision 2026-10-04: ghost layer)**.
 
 ## 3. Inline indicators (the "dots under text")
 
@@ -67,7 +67,7 @@ The active alternative is shown with brighter/bold text and its glyph tinted lav
 
 **R-5.2 Revive.** Right-click ghosted text → "Revive" restores full opacity `[T 2:45–2:50]`.
 
-**R-5.3 Ghost is a span attribute, persisted with the document, independent of alternatives.** A ghosted span may also have alternatives.
+**R-5.3 Ghosting is an independent layer, persisted with the document** **(decision 2026-10-04: ghost layer)**. Ghosts are ranges of body text separate from alternative spans: a ghost may fully cover or partially overlap any spans (so a sentence containing a word with alternatives can be ghosted), while ghosts never overlap each other (ghosting over or next to an existing ghost merges them; reviving part of a ghost trims or splits it). Ghosts are elastic: edits and alternative swaps inside a ghost resize it, and deleting all of its text removes it.
 
 ## 6. Overflow panel (stash)
 
@@ -144,15 +144,18 @@ Menu is a dark rounded panel, monospace labels left, dim shortcut text right, ho
         { "text": "tension",  "source": "original" },
         { "text": "pressure", "source": "human" },
         { "text": "struggle", "source": "ai", "model": "…" }
-      ],
-      "ghost": false }
+      ] }
+  ],
+  "ghosts": [
+    { "id": "g1", "anchor": { "start": 100, "end": 140, "text": "…a sentence containing tension…" } }
   ],
   "overflow": "…free text…"
 }
 ```
+Spans carry no `ghost` field; ghosting lives in the separate `ghosts` list of non-overlapping ranges, which may overlap spans **(decision 2026-10-04: ghost layer)**.
 Anchors must survive edits elsewhere in the document: store `text` and re-anchor by search on load, with `start/end` as a hint. **Inferred.**
 
-**R-9.3 Export.** Plain export emits only the active alternatives, drops ghosted spans **(inferred — ask: should ghosted text export?)**, and omits overflow.
+**R-9.3 Export.** Plain export emits only the active alternatives, drops ghosted text, i.e. every ghost range including any spans inside it **(decision 2026-10-04: ghost layer)**, **(inferred — ask: should ghosted text export?)**, and omits overflow.
 
 ## 10. Visual design tokens
 

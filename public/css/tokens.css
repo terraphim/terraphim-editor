@@ -1,0 +1,98 @@
+/*
+ * terraphim-editor design tokens and Write_On theme
+ * ==================================================
+ *
+ * Single source of truth for the Write_On visual language
+ * (docs/requirements/alternative-control.md, section 10 and R-7.1).
+ * All later UI issues (alternatives panel, ghosting, overflow panel,
+ * context menu, Lab popover, corner chrome) must consume these custom
+ * properties rather than hard-coding colours, radii or fonts.
+ * Full documentation, contrast figures and rationale: docs/design/tokens.md
+ *
+ * Values come from the spec text; sampling from the source demo frames
+ * is deferred (the frames are not available in the repository).
+ *
+ * Tokens (defined once, on :root, inert until consumed):
+ *   --te-color-bg            #0a0d1c   page background
+ *   --te-color-text          #e8d9c4   body text, warm cream
+ *   --te-color-text-dim      #8f8781   dim UI text (counts, shortcut hints); solid
+ *   --te-color-accent        #8c86e6   lavender accent (active tab, lit dot, save icon)
+ *   --te-color-accent-soft   rgba(140, 134, 230, 0.4)  underline / dot (accent at 40%)
+ *   --te-color-panel         #11142a   side panels (alternatives, overflow)
+ *   --te-color-panel-border  #262a4a   1px lighter panel border
+ *   --te-color-popover       #171a2e   context menu and Lab popover
+ *   --te-color-popover-hover #1f2340   hovered row in menus
+ *   --te-radius-popover      8px
+ *   --te-font-mono           monospace stack for body and UI
+ *   --te-font-display        cursive stack for panel titles
+ *   --te-font-size-body      1.0625rem
+ *   --te-line-height         1.75
+ *   --te-ghost-opacity       0.1       ghosted spans (R-5.1)
+ *   --te-measure             70ch      text column width (R-7.1)
+ *   --te-page-margin-top     generous top margin (R-7.1)
+ *
+ * Scoping: the Write_On theme and layout apply only beneath an element
+ * carrying data-mode="write-on" or the class "write-on". The plain editor
+ * is unaffected until issue #7 wires the toggle. To preview, set
+ *   <body data-mode="write-on">
+ * (or add class="write-on" to <body>) by hand or in the browser devtools.
+ *
+ * Expected hooks inside the scope:
+ *   .te-surface        the editable writing surface (contenteditable)
+ *   .markdown-preview  the rendered preview
+ */
+
+:root {
+    --te-color-bg: #0a0d1c;
+    --te-color-text: #e8d9c4;
+    --te-color-text-dim: #8f8781;
+    --te-color-accent: #8c86e6;
+    --te-color-accent-soft: rgba(140, 134, 230, 0.4);
+    --te-color-panel: #11142a;
+    --te-color-panel-border: #262a4a;
+    --te-color-popover: #171a2e;
+    --te-color-popover-hover: #1f2340;
+    --te-radius-popover: 8px;
+    --te-font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --te-font-display: "Caveat", "Segoe Script", "Bradley Hand", "Brush Script MT", cursive;
+    --te-font-size-body: 1.0625rem;
+    --te-line-height: 1.75;
+    --te-ghost-opacity: 0.1;
+    --te-measure: 70ch;
+    --te-page-margin-top: clamp(3rem, 12vh, 8rem);
+}
+
+/* ---- Write_On theme (opt-in scope) ---- */
+
+[data-mode="write-on"],
+.write-on {
+    min-height: 100vh;
+    background-color: var(--te-color-bg);
+    color: var(--te-color-text);
+    font-family: var(--te-font-mono);
+    font-size: var(--te-font-size-body);
+    line-height: var(--te-line-height);
+    color-scheme: dark;
+}
+
+/* ---- Write_On layout (R-7.1): centred ~70ch column, generous top margin ---- */
+
+[data-mode="write-on"] .te-surface,
+[data-mode="write-on"] .markdown-preview,
+.write-on .te-surface,
+.write-on .markdown-preview {
+    box-sizing: content-box;
+    max-width: var(--te-measure);
+    margin-inline: auto;
+    padding-top: var(--te-page-margin-top);
+    background-color: transparent;
+    color: inherit;
+    font-family: var(--te-font-mono);
+    line-height: var(--te-line-height);
+    caret-color: var(--te-color-accent);
+}
+
+[data-mode="write-on"] ::selection,
+.write-on ::selection {
+    background-color: var(--te-color-accent-soft);
+}
