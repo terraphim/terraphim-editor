@@ -9,10 +9,14 @@ class TeraphimEditor {
     // Load required Shoelace components
     await this.loadShoelaceComponents();
     
+    // Re-initialising must not leak the previous editor.
+    this.destroy();
+
     // Create editor container
     const container = document.createElement('div');
     container.className = 'terraphim-editor-container';
     this.targetElement.appendChild(container);
+    this.container = container;
 
     // Initialize editor
     this.editor = new MarkdownEditor(this.config);
@@ -50,6 +54,14 @@ class TeraphimEditor {
         await import(`${shoelaceBase}components/${component}`);
       }
     }));
+  }
+
+  /** Remove the editor, its listeners and the container it created. */
+  destroy() {
+    if (this.editor) this.editor.destroy();
+    this.editor = null;
+    if (this.container) this.container.remove();
+    this.container = null;
   }
 
   getValue() {

@@ -47,6 +47,12 @@ class EditorSurface {
     this.historyLimit = options.historyLimit || 500;
     this.coalesceMs = options.coalesceMs === undefined ? 1000 : options.coalesceMs;
     this.nextDecorationId = 1;
+    // Pre-edit range reported by the last `beforeinput`, used to place the
+    // edit when the content diff alone is ambiguous (see sync()).
+    this.pendingHint = null;
+    // One AbortController removes every listener this instance adds.
+    this.abortController = new AbortController();
+    this.destroyed = false;
     this.plaintextOnly = EditorSurface.enablePlaintextEditing(root);
 
     root.setAttribute('role', 'textbox');
@@ -62,22 +68,23 @@ class EditorSurface {
       beforeinput: (e) => this.onBeforeInput(e),
       input: (e) => this.onInput(e),
       keydown: (e) => this.onKeyDown(e),
-      compositionstart: () => { this.composing = true; },
+      compositionstart: () => { this.composing = true; this.pendingHint = null; },
       compositionend: () => this.onCompositionEnd(),
       paste: (e) => this.onPaste(e),
       drop: (e) => this.onDrop(e),
       copy: (e) => this.onCopy(e, false),
       cut: (e) => this.onCopy(e, true),
     };
-    root.addEventListener('beforeinput', this.handlers.beforeinput);
-    root.addEventListener('input', this.handlers.input, true);
-    root.addEventListener('keydown', this.handlers.keydown);
-    root.addEventListener('compositionstart', this.handlers.compositionstart);
-    root.addEventListener('compositionend', this.handlers.compositionend);
-    root.addEventListener('paste', this.handlers.paste);
-    root.addEventListener('drop', this.handlers.drop);
-    root.addEventListener('copy', this.handlers.copy);
-    root.addEventListener('cut', this.handlers.cut);
+    const signal = this.abortController.signal;
+    root.addEventListener('beforeinput', this.handlers.beforeinput, { signal });
+    root.addEventListener('input', this.handlers.input, { capture: true, signal });
+    root.addEventListener('keydown', this.handlers.keydown, { signal });
+    root.addEventListener('compositionstart', this.handlers.compositionstart, { signal });
+    root.addEventListener('compositionend', this.handlers.compositionend, { signal });
+    root.addEventListener('paste', this.handlers.paste, { signal });
+    root.addEventListener('drop', this.handlers.drop, { signal });
+    root.addEventListener('copy', this.handlers.copy, { signal });
+    root.addEventListener('cut', this.handlers.cut, { signal });
     // Remember the raw DOM selection points while they are inside the
     // surface; they are only converted to offsets when needed (converting
     // eagerly would force a layout on every keystroke).
@@ -88,7 +95,21 @@ class EditorSurface {
         this.pendingSelection = [sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset];
       }
     };
-    document.addEventListener('selectionchange', this.onSelectionChange);
+    document.addEventListener('selectionchange', this.onSelectionChange, { signal });
+  }
+
+  /**
+   * Detach the surface: remove every listener it added (including the
+   * document-level `selectionchange` listener) and drop change subscribers.
+   * The DOM content is left in place. Safe to call more than once.
+   */
+  destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.abortController.abort();
+    this.changeListeners.clear();
+    this.pendingSelection = null;
+    this.pendingHint = null;
   }
 
   /** Use plaintext-only editing where supported, otherwise fall back to "true". */
@@ -480,11 +501,74 @@ class EditorSurface {
     }
   }
 
-  /** Read native edits back into the model and normalise the DOM. */
-  sync(source) {
+  /**
+   * Read native edits back into the model and normalise the DOM.
+   *
+   * The new text is known exactly, but where the edit happened is not: in
+   * repeated text ("aaaa", "abab", repeated words) several alignments
+   * explain the same change, and the plain minimal diff would always pick
+   * the last one. The location is therefore taken from what the browser
+   * knows, in this order:
+   * 1. `hint.exact`: the `beforeinput` target range (getTargetRanges()).
+   *    It is authoritative and always applied.
+   * 2. Only when the content diff is ambiguous: the pre-edit selection,
+   *    from `beforeinput` or else the last known selection provided no newer
+   *    DOM selection is pending (native edits without a `beforeinput`, such
+   *    as execCommand, take this path). A collapsed selection before a pure
+   *    deletion is widened by the deletion length in the direction given by
+   *    `inputType`. If the resulting edit is minimal it is used as is (no
+   *    DOM read, so typing stays cheap); otherwise, as for a replacement,
+   *    it is accepted only if it ends at the post-edit caret.
+   * 3. The post-edit caret read from the DOM (the edit ends at the caret).
+   * 4. The plain minimal diff, for example after IME composition or an
+   *    external DOM mutation with the selection elsewhere.
+   */
+  sync(source, hint = null, inputType = '') {
     const shape = this.isCanonical();
     const text = shape.ok ? this.root.textContent : this.serialise().text;
-    const edit = EditorSurface.diff(this.text, text);
+    const old = this.text;
+    let edit;
+    let sel;
+    if (hint && hint.exact) {
+      edit = EditorSurface.diff(old, text, hint);
+    } else {
+      const ends = old === text ? null : EditorSurface.commonEnds(old, text);
+      if (!ends || !EditorSurface.isAmbiguous(old, text, ends)) {
+        edit = ends && EditorSurface.diff(old, text, null, ends);
+      } else {
+        // Ambiguous, hence a pure insertion or deletion of `growth` code units.
+        const growth = text.length - old.length;
+        const minimal = { deletedLength: Math.max(0, -growth), insertedLength: Math.max(0, growth) };
+        let resolved = null;
+        let pre = hint || (this.pendingSelection === null ? this.lastSelection : null);
+        if (pre && pre.start === pre.end && growth < 0) {
+          const k = pre.start;
+          const d = minimal.deletedLength;
+          if (/Backward$/.test(inputType) && k - d >= 0) pre = { start: k - d, end: k };
+          else if (/Forward$/.test(inputType) && k + d <= old.length) pre = { start: k, end: k + d };
+          else pre = null;
+        }
+        if (pre) {
+          const candidate = EditorSurface.diff(old, text, pre, ends);
+          if (
+            candidate.deletedLength === minimal.deletedLength &&
+            candidate.insertedText.length === minimal.insertedLength
+          ) {
+            resolved = candidate;
+          } else {
+            sel = this.readSelection();
+            const caret = sel && sel.start === sel.end ? sel.start : null;
+            const end = candidate.start + candidate.insertedText.length;
+            if (caret === null ? hint !== null : end === caret) resolved = candidate;
+          }
+        }
+        if (!resolved) {
+          if (sel === undefined) sel = this.readSelection();
+          if (sel && sel.start === sel.end) resolved = EditorSurface.diff(old, text, { caret: sel.start }, ends);
+        }
+        edit = resolved || EditorSurface.diff(old, text, null, ends);
+      }
+    }
     let needsRender = !shape.ok || shape.hasPlaceholder !== text.endsWith('\n');
     if (edit && this.decorations.length > 0) {
       const editEnd = edit.start + edit.deletedLength;
@@ -493,7 +577,7 @@ class EditorSurface {
     // Reading the DOM selection forces a synchronous layout, so only do it
     // when the DOM is about to be rebuilt. For a plain native edit the caret
     // is derived from the edit itself (selectionchange refreshes it later).
-    const sel = needsRender ? this.readSelection() : null;
+    if (sel === undefined) sel = needsRender ? this.readSelection() : null;
     if (edit) this.decorations = EditorSurface.mapRanges(this.decorations, edit);
     this.text = text;
     if (needsRender) {
@@ -603,19 +687,59 @@ class EditorSurface {
       return;
     }
     this.pendingSource = type.startsWith('delete') ? 'delete' : 'typing';
+    this.pendingHint = this.preEditRange(e);
+  }
+
+  /**
+   * The range a native edit is about to replace, as UTF-16 offsets into the
+   * current text: the event's first target range where the browser provides
+   * one (exact: true), otherwise the current selection (exact: false, since
+   * for example a backward delete removes the character before a collapsed
+   * selection). Returns null if neither maps into the surface.
+   */
+  preEditRange(e) {
+    let start = -1;
+    let end = -1;
+    let exact = false;
+    const ranges = typeof e.getTargetRanges === 'function' ? e.getTargetRanges() : [];
+    if (ranges.length > 0) {
+      const r = ranges[0];
+      start = this.pointToOffset(r.startContainer, r.startOffset);
+      end = this.pointToOffset(r.endContainer, r.endOffset);
+      exact = start >= 0 && end >= 0;
+    }
+    if (start < 0 || end < 0) {
+      const sel = this.readSelection();
+      if (!sel) return null;
+      start = sel.start;
+      end = sel.end;
+    }
+    return {
+      start: Math.min(start, end),
+      end: Math.max(start, end),
+      exact,
+      inputType: e.inputType || '',
+      text: this.text,
+    };
   }
 
   onInput(e) {
     if (this.programmatic) return;
     if (e.isComposing || this.composing) return;
     const source = this.pendingSource || 'typing';
+    // Only trust a hint recorded for this very edit: same input type and no
+    // model change since it was taken.
+    const h = this.pendingHint;
+    const hint = h && h.text === this.text && h.inputType === (e.inputType || '') ? h : null;
     this.pendingSource = null;
-    this.sync(source);
+    this.pendingHint = null;
+    this.sync(source, hint, e.inputType || '');
   }
 
   onCompositionEnd() {
     this.composing = false;
     this.pendingSource = null;
+    this.pendingHint = null;
     this.sync('composition');
   }
 
@@ -707,21 +831,82 @@ class EditorSurface {
     return false;
   }
 
-  /** Minimal single-region diff between two strings, or null if equal. */
-  static diff(a, b) {
+  /**
+   * Lengths of the common prefix and the common suffix of `a` and `b`, each
+   * at most min(a.length, b.length) (they may overlap). Scanning is the
+   * expensive part of a diff on a long document, so it is done once per
+   * edit and every candidate alignment is derived from the result.
+   */
+  static commonEnds(a, b) {
+    const min = Math.min(a.length, b.length);
+    let prefix = 0;
+    while (prefix < min && a.charCodeAt(prefix) === b.charCodeAt(prefix)) prefix++;
+    // For a single-region change the suffix scan stops at the change, so the
+    // two scans together touch each code unit about once; they only overlap
+    // across a run of repeated text, which is exactly the ambiguous case.
+    let suffix = 0;
+    while (suffix < min && a.charCodeAt(a.length - 1 - suffix) === b.charCodeAt(b.length - 1 - suffix)) suffix++;
+    return { prefix, suffix };
+  }
+
+  /**
+   * Single-region diff between two strings, or null if equal.
+   *
+   * Without a hint the result is minimal with the longest common prefix.
+   * An optional hint chooses among equally valid alignments (in the manner
+   * of ProseMirror's findDiff with a preferred position):
+   * - { start, end }: the pre-edit range in `a`. The common prefix is capped
+   *   at `start` and the common suffix at `a.length - end`, so the edit
+   *   starts at `start` and covers the hinted range.
+   * - { caret }: the post-edit caret in `b`, taken to sit at the end of the
+   *   inserted text. The common suffix is capped at `b.length - caret` and
+   *   taken first, so the edit ends at the caret.
+   * The result always transforms `a` into `b`; a wrong hint can only make
+   * it larger than necessary, never incorrect. `ends` is an optional
+   * precomputed commonEnds(a, b).
+   */
+  static diff(a, b, hint = null, ends = null) {
     if (a === b) return null;
     const min = Math.min(a.length, b.length);
-    let p = 0;
-    while (p < min && a.charCodeAt(p) === b.charCodeAt(p)) p++;
-    if (p > 0) {
-      const c = a.charCodeAt(p - 1);
-      if (c >= 0xd800 && c <= 0xdbff) p--;
+    const { prefix, suffix } = ends || EditorSurface.commonEnds(a, b);
+    let pMax = min;
+    let sMax = min;
+    let suffixFirst = false;
+    if (hint) {
+      const { start, end, caret } = hint;
+      if (Number.isInteger(start) && Number.isInteger(end) && start >= 0 && start <= end && end <= a.length) {
+        pMax = Math.min(pMax, start);
+        sMax = Math.min(sMax, a.length - end);
+      } else if (Number.isInteger(caret) && caret >= 0 && caret <= b.length) {
+        pMax = Math.min(pMax, caret);
+        sMax = Math.min(sMax, b.length - caret);
+        suffixFirst = true;
+      }
     }
-    let s = 0;
-    while (s < min - p && a.charCodeAt(a.length - 1 - s) === b.charCodeAt(b.length - 1 - s)) s++;
-    if (s > 0) {
-      const c = a.charCodeAt(a.length - s);
-      if (c >= 0xdc00 && c <= 0xdfff) s--;
+    // Never split a surrogate pair: back off a prefix ending on a high
+    // surrogate or a suffix starting on a low surrogate.
+    const fixPrefix = (n) => {
+      if (n > 0) {
+        const c = a.charCodeAt(n - 1);
+        if (c >= 0xd800 && c <= 0xdbff) return n - 1;
+      }
+      return n;
+    };
+    const fixSuffix = (n) => {
+      if (n > 0) {
+        const c = a.charCodeAt(a.length - n);
+        if (c >= 0xdc00 && c <= 0xdfff) return n - 1;
+      }
+      return n;
+    };
+    let p;
+    let s;
+    if (suffixFirst) {
+      s = fixSuffix(Math.min(suffix, sMax));
+      p = fixPrefix(Math.min(prefix, pMax, min - s));
+    } else {
+      p = fixPrefix(Math.min(prefix, pMax));
+      s = fixSuffix(Math.min(suffix, sMax, min - p));
     }
     return {
       start: p,
@@ -729,6 +914,19 @@ class EditorSurface {
       deletedText: a.slice(p, a.length - s),
       insertedText: b.slice(p, b.length - s),
     };
+  }
+
+  /**
+   * Does the change from `a` to `b` admit more than one minimal alignment?
+   * That happens exactly when the common prefix and common suffix overlap,
+   * as in typing "a" inside "aaaa"; the change is then a pure insertion or
+   * deletion and only a hint can say where it happened. `ends` is an
+   * optional precomputed commonEnds(a, b).
+   */
+  static isAmbiguous(a, b, ends = null) {
+    if (a === b) return false;
+    const { prefix, suffix } = ends || EditorSurface.commonEnds(a, b);
+    return prefix + suffix > Math.min(a.length, b.length);
   }
 
   /**
@@ -758,6 +956,26 @@ class MarkdownEditor {
       ...cmd,
       action: () => this.wrapSelectedText(cmd.prefix, cmd.suffix)
     }));
+    // Every listener added by this instance is registered with this signal
+    // so destroy() can remove them all; createdNodes are the DOM nodes it
+    // inserted (toolbar buttons, help items, the command menu).
+    this.abortController = new AbortController();
+    this.createdNodes = [];
+    this.destroyed = false;
+  }
+
+  /**
+   * Tear the editor down: remove every listener it added (on the surface,
+   * the document and the window), remove the DOM it created and destroy the
+   * editing surface. Safe to call more than once.
+   */
+  destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.abortController.abort();
+    for (const node of this.createdNodes) node.remove();
+    this.createdNodes = [];
+    if (this.surface) this.surface.destroy();
   }
 
   initialize() {
@@ -814,9 +1032,10 @@ class MarkdownEditor {
 
       button.querySelector('sl-button').addEventListener('click', () => {
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
-      });
+      }, { signal: this.abortController.signal });
 
       this.toolbar.appendChild(button);
+      this.createdNodes.push(button);
     });
 
     // Setup keyboard shortcuts
@@ -829,7 +1048,7 @@ class MarkdownEditor {
         e.preventDefault();
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
       }
-    });
+    }, { signal: this.abortController.signal });
   }
 
   setupHelpDialog() {
@@ -843,12 +1062,14 @@ class MarkdownEditor {
         <sl-badge variant="neutral">${shortcut.key}</sl-badge>
       `;
       this.shortcutsList.appendChild(item);
+      this.createdNodes.push(item);
     });
 
-    this.helpButton.addEventListener('click', () => this.dialog.show());
+    this.helpButton.addEventListener('click', () => this.dialog.show(), { signal: this.abortController.signal });
   }
 
   setupCommandPalette() {
+    const signal = this.abortController.signal;
     // Create inline command menu
     const commandMenu = document.createElement('div');
     commandMenu.classList.add('command-menu');
@@ -861,6 +1082,7 @@ class MarkdownEditor {
 
     commandMenu.appendChild(commandList);
     document.body.appendChild(commandMenu);
+    this.createdNodes.push(commandMenu);
 
     let selectedIndex = -1;
     let visibleItems = [];
@@ -881,7 +1103,7 @@ class MarkdownEditor {
         }
         cmd.action();
         hideCommandMenu();
-      });
+      }, { signal });
 
       commandList.appendChild(item);
     });
@@ -974,7 +1196,7 @@ class MarkdownEditor {
           hideCommandMenu();
           break;
       }
-    });
+    }, { signal });
 
     // Show command menu on forward slash
     this.input.addEventListener('keydown', (e) => {
@@ -985,7 +1207,7 @@ class MarkdownEditor {
         slashPosition = start;
         showCommandMenu();
       }
-    });
+    }, { signal });
 
     // Hide menu when clicking outside
     document.addEventListener('click', (e) => {
@@ -993,12 +1215,12 @@ class MarkdownEditor {
       if (!commandMenu.contains(e.target) && !this.input.contains(e.target)) {
         hideCommandMenu();
       }
-    });
+    }, { signal });
 
     // Update menu position on scroll or resize
-    window.addEventListener('scroll', positionCommandMenu);
-    window.addEventListener('resize', positionCommandMenu);
-    this.input.addEventListener('scroll', positionCommandMenu);
+    window.addEventListener('scroll', positionCommandMenu, { signal });
+    window.addEventListener('resize', positionCommandMenu, { signal });
+    this.input.addEventListener('scroll', positionCommandMenu, { signal });
   }
 
   showCustomDialog() {
@@ -1046,6 +1268,10 @@ const initEditor = () => {
     ];
 
     if (required.every(selector => document.querySelector(selector))) {
+      // Tear down any previous editor so its listeners and DOM do not leak.
+      if (window.terraphimEditor && typeof window.terraphimEditor.destroy === 'function') {
+        window.terraphimEditor.destroy();
+      }
       // Pass the EditorConfig when initializing
       const editor = new MarkdownEditor(window.EditorConfig || {
         shortcuts: [],
