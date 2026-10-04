@@ -443,7 +443,14 @@ fn test_browser_dom_shapes_read_back_as_plain_text() {
           s.root.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
           if (s.getText() !== 'one\ntwo \u{1F600}\n\né') out.push('normalised text ' + JSON.stringify(s.getText()));
           if (!teTest.canonical()) out.push('not canonical after input');
-          if (!teTest.preview().includes('one')) out.push('preview not updated');
+          // The Rust preview must see the normalised text: two paragraphs only
+          // appear if it read "para one\n\npara two" after the capture-phase
+          // sync, not the raw textContent "para onepara two".
+          s.root.innerHTML = '<div>para one</div><div><br></div><div>para two</div>';
+          s.root.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+          if (!teTest.preview().includes('<p>para one</p>') || !teTest.preview().includes('<p>para two</p>')) {
+            out.push('preview read un-normalised DOM: ' + teTest.preview());
+          }
           // <br> shape.
           s.root.innerHTML = 'a<br>b<br>';
           r = s.serialise();
@@ -653,7 +660,8 @@ fn five_thousand_words() -> String {
 }
 
 const KEYSTROKES: u32 = 30;
-const ROUNDS: u32 = 5;
+// Kept small so the whole suite stays well inside the runner's 20 s budget.
+const ROUNDS: u32 = 3;
 
 fn time_keystrokes() -> f64 {
     js_number(&format!(
