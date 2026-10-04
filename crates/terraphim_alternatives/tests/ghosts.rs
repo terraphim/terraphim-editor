@@ -398,14 +398,30 @@ fn stale_ghosts_block_edits_that_would_resize_them() {
 }
 
 #[test]
-fn stale_ghost_on_the_article_skips_the_fix_up() {
+fn stale_ghost_on_the_article_fails_the_swap_atomically() {
     let mut d = Document::new("Take a paperclip.");
     let word = span(&mut d, "paperclip", &["eraser"]);
     d.ghost(0, 6).unwrap();
     d.body = d.body.replace("Take", "Make");
-    d.set_active(&word, 1).unwrap();
-    assert_eq!(d.body, "Make a eraser.", "article left alone");
+    assert_eq!(
+        d.set_active(&word, 1),
+        Err(EditError::StaleAnchor("g1".into()))
+    );
+    assert_eq!(d.body, "Make a paperclip.", "nothing changed");
     assert_eq!(ghost_view(&d), vec![("g1", 0, 6, "Take a")]);
+}
+
+#[test]
+fn stale_ghost_on_an_article_that_needs_no_change_does_not_block() {
+    let mut d = Document::new("Take a paperclip.");
+    let word = span(&mut d, "paperclip", &["thumbtack"]);
+    d.ghost(0, 6).unwrap();
+    d.body = d.body.replace("Take", "Make");
+    d.set_active(&word, 1).unwrap();
+    assert_eq!(
+        d.body, "Make a thumbtack.",
+        "a stays a; the stale ghost is untouched"
+    );
 }
 
 // ----- multi-byte text -------------------------------------------------------

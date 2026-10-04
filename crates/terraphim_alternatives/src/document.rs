@@ -198,7 +198,9 @@ impl Document {
     /// it, then fixes an immediately preceding `a`/`an` (R-2.6). Later
     /// anchors are shifted to stay correct and ghosts follow the edit (see
     /// [`Document`]), so a ghost over a sentence resizes when a
-    /// word inside it is swapped.
+    /// word inside it is swapped. Atomic: if the span, or a ghost that the
+    /// swap or the article fix-up would touch, is stale, it returns
+    /// [`EditError::StaleAnchor`] and changes nothing.
     pub fn set_active(&mut self, id: &str, index: usize) -> Result<(), EditError> {
         let span_index = self.span_index(id)?;
         if index >= self.annotations.spans[span_index].alts.len() {
@@ -211,6 +213,10 @@ impl Document {
         let anchor = &self.annotations.spans[span_index].anchor;
         self.check_ghosts_for_edit(anchor.start, anchor.end)?;
         let new_text = self.annotations.spans[span_index].alts[index].text.clone();
+        // Preflight the a/an fix-up so a stale ghost over the article fails
+        // the whole call before anything changes, instead of leaving the
+        // swap done and the article wrong.
+        self.check_article_edit(span_index, byte_start, &new_text)?;
 
         self.splice(byte_start, byte_end, &new_text, Some(span_index));
         let span = &mut self.annotations.spans[span_index];
@@ -591,6 +597,39 @@ impl Document {
             }
             self.annotations.ghosts.push(ghost);
         }
+    }
+
+    /// Errors with [`EditError::StaleAnchor`] when the a/an fix-up that
+    /// swapping in `new_text` would make touches a stale ghost. The article
+    /// precedes the span, so the pre-swap body locates it exactly.
+    fn check_article_edit(
+        &self,
+        span_index: usize,
+        span_byte_start: usize,
+        new_text: &str,
+    ) -> Result<(), EditError> {
+        let Some(wanted) = article_for(new_text) else {
+            return Ok(());
+        };
+        let Some((art_start, art_end)) = preceding_article(&self.body, span_byte_start) else {
+            return Ok(());
+        };
+        let existing = &self.body[art_start..art_end];
+        if respell(existing, wanted) == existing {
+            return Ok(());
+        }
+        let art_u16_start = utf16_len(&self.body[..art_start]);
+        let art_u16_end = art_u16_start + utf16_len(existing);
+        let blocked_by_span = self
+            .annotations
+            .spans
+            .iter()
+            .enumerate()
+            .any(|(i, s)| i != span_index && s.anchor.overlaps(art_u16_start, art_u16_end));
+        if blocked_by_span {
+            return Ok(());
+        }
+        self.check_ghosts_for_edit(art_u16_start, art_u16_end)
     }
 
     fn fix_article(&mut self, span_index: usize, span_byte_start: usize, new_text: &str) {
