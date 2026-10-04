@@ -1,3 +1,755 @@
+/*
+ * EditorSurface: a span-aware plain-text editing surface built on a
+ * contenteditable element.
+ *
+ * Offset unit
+ * -----------
+ * Every offset accepted or returned by this API is a UTF-16 code unit index
+ * into the plain-text document, i.e. exactly the index space of a JavaScript
+ * string (`text.length`, `text.slice(start, end)`). A character outside the
+ * Basic Multilingual Plane (for example most emoji) occupies two code units;
+ * a combining mark (for example U+0301) is a separate code unit from its base
+ * character. Setters snap an offset that would split a surrogate pair back to
+ * the start of the pair, so a caret or decoration can never sit inside one
+ * code point. Offsets between a base character and a combining mark are
+ * permitted (they are valid code unit boundaries).
+ *
+ * DOM invariant
+ * -------------
+ * After every edit the root element is normalised to a canonical shape:
+ * only Text nodes, decoration `<span class="te-decoration">` elements (each
+ * holding a single Text node) and, when the text ends with a newline, one
+ * trailing placeholder `<br class="te-placeholder">` that makes the final
+ * empty line visible. Newlines are literal "\n" characters inside Text nodes
+ * (the root uses `white-space: pre-wrap`). Consequently
+ * `root.textContent === surface.getText()`, which is what the Rust preview
+ * handler relies on. The surface's `input` listener runs in the capture phase
+ * so it normalises the DOM before any bubbling/target-phase listener (such as
+ * the Rust Markdown conversion) reads it.
+ *
+ * Undo/redo
+ * ---------
+ * The surface keeps its own history stack instead of the browser's native
+ * one, because programmatic edits (shortcuts, the command palette, decoration
+ * re-rendering) would otherwise corrupt or bypass the native stack. Bursts of
+ * typing are coalesced into one undo step.
+ */
+class EditorSurface {
+  constructor(root, options = {}) {
+    this.root = root;
+    this.decorations = [];
+    this.changeListeners = new Set();
+    this.composing = false;
+    this.programmatic = false;
+    this.pendingSource = null;
+    this.history = [];
+    this.historyIndex = -1;
+    this.historyLimit = options.historyLimit || 500;
+    this.coalesceMs = options.coalesceMs === undefined ? 1000 : options.coalesceMs;
+    this.nextDecorationId = 1;
+    this.plaintextOnly = EditorSurface.enablePlaintextEditing(root);
+
+    root.setAttribute('role', 'textbox');
+    root.setAttribute('aria-multiline', 'true');
+    root.spellcheck = false;
+
+    this.text = this.serialise().text;
+    this.render();
+    this.lastSelection = { start: this.text.length, end: this.text.length, direction: 'none' };
+    this.record('init', this.lastSelection);
+
+    this.handlers = {
+      beforeinput: (e) => this.onBeforeInput(e),
+      input: (e) => this.onInput(e),
+      keydown: (e) => this.onKeyDown(e),
+      compositionstart: () => { this.composing = true; },
+      compositionend: () => this.onCompositionEnd(),
+      paste: (e) => this.onPaste(e),
+      drop: (e) => this.onDrop(e),
+      copy: (e) => this.onCopy(e, false),
+      cut: (e) => this.onCopy(e, true),
+    };
+    root.addEventListener('beforeinput', this.handlers.beforeinput);
+    root.addEventListener('input', this.handlers.input, true);
+    root.addEventListener('keydown', this.handlers.keydown);
+    root.addEventListener('compositionstart', this.handlers.compositionstart);
+    root.addEventListener('compositionend', this.handlers.compositionend);
+    root.addEventListener('paste', this.handlers.paste);
+    root.addEventListener('drop', this.handlers.drop);
+    root.addEventListener('copy', this.handlers.copy);
+    root.addEventListener('cut', this.handlers.cut);
+    // Remember the raw DOM selection points while they are inside the
+    // surface; they are only converted to offsets when needed (converting
+    // eagerly would force a layout on every keystroke).
+    this.pendingSelection = null;
+    this.onSelectionChange = () => {
+      const sel = document.getSelection();
+      if (sel && sel.rangeCount > 0 && this.root.contains(sel.anchorNode) && this.root.contains(sel.focusNode)) {
+        this.pendingSelection = [sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset];
+      }
+    };
+    document.addEventListener('selectionchange', this.onSelectionChange);
+  }
+
+  /** Use plaintext-only editing where supported, otherwise fall back to "true". */
+  static enablePlaintextEditing(root) {
+    try {
+      root.contentEditable = 'plaintext-only';
+    } catch (e) {
+      // Browsers without plaintext-only throw a SyntaxError.
+    }
+    if (root.contentEditable !== 'plaintext-only') {
+      root.contentEditable = 'true';
+      return false;
+    }
+    return true;
+  }
+
+  // ---------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------
+
+  /** The plain-text document. */
+  getText() {
+    return this.text;
+  }
+
+  /** Replace the whole document. The edit is recorded in the undo history. */
+  setText(text, options = {}) {
+    return this.replaceRange(0, this.text.length, text, { source: 'api', ...options });
+  }
+
+  /**
+   * Replace [start, end) with `insert` (UTF-16 offsets). Line endings in
+   * `insert` are normalised to "\n". Options: selectStart, selectEnd
+   * (selection after the edit; defaults to a caret after the insertion) and
+   * source (a label passed to change listeners and used for undo grouping).
+   */
+  replaceRange(start, end, insert, options = {}) {
+    const source = options.source || 'api';
+    const old = this.text;
+    let s = this.snap(this.clamp(Math.min(start, end)), old);
+    let e = this.snap(this.clamp(Math.max(start, end)), old);
+    const inserted = EditorSurface.normaliseNewlines(String(insert));
+    const edit = {
+      start: s,
+      deletedLength: e - s,
+      deletedText: old.slice(s, e),
+      insertedText: inserted,
+    };
+    this.text = old.slice(0, s) + inserted + old.slice(e);
+    this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+    this.render();
+    const selStart = options.selectStart === undefined ? s + inserted.length : options.selectStart;
+    const selEnd = options.selectEnd === undefined ? selStart : options.selectEnd;
+    this.setSelectionOffsets(selStart, selEnd);
+    this.record(source, this.lastSelection);
+    this.emitChange(edit, source);
+    this.dispatchInput(source === 'paste' ? 'insertFromPaste' : 'insertReplacementText', inserted);
+    return edit;
+  }
+
+  /** Replace the current selection with `insert`. */
+  replaceSelection(insert, source = 'api') {
+    const { start, end } = this.getSelectionOffsets();
+    return this.replaceRange(start, end, insert, { source });
+  }
+
+  /**
+   * Current selection as { start, end, direction } in UTF-16 offsets with
+   * start <= end. If the live DOM selection is outside the surface (for
+   * example a toolbar button has focus) the last known selection is returned.
+   */
+  getSelectionOffsets() {
+    const live = this.readSelection();
+    if (live) {
+      this.lastSelection = live;
+    } else if (this.pendingSelection) {
+      const [a, ao, f, fo] = this.pendingSelection;
+      if (this.root.contains(a) && this.root.contains(f)) {
+        const x = this.serialise(a, ao).offset;
+        const y = this.serialise(f, fo).offset;
+        this.lastSelection = {
+          start: Math.min(x, y),
+          end: Math.max(x, y),
+          direction: x === y ? 'none' : x < y ? 'forward' : 'backward',
+        };
+      }
+    }
+    this.pendingSelection = null;
+    return { ...this.lastSelection };
+  }
+
+  /** Select [start, end). direction is 'forward', 'backward' or 'none'. */
+  setSelectionOffsets(start, end = start, direction) {
+    let s = this.snap(this.clamp(start));
+    let e = this.snap(this.clamp(end));
+    let dir = direction;
+    if (s > e) {
+      [s, e] = [e, s];
+      dir = dir || 'backward';
+    }
+    if (!dir) dir = s === e ? 'none' : 'forward';
+    if (!this.isCanonical().ok) this.render();
+    this.lastSelection = { start: s, end: e, direction: s === e ? 'none' : dir };
+    this.pendingSelection = null;
+    if (!this.root.isConnected) return { ...this.lastSelection };
+    const anchor = this.offsetToPoint(dir === 'backward' ? e : s);
+    const focus = this.offsetToPoint(dir === 'backward' ? s : e);
+    const sel = document.getSelection();
+    if (sel) sel.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+    return { ...this.lastSelection };
+  }
+
+  /** Map a DOM point (node, offset) inside the surface to a UTF-16 offset. */
+  pointToOffset(node, offset) {
+    if (!this.root.contains(node)) return -1;
+    return this.serialise(node, offset).offset;
+  }
+
+  /** Map a UTF-16 offset to a DOM point { node, offset } in the canonical DOM. */
+  offsetToPoint(offset) {
+    const target = this.snap(this.clamp(offset));
+    const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT);
+    let acc = 0;
+    let last = null;
+    let node;
+    while ((node = walker.nextNode())) {
+      const len = node.data.length;
+      if (target <= acc + len) return { node, offset: target - acc };
+      acc += len;
+      last = node;
+    }
+    if (last) return { node: last, offset: last.data.length };
+    return { node: this.root, offset: 0 };
+  }
+
+  /** A DOM Range covering [start, end), useful for positioning popovers. */
+  rangeForOffsets(start, end = start) {
+    if (!this.isCanonical().ok) this.render();
+    const a = this.offsetToPoint(Math.min(start, end));
+    const b = this.offsetToPoint(Math.max(start, end));
+    const range = document.createRange();
+    range.setStart(a.node, a.offset);
+    range.setEnd(b.node, b.offset);
+    return range;
+  }
+
+  /** Viewport rectangle of the caret at `offset` (defaults to selection start). */
+  getCaretRect(offset) {
+    const at = offset === undefined ? this.getSelectionOffsets().start : offset;
+    const rects = this.rangeForOffsets(at).getClientRects();
+    if (rects.length > 0) {
+      const r = rects[0];
+      return { left: r.left, top: r.top, bottom: r.bottom, height: r.height };
+    }
+    const box = this.root.getBoundingClientRect();
+    const style = getComputedStyle(this.root);
+    const left = box.left + (parseFloat(style.paddingLeft) || 0);
+    const top = box.top + (parseFloat(style.paddingTop) || 0);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2 || 16;
+    return { left, top, bottom: top + lineHeight, height: lineHeight };
+  }
+
+  /**
+   * Decorate ranges of the text. Each item is { start, end, className?, id?,
+   * data? } in UTF-16 offsets; empty or out-of-range items are ignored.
+   * Overlapping ranges are allowed: each rendered span lists every covering
+   * decoration id in `data-te-decoration` (space separated) and carries the
+   * union of their class names. Decorations move with edits made before them
+   * and are dropped when an edit lands inside them.
+   */
+  setDecorations(list) {
+    const len = this.text.length;
+    const next = [];
+    for (const item of list || []) {
+      const s = this.snap(Math.max(0, Math.min(len, item.start | 0)));
+      const e = this.snap(Math.max(0, Math.min(len, item.end | 0)));
+      if (e <= s) continue;
+      next.push({
+        id: item.id === undefined ? String(this.nextDecorationId++) : String(item.id),
+        start: s,
+        end: e,
+        className: item.className || '',
+        data: item.data,
+      });
+    }
+    next.sort((a, b) => a.start - b.start || a.end - b.end);
+    const sel = this.getSelectionOffsets();
+    this.decorations = next;
+    this.render();
+    if (this.readSelection() !== null || document.activeElement === this.root) {
+      this.setSelectionOffsets(sel.start, sel.end, sel.direction);
+    }
+    return this.getDecorations();
+  }
+
+  /** Current decorations (already mapped through any edits). */
+  getDecorations() {
+    return this.decorations.map((d) => ({ ...d }));
+  }
+
+  /** Decorations covering `offset` (start <= offset < end). */
+  decorationsAt(offset) {
+    return this.decorations.filter((d) => d.start <= offset && offset < d.end).map((d) => ({ ...d }));
+  }
+
+  clearDecorations() {
+    return this.setDecorations([]);
+  }
+
+  /**
+   * Subscribe to text changes. The callback receives { text, edit, source }
+   * where edit is { start, deletedLength, deletedText, insertedText }.
+   * Returns an unsubscribe function.
+   */
+  onChange(callback) {
+    this.changeListeners.add(callback);
+    return () => this.changeListeners.delete(callback);
+  }
+
+  canUndo() {
+    return this.historyIndex > 0;
+  }
+
+  canRedo() {
+    return this.historyIndex < this.history.length - 1;
+  }
+
+  undo() {
+    if (!this.canUndo()) return false;
+    this.historyIndex -= 1;
+    this.restore(this.history[this.historyIndex], 'undo');
+    return true;
+  }
+
+  redo() {
+    if (!this.canRedo()) return false;
+    this.historyIndex += 1;
+    this.restore(this.history[this.historyIndex], 'redo');
+    return true;
+  }
+
+  /** Focus the surface, restoring the last known selection. */
+  focus() {
+    const had = this.readSelection();
+    this.root.focus({ preventScroll: true });
+    if (!had) {
+      const { start, end, direction } = this.lastSelection;
+      this.setSelectionOffsets(start, end, direction);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // DOM <-> text mapping
+  // ---------------------------------------------------------------------
+
+  /**
+   * Serialise the root's DOM to plain text. If stopNode is given, also
+   * return the text offset of the DOM point (stopNode, stopOffset). Handles
+   * the canonical shape plus the shapes browsers produce natively (<br>
+   * line breaks, <div>/<p> blocks) so that any DOM can be read back.
+   */
+  serialise(stopNode = null, stopOffset = 0) {
+    const parts = [];
+    let length = 0;
+    let found = -1;
+    // True when the last emitted text was the line break closing a block, so
+    // the next block must not add another one.
+    let afterBlock = false;
+    const emit = (s) => {
+      if (s) {
+        parts.push(s);
+        length += s.length;
+        afterBlock = false;
+      }
+    };
+    const visit = (node) => {
+      const children = node.childNodes;
+      for (let i = 0; i < children.length; i++) {
+        if (node === stopNode && i === stopOffset && found < 0) found = length;
+        const child = children[i];
+        if (child.nodeType === Node.TEXT_NODE) {
+          if (child === stopNode && found < 0) found = length + Math.min(stopOffset, child.data.length);
+          emit(child.data);
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          if (child.tagName === 'BR') {
+            if (!EditorSurface.isPlaceholderBr(child, this.root)) emit('\n');
+          } else if (EditorSurface.isBlock(child)) {
+            if (length > 0 && !afterBlock) emit('\n');
+            visit(child);
+            if (EditorSurface.hasFollowingContent(child)) {
+              emit('\n');
+              afterBlock = true;
+            }
+          } else {
+            visit(child);
+          }
+        }
+      }
+      if (node === stopNode && stopOffset >= children.length && found < 0) found = length;
+    };
+    visit(this.root);
+    return { text: parts.join(''), offset: found };
+  }
+
+  /** Is the root in the canonical shape described at the top of this file? */
+  isCanonical() {
+    const children = this.root.childNodes;
+    let hasPlaceholder = false;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      if (child.nodeType === Node.TEXT_NODE) continue;
+      if (child.nodeType !== Node.ELEMENT_NODE) return { ok: false, hasPlaceholder };
+      if (child.tagName === 'SPAN' && child.classList.contains('te-decoration')) {
+        if (child.childNodes.length !== 1 || child.firstChild.nodeType !== Node.TEXT_NODE) {
+          return { ok: false, hasPlaceholder };
+        }
+        continue;
+      }
+      if (child.tagName === 'BR' && child.classList.contains('te-placeholder') && i === children.length - 1) {
+        hasPlaceholder = true;
+        continue;
+      }
+      return { ok: false, hasPlaceholder };
+    }
+    return { ok: true, hasPlaceholder };
+  }
+
+  readSelection() {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const a = sel.anchorNode;
+    const f = sel.focusNode;
+    if (!a || !f || !this.root.contains(a) || !this.root.contains(f)) return null;
+    const ao = this.serialise(a, sel.anchorOffset).offset;
+    const fo = a === f && sel.anchorOffset === sel.focusOffset ? ao : this.serialise(f, sel.focusOffset).offset;
+    return {
+      start: Math.min(ao, fo),
+      end: Math.max(ao, fo),
+      direction: ao === fo ? 'none' : ao < fo ? 'forward' : 'backward',
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // Rendering, history and events
+  // ---------------------------------------------------------------------
+
+  render() {
+    // Number of full DOM rebuilds; plain native typing should never need one.
+    this.renderCount = (this.renderCount || 0) + 1;
+    const text = this.text;
+    const root = this.root;
+    if (this.decorations.length === 0) {
+      root.textContent = text;
+    } else {
+      const frag = document.createDocumentFragment();
+      const bounds = new Set([0, text.length]);
+      for (const d of this.decorations) {
+        bounds.add(d.start);
+        bounds.add(d.end);
+      }
+      const points = Array.from(bounds).sort((x, y) => x - y);
+      for (let i = 0; i + 1 < points.length; i++) {
+        const s = points[i];
+        const e = points[i + 1];
+        if (e <= s) continue;
+        const piece = text.slice(s, e);
+        const covering = this.decorations.filter((d) => d.start <= s && d.end >= e);
+        if (covering.length === 0) {
+          frag.appendChild(document.createTextNode(piece));
+        } else {
+          const span = document.createElement('span');
+          const classes = ['te-decoration'];
+          for (const d of covering) {
+            if (d.className) classes.push(...d.className.split(/\s+/).filter(Boolean));
+          }
+          span.className = Array.from(new Set(classes)).join(' ');
+          span.setAttribute('data-te-decoration', covering.map((d) => d.id).join(' '));
+          span.appendChild(document.createTextNode(piece));
+          frag.appendChild(span);
+        }
+      }
+      root.textContent = '';
+      root.appendChild(frag);
+    }
+    if (text.endsWith('\n')) {
+      const br = document.createElement('br');
+      br.className = 'te-placeholder';
+      root.appendChild(br);
+    }
+  }
+
+  /** Read native edits back into the model and normalise the DOM. */
+  sync(source) {
+    const shape = this.isCanonical();
+    const text = shape.ok ? this.root.textContent : this.serialise().text;
+    const edit = EditorSurface.diff(this.text, text);
+    let needsRender = !shape.ok || shape.hasPlaceholder !== text.endsWith('\n');
+    if (edit && this.decorations.length > 0) {
+      const editEnd = edit.start + edit.deletedLength;
+      if (this.decorations.some((d) => d.start <= editEnd && d.end >= edit.start)) needsRender = true;
+    }
+    // Reading the DOM selection forces a synchronous layout, so only do it
+    // when the DOM is about to be rebuilt. For a plain native edit the caret
+    // is derived from the edit itself (selectionchange refreshes it later).
+    const sel = needsRender ? this.readSelection() : null;
+    if (edit) this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+    this.text = text;
+    if (needsRender) {
+      this.render();
+      if (sel) this.setSelectionOffsets(sel.start, sel.end, sel.direction);
+    } else if (edit) {
+      const caret = edit.start + edit.insertedText.length;
+      this.lastSelection = { start: caret, end: caret, direction: 'none' };
+      this.pendingSelection = null;
+    }
+    if (edit) {
+      this.record(source, this.lastSelection);
+      this.emitChange(edit, source);
+    }
+  }
+
+  record(source, sel) {
+    const now = performance.now();
+    const entry = {
+      text: this.text,
+      start: sel ? sel.start : this.text.length,
+      end: sel ? sel.end : this.text.length,
+      source,
+      time: now,
+    };
+    const top = this.history[this.historyIndex];
+    if (top && top.text === entry.text) {
+      top.start = entry.start;
+      top.end = entry.end;
+      return;
+    }
+    this.history.length = this.historyIndex + 1;
+    const coalesce =
+      top &&
+      this.historyIndex > 0 &&
+      (source === 'typing' || source === 'delete') &&
+      top.source === source &&
+      now - top.time < this.coalesceMs;
+    if (coalesce) {
+      this.history[this.historyIndex] = entry;
+    } else {
+      this.history.push(entry);
+      if (this.history.length > this.historyLimit) this.history.shift();
+      this.historyIndex = this.history.length - 1;
+    }
+  }
+
+  restore(entry, source) {
+    const edit = EditorSurface.diff(this.text, entry.text);
+    if (edit) this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+    this.text = entry.text;
+    this.render();
+    this.setSelectionOffsets(entry.start, entry.end);
+    if (edit) this.emitChange(edit, source);
+    this.dispatchInput(source === 'undo' ? 'historyUndo' : 'historyRedo', null);
+  }
+
+  emitChange(edit, source) {
+    for (const listener of this.changeListeners) {
+      try {
+        listener({ text: this.text, edit, source });
+      } catch (err) {
+        console.error('EditorSurface change listener failed', err);
+      }
+    }
+  }
+
+  /** Fire a real `input` event so that listeners (e.g. the Rust preview) update. */
+  dispatchInput(inputType, data) {
+    this.programmatic = true;
+    try {
+      this.root.dispatchEvent(new InputEvent('input', { bubbles: true, inputType, data }));
+    } finally {
+      this.programmatic = false;
+    }
+  }
+
+  onBeforeInput(e) {
+    const type = e.inputType || '';
+    if (type === 'historyUndo') {
+      e.preventDefault();
+      this.undo();
+      return;
+    }
+    if (type === 'historyRedo') {
+      e.preventDefault();
+      this.redo();
+      return;
+    }
+    if (type.startsWith('format')) {
+      // Rich formatting (fallback contenteditable="true" mode) is never allowed.
+      e.preventDefault();
+      return;
+    }
+    if (e.isComposing || this.composing) return;
+    if (type === 'insertParagraph' || type === 'insertLineBreak') {
+      e.preventDefault();
+      this.replaceSelection('\n', 'newline');
+      return;
+    }
+    if (type === 'insertFromPaste' || type === 'insertFromPasteAsQuotation' || type === 'insertFromDrop') {
+      // Normally handled (and cancelled) by the paste/drop listeners; this is
+      // a safety net so rich content can never be inserted.
+      e.preventDefault();
+      const data = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+      if (data) this.replaceSelection(data, 'paste');
+      return;
+    }
+    this.pendingSource = type.startsWith('delete') ? 'delete' : 'typing';
+  }
+
+  onInput(e) {
+    if (this.programmatic) return;
+    if (e.isComposing || this.composing) return;
+    const source = this.pendingSource || 'typing';
+    this.pendingSource = null;
+    this.sync(source);
+  }
+
+  onCompositionEnd() {
+    this.composing = false;
+    this.pendingSource = null;
+    this.sync('composition');
+  }
+
+  onKeyDown(e) {
+    if (e.isComposing || this.composing) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const key = (e.key || '').toLowerCase();
+    if (key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      this.undo();
+    } else if ((key === 'z' && e.shiftKey) || (key === 'y' && !e.shiftKey)) {
+      e.preventDefault();
+      this.redo();
+    }
+  }
+
+  onPaste(e) {
+    e.preventDefault();
+    const data = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+    if (data) this.replaceSelection(data, 'paste');
+  }
+
+  onDrop(e) {
+    e.preventDefault();
+    const data = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+    if (!data) return;
+    let offset = null;
+    if (document.caretRangeFromPoint) {
+      const range = document.caretRangeFromPoint(e.clientX, e.clientY);
+      if (range && this.root.contains(range.startContainer)) {
+        offset = this.pointToOffset(range.startContainer, range.startOffset);
+      }
+    }
+    if (offset === null || offset < 0) offset = this.getSelectionOffsets().start;
+    this.replaceRange(offset, offset, data, { source: 'drop' });
+  }
+
+  onCopy(e, cut) {
+    const { start, end } = this.getSelectionOffsets();
+    if (start === end || !e.clipboardData) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', this.text.slice(start, end));
+    if (cut) this.replaceRange(start, end, '', { source: 'cut' });
+  }
+
+  clamp(offset) {
+    const n = Number.isFinite(offset) ? Math.trunc(offset) : 0;
+    return Math.max(0, Math.min(this.text.length, n));
+  }
+
+  /** Move an offset that splits a surrogate pair back to the start of the pair. */
+  snap(offset, text = this.text) {
+    if (offset > 0 && offset < text.length) {
+      const hi = text.charCodeAt(offset - 1);
+      const lo = text.charCodeAt(offset);
+      if (hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff) return offset - 1;
+    }
+    return offset;
+  }
+
+  // ---------------------------------------------------------------------
+  // Static helpers
+  // ---------------------------------------------------------------------
+
+  static normaliseNewlines(text) {
+    return text.replace(/\r\n?/g, '\n');
+  }
+
+  static isBlock(node) {
+    return /^(DIV|P|LI|UL|OL|H[1-6]|PRE|BLOCKQUOTE|SECTION|ARTICLE)$/.test(node.tagName);
+  }
+
+  /** A <br> that is the last node of the root or of a block only holds a line open. */
+  static isPlaceholderBr(br, root) {
+    const parent = br.parentNode;
+    if (parent !== root && !EditorSurface.isBlock(parent)) return false;
+    let next = br.nextSibling;
+    while (next && next.nodeType === Node.TEXT_NODE && next.data === '') next = next.nextSibling;
+    return next === null;
+  }
+
+  static hasFollowingContent(node) {
+    let next = node.nextSibling;
+    while (next) {
+      if (next.nodeType === Node.ELEMENT_NODE) return true;
+      if (next.nodeType === Node.TEXT_NODE && next.data !== '') return true;
+      next = next.nextSibling;
+    }
+    return false;
+  }
+
+  /** Minimal single-region diff between two strings, or null if equal. */
+  static diff(a, b) {
+    if (a === b) return null;
+    const min = Math.min(a.length, b.length);
+    let p = 0;
+    while (p < min && a.charCodeAt(p) === b.charCodeAt(p)) p++;
+    if (p > 0) {
+      const c = a.charCodeAt(p - 1);
+      if (c >= 0xd800 && c <= 0xdbff) p--;
+    }
+    let s = 0;
+    while (s < min - p && a.charCodeAt(a.length - 1 - s) === b.charCodeAt(b.length - 1 - s)) s++;
+    if (s > 0) {
+      const c = a.charCodeAt(a.length - s);
+      if (c >= 0xdc00 && c <= 0xdfff) s--;
+    }
+    return {
+      start: p,
+      deletedLength: a.length - p - s,
+      deletedText: a.slice(p, a.length - s),
+      insertedText: b.slice(p, b.length - s),
+    };
+  }
+
+  /**
+   * Map ranges through an edit: ranges entirely before the edit are kept,
+   * ranges entirely after it are shifted, ranges the edit lands inside are
+   * dropped. An insertion exactly at a range boundary does not extend it.
+   */
+  static mapRanges(ranges, edit) {
+    if (!edit || ranges.length === 0) return ranges;
+    const editStart = edit.start;
+    const editEnd = edit.start + edit.deletedLength;
+    const delta = edit.insertedText.length - edit.deletedLength;
+    const out = [];
+    for (const r of ranges) {
+      if (r.end <= editStart) out.push(r);
+      else if (r.start >= editEnd) out.push({ ...r, start: r.start + delta, end: r.end + delta });
+    }
+    return out;
+  }
+}
+
 class MarkdownEditor {
   constructor(config) {
     this.config = config;
@@ -10,14 +762,14 @@ class MarkdownEditor {
 
   initialize() {
     // Get DOM elements after template is rendered
-    this.textarea = document.querySelector('.markdown-input');
+    this.input = document.querySelector('.markdown-input');
     this.toolbar = document.querySelector('#formatting-toolbar');
     this.shortcutsList = document.querySelector('#shortcuts-list');
     this.dialog = document.querySelector('.shortcuts-dialog');
     this.helpButton = document.querySelector('#show-help');
 
     // Check if elements exist
-    if (!this.textarea || !this.toolbar || !this.shortcutsList || !this.dialog || !this.helpButton) {
+    if (!this.input || !this.toolbar || !this.shortcutsList || !this.dialog || !this.helpButton) {
       console.error('Required DOM elements not found');
       return;
     }
@@ -27,27 +779,25 @@ class MarkdownEditor {
       return;
     }
 
+    this.surface = new EditorSurface(this.input);
+
     this.setupShortcuts();
     this.setupHelpDialog();
     this.setupCommandPalette();
   }
 
   wrapSelectedText(prefix, suffix) {
-    const start = this.textarea.selectionStart;
-    const end = this.textarea.selectionEnd;
-    const text = this.textarea.value;
-    const before = text.substring(0, start);
+    const { start, end } = this.surface.getSelectionOffsets();
+    const text = this.surface.getText();
     const selection = text.substring(start, end);
-    const after = text.substring(end);
-    
     const wrappedText = selection ? selection : 'text';
-    this.textarea.value = before + prefix + wrappedText + suffix + after;
-    
-    this.textarea.focus();
-    this.textarea.selectionStart = selection ? start + prefix.length : start + prefix.length;
-    this.textarea.selectionEnd = selection ? end + prefix.length : start + prefix.length + 4;
-    
-    this.textarea.dispatchEvent(new Event('input'));
+
+    this.surface.focus();
+    this.surface.replaceRange(start, end, prefix + wrappedText + suffix, {
+      source: 'format',
+      selectStart: start + prefix.length,
+      selectEnd: selection ? end + prefix.length : start + prefix.length + 4,
+    });
   }
 
   setupShortcuts() {
@@ -55,25 +805,26 @@ class MarkdownEditor {
     this.shortcuts.forEach(shortcut => {
       const button = document.createElement('sl-tooltip');
       button.setAttribute('content', shortcut.key);
-      
+
       button.innerHTML = `
         <sl-button size="small" variant="default">
           <sl-icon name="${shortcut.name}"></sl-icon>
         </sl-button>
       `;
-      
+
       button.querySelector('sl-button').addEventListener('click', () => {
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
       });
-      
+
       this.toolbar.appendChild(button);
     });
 
     // Setup keyboard shortcuts
-    this.textarea.addEventListener('keydown', (e) => {
+    this.input.addEventListener('keydown', (e) => {
+      if (e.isComposing) return;
       const key = `${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`;
       const shortcut = this.shortcuts.find(s => s.key === key);
-      
+
       if (shortcut) {
         e.preventDefault();
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
@@ -103,10 +854,11 @@ class MarkdownEditor {
     commandMenu.classList.add('command-menu');
     commandMenu.style.display = 'none';
     commandMenu.setAttribute('tabindex', '0');
-    
+    this.commandMenu = commandMenu;
+
     const commandList = document.createElement('div');
     commandList.classList.add('command-list');
-    
+
     commandMenu.appendChild(commandList);
     document.body.appendChild(commandMenu);
 
@@ -122,18 +874,15 @@ class MarkdownEditor {
         <sl-icon name="${cmd.icon}"></sl-icon>
         <span>${cmd.name}</span>
       `;
-      
+
       item.addEventListener('click', () => {
-        if (slashPosition !== null) {
-          const text = this.textarea.value;
-          this.textarea.value = text.substring(0, slashPosition) + text.substring(slashPosition + 1);
-          this.textarea.selectionStart = slashPosition;
-          this.textarea.selectionEnd = slashPosition;
+        if (slashPosition !== null && this.surface.getText().charAt(slashPosition) === '/') {
+          this.surface.replaceRange(slashPosition, slashPosition + 1, '', { source: 'command' });
         }
         cmd.action();
         hideCommandMenu();
       });
-      
+
       commandList.appendChild(item);
     });
 
@@ -150,16 +899,16 @@ class MarkdownEditor {
     };
 
     const positionCommandMenu = () => {
-      const caretPosition = getCaretCoordinates(this.textarea, this.textarea.selectionStart);
-      const textareaRect = this.textarea.getBoundingClientRect();
+      if (commandMenu.style.display === 'none') return;
+      const caret = this.surface.getCaretRect();
       const menuRect = commandMenu.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      
-      // Calculate initial position
-      let left = textareaRect.left + caretPosition.left;
-      let top = textareaRect.top + caretPosition.top + 20;
-      
+
+      // Calculate initial position just below the caret
+      let left = caret.left;
+      let top = caret.bottom + 4;
+
       // Adjust horizontal position if menu would go outside viewport
       if (left + menuRect.width > viewportWidth) {
         left = viewportWidth - menuRect.width - 10; // 10px padding from right edge
@@ -167,16 +916,16 @@ class MarkdownEditor {
       if (left < 0) {
         left = 10; // 10px padding from left edge
       }
-      
+
       // Adjust vertical position if menu would go outside viewport
       if (top + menuRect.height > viewportHeight) {
         // Show menu above the caret if there's not enough space below
-        top = textareaRect.top + caretPosition.top - menuRect.height - 10;
+        top = caret.top - menuRect.height - 10;
       }
       if (top < 0) {
         top = 10; // 10px padding from top edge
       }
-      
+
       commandMenu.style.position = 'fixed';
       commandMenu.style.left = `${left}px`;
       commandMenu.style.top = `${top}px`;
@@ -194,7 +943,7 @@ class MarkdownEditor {
       commandMenu.style.display = 'none';
       selectedIndex = -1;
       slashPosition = null;
-      this.textarea.focus();
+      this.surface.focus();
     };
 
     // Keyboard navigation
@@ -206,20 +955,20 @@ class MarkdownEditor {
           if (selectedIndex === -1 && visibleItems.length > 0) selectedIndex = 0;
           updateSelection();
           break;
-          
+
         case 'ArrowUp':
           e.preventDefault();
           selectedIndex = Math.max(selectedIndex - 1, 0);
           updateSelection();
           break;
-          
+
         case 'Enter':
           e.preventDefault();
           if (selectedIndex >= 0 && selectedIndex < visibleItems.length) {
             visibleItems[selectedIndex].click();
           }
           break;
-          
+
         case 'Escape':
           e.preventDefault();
           hideCommandMenu();
@@ -228,15 +977,11 @@ class MarkdownEditor {
     });
 
     // Show command menu on forward slash
-    this.textarea.addEventListener('keydown', (e) => {
-      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+    this.input.addEventListener('keydown', (e) => {
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing) {
         e.preventDefault();
-        const start = this.textarea.selectionStart;
-        const text = this.textarea.value;
-        this.textarea.value = text.substring(0, start) + '/' + text.substring(this.textarea.selectionEnd);
-        this.textarea.selectionStart = start + 1;
-        this.textarea.selectionEnd = start + 1;
-        
+        const { start } = this.surface.getSelectionOffsets();
+        this.surface.replaceSelection('/', 'typing');
         slashPosition = start;
         showCommandMenu();
       }
@@ -244,7 +989,8 @@ class MarkdownEditor {
 
     // Hide menu when clicking outside
     document.addEventListener('click', (e) => {
-      if (!commandMenu.contains(e.target) && e.target !== this.textarea) {
+      if (commandMenu.style.display === 'none') return;
+      if (!commandMenu.contains(e.target) && !this.input.contains(e.target)) {
         hideCommandMenu();
       }
     });
@@ -252,73 +998,41 @@ class MarkdownEditor {
     // Update menu position on scroll or resize
     window.addEventListener('scroll', positionCommandMenu);
     window.addEventListener('resize', positionCommandMenu);
-    this.textarea.addEventListener('scroll', positionCommandMenu);
+    this.input.addEventListener('scroll', positionCommandMenu);
   }
 
   showCustomDialog() {
     const dialog = document.createElement('sl-dialog');
     dialog.label = 'Custom Formatting';
-    
+
     dialog.innerHTML = `
       <sl-input label="Prefix" id="prefix-input"></sl-input>
       <sl-input label="Suffix" id="suffix-input"></sl-input>
       <sl-button slot="footer" variant="primary">Apply</sl-button>
       <sl-button slot="footer" variant="default">Cancel</sl-button>
     `;
-    
+
     document.body.appendChild(dialog);
-    
+
     const [applyBtn, cancelBtn] = dialog.querySelectorAll('sl-button');
     const prefixInput = dialog.querySelector('#prefix-input');
     const suffixInput = dialog.querySelector('#suffix-input');
-    
+
     applyBtn.addEventListener('click', () => {
       this.wrapSelectedText(prefixInput.value, suffixInput.value);
       dialog.hide();
     });
-    
+
     cancelBtn.addEventListener('click', () => dialog.hide());
-    
+
     dialog.addEventListener('sl-after-hide', () => dialog.remove());
-    
+
     dialog.show();
   }
 }
 
-function getCaretCoordinates(element, position) {
-  const div = document.createElement('div');
-  const styles = getComputedStyle(element);
-  const properties = [
-    'direction', 'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
-    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
-    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-    'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize',
-    'fontSizeAdjust', 'lineHeight', 'fontFamily', 'textAlign', 'textTransform',
-    'textIndent', 'textDecoration', 'letterSpacing', 'wordSpacing'
-  ];
-
-  div.style.position = 'absolute';
-  div.style.visibility = 'hidden';
-  div.style.whiteSpace = 'pre-wrap';
-
-  properties.forEach(prop => {
-    div.style[prop] = styles[prop];
-  });
-
-  div.textContent = element.value.substring(0, position);
-  const span = document.createElement('span');
-  span.textContent = element.value.substring(position) || '.';
-  div.appendChild(span);
-  
-  document.body.appendChild(div);
-  const coordinates = {
-    top: span.offsetTop,
-    left: span.offsetLeft
-  };
-  document.body.removeChild(div);
-  
-  return coordinates;
-}
+window.EditorSurface = EditorSurface;
+window.MarkdownEditor = MarkdownEditor;
 
 // Update the initEditor function
 const initEditor = () => {
@@ -339,6 +1053,7 @@ const initEditor = () => {
         styles: {}
       });
       editor.initialize();
+      window.terraphimEditor = editor;
     } else {
       // Check again in 100ms
       setTimeout(checkElements, 100);
@@ -355,4 +1070,4 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     console.error('Editor configuration not found. Make sure config.js is loaded before editor.js');
   }
-}); 
+});

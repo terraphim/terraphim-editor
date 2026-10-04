@@ -53,12 +53,12 @@ class TeraphimEditor {
   }
 
   getValue() {
-    return this.editor.textarea.value;
+    return this.editor.surface.getText();
   }
 
   setValue(markdown) {
-    this.editor.textarea.value = markdown;
-    this.editor.textarea.dispatchEvent(new Event('input'));
+    // setText records an undo step and fires the input event for the preview.
+    this.editor.surface.setText(markdown);
   }
 }
 
