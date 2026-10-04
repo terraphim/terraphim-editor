@@ -1,0 +1,158 @@
+//! Round-trip and malformed-block acceptance tests against real fixture files.
+//!
+//! Fixtures are embedded with `include_str!` so the tests need no file system
+//! access and can also run under wasm-bindgen-test later.
+
+use terraphim_alternatives::{
+    Alternative, BlockErrorKind, Document, Source, SpanKind, parse, write,
+};
+
+const FULL: &str = include_str!("fixtures/full.md");
+const GHOST_ONLY: &str = include_str!("fixtures/ghost_only.md");
+const OVERFLOW_ONLY: &str = include_str!("fixtures/overflow_only.md");
+const PLAIN: &str = include_str!("fixtures/plain.md");
+
+const TRUNCATED: &str = include_str!("fixtures/malformed/truncated.md");
+const INVALID_JSON: &str = include_str!("fixtures/malformed/invalid_json.md");
+const UNKNOWN_VERSION: &str = include_str!("fixtures/malformed/unknown_version.md");
+const DUPLICATE_IDS: &str = include_str!("fixtures/malformed/duplicate_ids.md");
+
+const FIXTURES: [(&str, &str); 4] = [
+    ("full", FULL),
+    ("ghost_only", GHOST_ONLY),
+    ("overflow_only", OVERFLOW_ONLY),
+    ("plain", PLAIN),
+];
+
+#[test]
+fn fixtures_are_byte_stable() {
+    for (name, source) in FIXTURES {
+        let doc = parse(source).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(write(&doc), source, "{name}: write(parse(f)) != f");
+    }
+}
+
+#[test]
+fn parse_of_write_is_identity_for_fixture_documents() {
+    for (name, source) in FIXTURES {
+        let doc = parse(source).unwrap();
+        assert_eq!(parse(&write(&doc)).unwrap(), doc, "{name}");
+    }
+}
+
+#[test]
+fn full_fixture_has_the_expected_content() {
+    let doc = parse(FULL).unwrap();
+    assert!(doc.body.starts_with("# Why isn't everything obvious?\n"));
+    assert!(
+        doc.body.ends_with("repeats itself.\n"),
+        "separator stripped exactly"
+    );
+    assert!(!doc.body.contains("terraphim-alternatives"));
+    let spans = &doc.annotations.spans;
+    assert_eq!(spans.len(), 4);
+    assert_eq!(spans[0].kind, SpanKind::Sentence);
+    assert_eq!(spans[1].active_alternative().text, "struggle");
+    assert_eq!(
+        spans[1].active_alternative().model.as_deref(),
+        Some("llama3")
+    );
+    assert!(spans[3].ghost);
+    assert!(
+        doc.annotations.overflow.contains("```rust"),
+        "backticks unescaped on read"
+    );
+    // Every stored anchor matches the body at its UTF-16 offsets.
+    let units: Vec<u16> = doc.body.encode_utf16().collect();
+    for span in spans {
+        let text = String::from_utf16(&units[span.anchor.start..span.anchor.end]).unwrap();
+        assert_eq!(text, span.anchor.text, "{}", span.id);
+    }
+}
+
+#[test]
+fn plain_markdown_parses_to_empty_annotations() {
+    let doc = parse(PLAIN).unwrap();
+    assert_eq!(doc.body, PLAIN);
+    assert!(doc.annotations.is_empty());
+}
+
+#[test]
+fn programmatic_documents_round_trip() {
+    let mut doc = Document::new("A 𝄞 clef, a café and a paperclip.\r\n");
+    // "A 𝄞 clef, a café and a " is 24 UTF-16 units (the clef is two).
+    let id = doc.add_span(SpanKind::Word, 24, 33).unwrap();
+    assert_eq!(doc.span(&id).unwrap().anchor.text, "paperclip");
+    doc.add_alternative(&id, "eraser", Source::Human, None)
+        .unwrap();
+    doc.add_alternative(&id, "`tick`", Source::Ai, Some("m".into()))
+        .unwrap();
+    doc.set_active(&id, 2).unwrap();
+    doc.annotations.overflow = "line one\nline two ``` end".into();
+    let written = write(&doc);
+    assert_eq!(parse(&written).unwrap(), doc);
+    assert_eq!(write(&parse(&written).unwrap()), written);
+}
+
+fn assert_recoverable(source: &str, expected_body: &str) -> BlockErrorKind {
+    let err = parse(source).unwrap_err();
+    assert_eq!(err.body, expected_body, "body is kept");
+    assert_eq!(
+        format!("{}{}", err.body, err.raw_block),
+        source,
+        "body + raw_block must reproduce the source exactly"
+    );
+    assert!(err.raw_block.contains("```terraphim-alternatives"));
+    assert!(!err.to_string().is_empty());
+    err.kind
+}
+
+#[test]
+fn truncated_block_is_recoverable() {
+    let kind = assert_recoverable(TRUNCATED, "Body survives truncation.");
+    assert_eq!(kind, BlockErrorKind::Truncated);
+}
+
+#[test]
+fn invalid_json_is_recoverable_with_position() {
+    let kind = assert_recoverable(INVALID_JSON, "Body survives bad JSON.");
+    match kind {
+        BlockErrorKind::InvalidJson { line, column, .. } => {
+            assert_eq!(line, 3);
+            assert!(column > 0);
+        }
+        other => panic!("expected InvalidJson, got {other:?}"),
+    }
+}
+
+#[test]
+fn unknown_version_is_reported_before_schema_checks() {
+    let kind = assert_recoverable(UNKNOWN_VERSION, "Body survives a future version.");
+    assert_eq!(kind, BlockErrorKind::UnknownVersion { found: 2 });
+}
+
+#[test]
+fn duplicate_span_ids_are_rejected() {
+    let kind = assert_recoverable(DUPLICATE_IDS, "The tension and the eraser.");
+    assert_eq!(kind, BlockErrorKind::DuplicateSpanId { id: "s1".into() });
+}
+
+#[test]
+fn structurally_invalid_span_is_reported_with_its_id() {
+    let mut doc = Document::new("The tension.");
+    let id = doc.add_span(SpanKind::Word, 4, 11).unwrap();
+    doc.annotations.spans[0]
+        .alts
+        .push(Alternative::new("pressure", Source::Human));
+    doc.annotations.spans[0].active = 9;
+    let err = parse(&write(&doc)).unwrap_err();
+    assert!(matches!(err.kind, BlockErrorKind::InvalidSpan { id: ref got, .. } if *got == id));
+}
+
+#[test]
+fn hand_edited_body_is_not_a_parse_error() {
+    // Anchor drift is the re-anchoring code's job, not the parser's.
+    let edited = FULL.replacen("# Why", "# So, why", 1);
+    let doc = parse(&edited).unwrap();
+    assert_eq!(doc.annotations.spans.len(), 4);
+}
