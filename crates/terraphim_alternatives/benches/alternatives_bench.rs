@@ -54,7 +54,7 @@ fn benches(c: &mut Criterion) {
     c.bench_function("export_with_ghosts", |b| {
         let mut d = doc.clone();
         for i in (1..=220).step_by(3) {
-            d.set_ghost(&format!("s{i}"), true).unwrap();
+            d.ghost_span(&format!("s{i}")).unwrap();
         }
         b.iter(|| black_box(&d).export())
     });

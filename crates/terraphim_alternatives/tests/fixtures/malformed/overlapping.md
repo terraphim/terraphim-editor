@@ -22,8 +22,7 @@ The tension and the eraser.
           "text": "pressure",
           "source": "human"
         }
-      ],
-      "ghost": false
+      ]
     },
     {
       "id": "s2",
@@ -43,8 +42,7 @@ The tension and the eraser.
           "text": "The pencil was sharp.",
           "source": "human"
         }
-      ],
-      "ghost": false
+      ]
     }
   ]
 }

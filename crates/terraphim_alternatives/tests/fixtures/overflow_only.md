@@ -5,6 +5,7 @@ Body with a trailing newline.
 {
   "version": 1,
   "spans": [],
+  "ghosts": [],
   "overflow": "Just the stash."
 }
 ```

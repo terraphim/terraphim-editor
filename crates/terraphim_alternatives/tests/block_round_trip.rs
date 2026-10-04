@@ -17,6 +17,8 @@ const INVALID_JSON: &str = include_str!("fixtures/malformed/invalid_json.md");
 const UNKNOWN_VERSION: &str = include_str!("fixtures/malformed/unknown_version.md");
 const DUPLICATE_IDS: &str = include_str!("fixtures/malformed/duplicate_ids.md");
 const OVERLAPPING: &str = include_str!("fixtures/malformed/overlapping.md");
+const OVERLAPPING_GHOSTS: &str = include_str!("fixtures/malformed/overlapping_ghosts.md");
+const DUPLICATE_GHOST_ID: &str = include_str!("fixtures/malformed/duplicate_ghost_id.md");
 
 const FIXTURES: [(&str, &str); 4] = [
     ("full", FULL),
@@ -51,24 +53,44 @@ fn full_fixture_has_the_expected_content() {
     );
     assert!(!doc.body.contains("terraphim-alternatives"));
     let spans = &doc.annotations.spans;
-    assert_eq!(spans.len(), 4);
+    assert_eq!(spans.len(), 3);
     assert_eq!(spans[0].kind, SpanKind::Sentence);
     assert_eq!(spans[1].active_alternative().text, "struggle");
     assert_eq!(
         spans[1].active_alternative().model.as_deref(),
         Some("llama3")
     );
-    assert!(spans[3].ghost);
+    // Ghost layer: g1 covers the word span s3 ("eraser") and its context, g2
+    // a whole paragraph that has no span at all.
+    let ghosts = &doc.annotations.ghosts;
+    assert_eq!(ghosts.len(), 2);
+    assert_eq!(ghosts[0].anchor.text, "draft 𝄞 is an eraser");
+    assert!(ghosts[0].anchor.start < spans[2].anchor.start);
+    assert_eq!(ghosts[0].anchor.end, spans[2].anchor.end);
+    assert!(ghosts[1].anchor.text.starts_with("This whole paragraph"));
     assert!(
         doc.annotations.overflow.contains("```rust"),
         "backticks unescaped on read"
     );
     // Every stored anchor matches the body at its UTF-16 offsets.
     let units: Vec<u16> = doc.body.encode_utf16().collect();
-    for span in spans {
-        let text = String::from_utf16(&units[span.anchor.start..span.anchor.end]).unwrap();
-        assert_eq!(text, span.anchor.text, "{}", span.id);
+    let anchors = spans
+        .iter()
+        .map(|s| (&s.id, &s.anchor))
+        .chain(ghosts.iter().map(|g| (&g.id, &g.anchor)));
+    for (id, anchor) in anchors {
+        let text = String::from_utf16(&units[anchor.start..anchor.end]).unwrap();
+        assert_eq!(text, anchor.text, "{id}");
     }
+}
+
+#[test]
+fn full_fixture_exports_without_ghosted_text() {
+    let doc = parse(FULL).unwrap();
+    assert_eq!(
+        doc.export(),
+        "# Why isn't everything obvious?\n\nThe struggle in a café holding `code` together.\n\n"
+    );
 }
 
 #[test]
@@ -135,7 +157,25 @@ fn unknown_version_is_reported_before_schema_checks() {
 #[test]
 fn duplicate_span_ids_are_rejected() {
     let kind = assert_recoverable(DUPLICATE_IDS, "The tension and the eraser.");
-    assert_eq!(kind, BlockErrorKind::DuplicateSpanId { id: "s1".into() });
+    assert_eq!(kind, BlockErrorKind::DuplicateId { id: "s1".into() });
+}
+
+#[test]
+fn ghost_reusing_a_span_id_is_rejected() {
+    let kind = assert_recoverable(DUPLICATE_GHOST_ID, "The tension and the eraser.");
+    assert_eq!(kind, BlockErrorKind::DuplicateId { id: "s1".into() });
+}
+
+#[test]
+fn overlapping_ghosts_are_reported_not_accepted() {
+    let kind = assert_recoverable(OVERLAPPING_GHOSTS, "The tension and the eraser.");
+    assert_eq!(
+        kind,
+        BlockErrorKind::OverlappingGhosts {
+            first: "g1".into(),
+            second: "g2".into(),
+        }
+    );
 }
 
 #[test]
@@ -167,5 +207,6 @@ fn hand_edited_body_is_not_a_parse_error() {
     // Anchor drift is the re-anchoring code's job, not the parser's.
     let edited = FULL.replacen("# Why", "# So, why", 1);
     let doc = parse(&edited).unwrap();
-    assert_eq!(doc.annotations.spans.len(), 4);
+    assert_eq!(doc.annotations.spans.len(), 3);
+    assert_eq!(doc.annotations.ghosts.len(), 2);
 }

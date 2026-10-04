@@ -16,6 +16,20 @@
 //!   can never contain a fence, whatever the overflow or alternatives hold.
 //! * When there is nothing to persist, no block is written at all and a plain
 //!   `.md` file stays plain.
+//! * The JSON fields are written in the order `version`, `spans`, `ghosts`,
+//!   `overflow`. `spans` and `ghosts` are always written, even when empty;
+//!   `overflow` is omitted when empty. A block without `ghosts` reads as no
+//!   ghosts.
+//!
+//! # Validation
+//!
+//! Ids are one namespace across spans and ghosts, so a repeated id in either
+//! collection, or one shared between them, is
+//! [`BlockErrorKind::DuplicateId`]. Spans must not overlap spans
+//! ([`BlockErrorKind::OverlappingSpans`]) and ghosts must not overlap ghosts
+//! ([`BlockErrorKind::OverlappingGhosts`]; touching is allowed); a ghost may
+//! overlap spans freely. Whether anchors still match the body is not checked
+//! here: that is [`Document::reanchor`]'s job, for spans and ghosts alike.
 //! * The reader is lenient: it strips up to two newlines before the opening
 //!   fence, accepts trailing whitespace and `\r` on fence lines, and ignores
 //!   trailing whitespace after the closing fence.
@@ -32,7 +46,7 @@ use std::collections::HashSet;
 use thiserror::Error;
 
 use crate::document::Document;
-use crate::model::{Annotations, SCHEMA_VERSION, WireV1};
+use crate::model::{Anchor, Annotations, SCHEMA_VERSION, WireV1};
 
 /// Info string identifying the annotation block's opening fence.
 pub const FENCE_INFO: &str = "terraphim-alternatives";
@@ -73,9 +87,9 @@ pub enum BlockErrorKind {
         /// Deserialiser message.
         message: String,
     },
-    /// Two spans share an id.
-    #[error("annotation block has duplicate span id {id:?}")]
-    DuplicateSpanId {
+    /// Two items share an id. Spans and ghosts share one id namespace.
+    #[error("annotation block has duplicate id {id:?}")]
+    DuplicateId {
         /// The repeated id.
         id: String,
     },
@@ -87,10 +101,28 @@ pub enum BlockErrorKind {
         /// The span that starts inside it.
         second: String,
     },
+    /// Two ghosts cover overlapping ranges; ghosts never overlap each other
+    /// (decision 2026-10-04: ghost layer).
+    #[error("annotation block has overlapping ghosts {first:?} and {second:?}")]
+    OverlappingGhosts {
+        /// The ghost that starts first.
+        first: String,
+        /// The ghost that starts inside it.
+        second: String,
+    },
     /// A span breaks a structural rule.
     #[error("span {id:?} is invalid: {reason}")]
     InvalidSpan {
         /// The span's id.
+        id: String,
+        /// What is wrong.
+        reason: String,
+    },
+    /// A ghost breaks a structural rule (empty id or text, or offsets that do
+    /// not match its text's UTF-16 length).
+    #[error("ghost {id:?} is invalid: {reason}")]
+    InvalidGhost {
+        /// The ghost's id.
         id: String,
         /// What is wrong.
         reason: String,
@@ -173,6 +205,7 @@ pub fn write(doc: &Document) -> String {
     let wire = WireV1 {
         version: SCHEMA_VERSION,
         spans: doc.annotations.spans.clone(),
+        ghosts: doc.annotations.ghosts.clone(),
         overflow: doc.annotations.overflow.clone(),
     };
     let json = serde_json::to_string_pretty(&wire)
@@ -213,35 +246,57 @@ fn decode(json: &str) -> Result<Annotations, BlockErrorKind> {
             message: e.to_string(),
         })?;
 
-    let mut seen = HashSet::with_capacity(wire.spans.len());
+    let mut seen = HashSet::with_capacity(wire.spans.len() + wire.ghosts.len());
+    let span_ids = wire.spans.iter().map(|s| &s.id);
+    if let Some(id) = span_ids
+        .chain(wire.ghosts.iter().map(|g| &g.id))
+        .find(|id| !seen.insert(id.as_str()))
+    {
+        return Err(BlockErrorKind::DuplicateId { id: id.clone() });
+    }
     for span in &wire.spans {
-        if !seen.insert(span.id.as_str()) {
-            return Err(BlockErrorKind::DuplicateSpanId {
-                id: span.id.clone(),
-            });
-        }
         span.validate()
             .map_err(|reason| BlockErrorKind::InvalidSpan {
                 id: span.id.clone(),
                 reason,
             })?;
     }
-    let mut ranges: Vec<_> = wire
-        .spans
-        .iter()
-        .map(|span| (span.anchor.start, span.anchor.end, span.id.as_str()))
-        .collect();
-    ranges.sort_unstable();
-    if let Some(pair) = ranges.windows(2).find(|pair| pair[1].0 < pair[0].1) {
-        return Err(BlockErrorKind::OverlappingSpans {
-            first: pair[0].2.to_string(),
-            second: pair[1].2.to_string(),
-        });
+    for ghost in &wire.ghosts {
+        ghost
+            .validate()
+            .map_err(|reason| BlockErrorKind::InvalidGhost {
+                id: ghost.id.clone(),
+                reason,
+            })?;
+    }
+    let spans = wire.spans.iter().map(|s| (&s.anchor, &s.id));
+    if let Some((first, second)) = first_overlap(spans) {
+        return Err(BlockErrorKind::OverlappingSpans { first, second });
+    }
+    let ghosts = wire.ghosts.iter().map(|g| (&g.anchor, &g.id));
+    if let Some((first, second)) = first_overlap(ghosts) {
+        return Err(BlockErrorKind::OverlappingGhosts { first, second });
     }
     Ok(Annotations {
         spans: wire.spans,
+        ghosts: wire.ghosts,
         overflow: wire.overflow,
     })
+}
+
+/// Ids of the first pair of overlapping ranges in start order, if any.
+/// Touching ranges do not overlap.
+fn first_overlap<'a>(
+    items: impl Iterator<Item = (&'a Anchor, &'a String)>,
+) -> Option<(String, String)> {
+    let mut ranges: Vec<_> = items
+        .map(|(anchor, id)| (anchor.start, anchor.end, id.as_str()))
+        .collect();
+    ranges.sort_unstable();
+    ranges
+        .windows(2)
+        .find(|pair| pair[1].0 < pair[0].1)
+        .map(|pair| (pair[0].2.to_string(), pair[1].2.to_string()))
 }
 
 /// Byte offset of the start of the last opening-fence line, if any.
@@ -284,7 +339,7 @@ fn strip_separator(before: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Alternative, Anchor, Source, Span, SpanKind};
+    use crate::model::{Alternative, Ghost, Source, Span, SpanKind};
 
     fn sample_span(id: &str) -> Span {
         Span {
@@ -300,7 +355,6 @@ mod tests {
                 Alternative::new("tension", Source::Original),
                 Alternative::new("pressure", Source::Human),
             ],
-            ghost: false,
         }
     }
 
@@ -335,7 +389,7 @@ mod tests {
         d.annotations.overflow = "x".into();
         assert_eq!(
             write(&d),
-            "Hi\n\n```terraphim-alternatives\n{\n  \"version\": 1,\n  \"spans\": [],\n  \"overflow\": \"x\"\n}\n```\n"
+            "Hi\n\n```terraphim-alternatives\n{\n  \"version\": 1,\n  \"spans\": [],\n  \"ghosts\": [],\n  \"overflow\": \"x\"\n}\n```\n"
         );
     }
 
@@ -393,5 +447,65 @@ mod tests {
     fn opening_fence_on_last_line_without_newline_is_truncated() {
         let src = "B\n\n```terraphim-alternatives";
         assert_eq!(parse(src).unwrap_err().kind, BlockErrorKind::Truncated);
+    }
+
+    #[test]
+    fn block_without_ghosts_field_reads_as_no_ghosts() {
+        let src = "B\n\n```terraphim-alternatives\n{\"version\":1,\"spans\":[],\"overflow\":\"o\"}\n```\n";
+        let d = parse(src).unwrap();
+        assert!(d.annotations.ghosts.is_empty());
+        assert_eq!(d.annotations.overflow, "o");
+    }
+
+    #[test]
+    fn ghosts_are_written_after_spans_and_round_trip() {
+        let mut d = doc("The tension rises.");
+        d.annotations.ghosts.push(Ghost {
+            id: "g1".into(),
+            anchor: Anchor {
+                start: 0,
+                end: 18,
+                text: "The tension rises.".into(),
+            },
+        });
+        let written = write(&d);
+        let spans_at = written.find("\"spans\"").unwrap();
+        let ghosts_at = written.find("\"ghosts\"").unwrap();
+        assert!(spans_at < ghosts_at);
+        assert_eq!(parse(&written).unwrap(), d);
+    }
+
+    #[test]
+    fn touching_ghosts_are_accepted_and_invalid_ghosts_rejected() {
+        let ghost = |id: &str, start: usize, text: &str| Ghost {
+            id: id.into(),
+            anchor: Anchor {
+                start,
+                end: start + text.len(),
+                text: text.into(),
+            },
+        };
+        let mut d = Document::new("abcdef");
+        d.annotations.ghosts = vec![ghost("g1", 0, "abc"), ghost("g2", 3, "def")];
+        assert_eq!(parse(&write(&d)).unwrap(), d);
+
+        d.annotations.ghosts = vec![ghost("g1", 0, "")];
+        let err = parse(&write(&d)).unwrap_err();
+        assert!(matches!(err.kind, BlockErrorKind::InvalidGhost { ref id, .. } if id == "g1"));
+    }
+
+    #[test]
+    fn a_ghost_sharing_a_span_id_is_a_duplicate() {
+        let mut d = doc("The tension rises.");
+        d.annotations.ghosts.push(Ghost {
+            id: "s1".into(),
+            anchor: Anchor {
+                start: 0,
+                end: 3,
+                text: "The".into(),
+            },
+        });
+        let err = parse(&write(&d)).unwrap_err();
+        assert_eq!(err.kind, BlockErrorKind::DuplicateId { id: "s1".into() });
     }
 }

@@ -1,9 +1,15 @@
-//! The span model: spans, alternatives, anchors and document-level annotations.
+//! The span model: spans, alternatives, ghosts, anchors and document-level
+//! annotations.
 //!
 //! Only state the knowledge graph cannot derive lives here: human-written and
-//! AI alternatives, ghost flags and the overflow stash. The text on the page is
-//! always the active alternative, so `anchor.text == alts[active].text` is an
-//! invariant checked when a block is parsed.
+//! AI alternatives, the ghost layer and the overflow stash. The text on the
+//! page is always the active alternative, so `anchor.text == alts[active].text`
+//! is an invariant checked when a block is parsed.
+//!
+//! Ghosting is a separate layer (decision 2026-10-04): a [`Ghost`] is a plain
+//! range of body text that may cover or partially overlap any number of
+//! alternative spans. Spans never overlap each other, and ghosts never overlap
+//! each other, but a ghost and a span may overlap freely.
 
 use serde::{Deserialize, Serialize};
 
@@ -60,7 +66,7 @@ impl Alternative {
     }
 }
 
-/// Where a span sits in the body.
+/// Where a span or ghost sits in the body.
 ///
 /// `start` and `end` are UTF-16 code-unit offsets into the body (see
 /// [`crate::offset`]). They are a hint: after the body is edited elsewhere,
@@ -73,11 +79,11 @@ pub struct Anchor {
     pub start: usize,
     /// End offset, UTF-16 code units, exclusive.
     pub end: usize,
-    /// The body text covered by the span (the active alternative).
+    /// The body text covered (for a span, its active alternative).
     pub text: String,
 }
 
-/// A contiguous piece of body text carrying alternatives and/or a ghost flag.
+/// A contiguous piece of body text carrying alternatives.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Span {
@@ -91,9 +97,6 @@ pub struct Span {
     pub active: usize,
     /// Ordered alternatives; index 0 is the original.
     pub alts: Vec<Alternative>,
-    /// Whether the span is ghosted (dimmed, counted, not exported).
-    #[serde(default)]
-    pub ghost: bool,
 }
 
 impl Span {
@@ -103,10 +106,11 @@ impl Span {
     }
 
     /// True when the span carries no state worth keeping: only its original
-    /// alternative and no ghost flag. Such spans are removed by the operations
-    /// that can produce them (R-2.7).
+    /// alternative. Such spans are removed by the operations that can produce
+    /// them (R-2.7). Ghosting is independent of spans, so a ghost over the
+    /// span's text does not keep it alive.
     pub fn is_inert(&self) -> bool {
-        self.alts.len() <= 1 && !self.ghost
+        self.alts.len() <= 1
     }
 
     /// Structural validation used when parsing a block. Returns a
@@ -143,22 +147,68 @@ impl Span {
         if self.anchor.text != self.alts[self.active].text {
             return Err("anchor text does not match the active alternative".into());
         }
-        if self.anchor.end < self.anchor.start
-            || self.anchor.end - self.anchor.start != utf16_len(&self.anchor.text)
-        {
+        self.anchor.validate_length()
+    }
+}
+
+impl Anchor {
+    /// True when the UTF-16 range `start..end` intersects this anchor's range
+    /// (touching ranges do not intersect).
+    pub(crate) fn overlaps(&self, start: usize, end: usize) -> bool {
+        start < self.end && end > self.start
+    }
+
+    fn validate_length(&self) -> Result<(), String> {
+        if self.end < self.start || self.end - self.start != utf16_len(&self.text) {
             return Err("anchor start/end do not match the UTF-16 length of its text".into());
         }
         Ok(())
     }
 }
 
-/// Document-level annotation state: the spans and the overflow stash.
+/// A ghosted range of body text (R-5): dimmed in the editor, still counted,
+/// dropped on export.
+///
+/// Ghosts form a layer independent of spans (decision 2026-10-04): a ghost may
+/// fully cover or partially overlap any alternative span, so a sentence that
+/// contains a word with alternatives can be ghosted as a whole. Ghosts never
+/// overlap one another in stored state; see
+/// [`Document::ghost`](crate::Document::ghost) for the merge rule and
+/// [`Document::apply_edit`](crate::Document::apply_edit) for how ghosts follow
+/// edits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ghost {
+    /// Identifier, unique within the document across spans and ghosts.
+    pub id: String,
+    /// Location hint plus the ghosted text, re-anchored like a span's.
+    pub anchor: Anchor,
+}
+
+impl Ghost {
+    /// Structural validation used when parsing a block.
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        if self.id.is_empty() {
+            return Err("ghost id is empty".into());
+        }
+        if self.anchor.text.is_empty() {
+            return Err("ghost text is empty".into());
+        }
+        self.anchor.validate_length()
+    }
+}
+
+/// Document-level annotation state: spans, ghosts and the overflow stash.
 ///
 /// Serialised as schema version [`SCHEMA_VERSION`] in the trailing block.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Annotations {
     /// Spans in insertion order. Non-overlapping.
     pub spans: Vec<Span>,
+    /// Ghosted ranges. Non-overlapping with each other (they may touch); free
+    /// to overlap spans. The [`Document`](crate::Document) operations keep
+    /// them sorted by start offset.
+    pub ghosts: Vec<Ghost>,
     /// Free text stashed out of the body (R-6). Never exported.
     pub overflow: String,
 }
@@ -166,7 +216,7 @@ pub struct Annotations {
 impl Annotations {
     /// True when there is nothing to persist.
     pub fn is_empty(&self) -> bool {
-        self.spans.is_empty() && self.overflow.is_empty()
+        self.spans.is_empty() && self.ghosts.is_empty() && self.overflow.is_empty()
     }
 }
 
@@ -177,6 +227,9 @@ impl Annotations {
 pub(crate) struct WireV1 {
     pub version: u64,
     pub spans: Vec<Span>,
+    /// Always written (like `spans`); a block without it reads as no ghosts.
+    #[serde(default)]
+    pub ghosts: Vec<Ghost>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub overflow: String,
 }
@@ -197,7 +250,6 @@ mod tests {
             },
             active,
             alts,
-            ghost: false,
         }
     }
 
@@ -253,11 +305,36 @@ mod tests {
     }
 
     #[test]
-    fn inert_means_only_original_and_not_ghosted() {
-        let mut s = span(vec![Alternative::new("x", Source::Original)], 0);
+    fn inert_means_only_the_original() {
+        let s = span(vec![Alternative::new("x", Source::Original)], 0);
         assert!(s.is_inert());
-        s.ghost = true;
-        assert!(!s.is_inert());
+    }
+
+    #[test]
+    fn ghost_validation_checks_id_text_and_length() {
+        let ghost = |id: &str, start, end, text: &str| Ghost {
+            id: id.into(),
+            anchor: Anchor {
+                start,
+                end,
+                text: text.into(),
+            },
+        };
+        assert_eq!(ghost("g1", 3, 6, "中𝄞").validate(), Ok(()));
+        assert!(ghost("", 0, 1, "x").validate().unwrap_err().contains("id"));
+        assert!(
+            ghost("g1", 0, 0, "")
+                .validate()
+                .unwrap_err()
+                .contains("empty")
+        );
+        assert!(
+            ghost("g1", 0, 2, "x")
+                .validate()
+                .unwrap_err()
+                .contains("UTF-16 length")
+        );
+        assert!(ghost("g1", 5, 4, "x").validate().is_err());
     }
 
     #[test]

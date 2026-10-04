@@ -1,5 +1,5 @@
-//! Span lifecycle (R-2.7, R-5), live edits, export (R-9.3) and counts
-//! (decision 3).
+//! Span lifecycle (R-2.7), live edits, export (R-9.3) and counts
+//! (decision 3). Ghost-layer behaviour has its own suite in `ghosts.rs`.
 
 use terraphim_alternatives::{
     Counts, Document, EditError, Source, SpanFate, SpanKind, parse, write,
@@ -20,7 +20,7 @@ fn ids_are_sequential_and_skip_used_numbers() {
     let mut d = Document::new("one two three");
     assert_eq!(d.add_span(SpanKind::Word, 0, 3).unwrap(), "s1");
     assert_eq!(d.add_span(SpanKind::Word, 4, 7).unwrap(), "s2");
-    d.set_ghost("s1", false).unwrap(); // inert -> removed
+    assert_eq!(d.clear_alternatives("s1"), Ok(SpanFate::Removed));
     assert_eq!(d.add_span(SpanKind::Word, 8, 13).unwrap(), "s3");
 }
 
@@ -127,25 +127,28 @@ fn clear_keeps_the_visible_text_as_plain_text() {
 }
 
 #[test]
-fn ghosted_span_survives_losing_its_alternatives() {
+fn ghost_is_independent_of_the_span_lifecycle() {
+    // Decision 2026-10-04: a ghost no longer keeps an emptied span alive.
     let (mut d, id) = word_doc();
     d.set_active(&id, 1).unwrap();
-    d.set_ghost(&id, true).unwrap();
-    assert_eq!(d.clear_alternatives(&id), Ok(SpanFate::Kept));
-    let span = d.span(&id).unwrap();
-    assert_eq!(span.alts.len(), 1);
-    assert_eq!(span.alts[0].source, Source::Original);
-    assert_eq!(span.alts[0].text, "pressure");
-    // Reviving a span with nothing else to keep removes it.
-    assert_eq!(d.set_ghost(&id, false), Ok(SpanFate::Removed));
+    let ghost = d.ghost_span(&id).unwrap();
+    assert_eq!(d.clear_alternatives(&id), Ok(SpanFate::Removed));
+    assert!(d.annotations.spans.is_empty());
+    let g = d.ghost_at(4).unwrap();
+    assert_eq!(
+        (g.id.as_str(), g.anchor.text.as_str()),
+        (ghost.as_str(), "pressure")
+    );
     assert_eq!(d.body, "The pressure rises.");
+    assert_eq!(d.export(), "The rises.");
 }
 
 #[test]
 fn ghost_and_revive_keep_alternatives() {
     let (mut d, id) = word_doc();
-    assert_eq!(d.set_ghost(&id, true), Ok(SpanFate::Kept));
-    assert_eq!(d.set_ghost(&id, false), Ok(SpanFate::Kept));
+    d.ghost_span(&id).unwrap();
+    assert_eq!(d.revive(4, 11), Ok(true));
+    assert!(d.annotations.ghosts.is_empty());
     assert_eq!(d.span(&id).unwrap().alts.len(), 3);
 }
 
@@ -184,16 +187,13 @@ fn apply_edit_shifts_before_keeps_after_and_detaches_inside() {
 }
 
 #[test]
-fn export_drops_ghosted_spans_and_omits_overflow_and_block() {
+fn export_drops_ghosted_text_and_omits_overflow_and_block() {
     let mut d = Document::new(
         "The big tension rises. It hedges. Done.\n\nKeep me.\n\nCut paragraph.\n\nEnd.\n",
     );
-    let big = d.add_span(SpanKind::Word, 4, 7).unwrap();
-    d.set_ghost(&big, true).unwrap();
-    let hedge = d.add_span(SpanKind::Sentence, 23, 33).unwrap();
-    d.set_ghost(&hedge, true).unwrap();
-    let para = d.add_span(SpanKind::Paragraph, 51, 65).unwrap();
-    d.set_ghost(&para, true).unwrap();
+    d.ghost(4, 7).unwrap();
+    d.ghost(23, 33).unwrap();
+    d.ghost(51, 65).unwrap();
     let t = d.add_span(SpanKind::Word, 8, 15).unwrap();
     d.add_alternative(&t, "pressure", Source::Human, None)
         .unwrap();
@@ -212,18 +212,15 @@ fn export_drops_ghosted_spans_and_omits_overflow_and_block() {
 #[test]
 fn export_tidies_spaces_at_line_starts_and_before_punctuation() {
     let mut d = Document::new("Big start here, and an ending word.");
-    let a = d.add_span(SpanKind::Word, 0, 3).unwrap();
-    d.set_ghost(&a, true).unwrap();
-    let b = d.add_span(SpanKind::Word, 30, 34).unwrap();
-    d.set_ghost(&b, true).unwrap();
+    d.ghost(0, 3).unwrap();
+    d.ghost(30, 34).unwrap();
     assert_eq!(d.export(), "start here, and an ending.");
 }
 
 #[test]
-fn export_skips_stale_spans_rather_than_cutting_the_wrong_text() {
+fn export_skips_stale_ghosts_rather_than_cutting_the_wrong_text() {
     let mut d = Document::new("Keep this, drop that.");
-    let id = d.add_span(SpanKind::Word, 11, 15).unwrap();
-    d.set_ghost(&id, true).unwrap();
+    d.ghost(11, 15).unwrap();
     d.body.insert_str(0, ">> ");
     assert_eq!(d.export(), ">> Keep this, drop that.");
 }
@@ -231,8 +228,7 @@ fn export_skips_stale_spans_rather_than_cutting_the_wrong_text() {
 #[test]
 fn counts_include_ghosted_text_and_exclude_the_block() {
     let mut d = Document::new("Café 𝄞 has five words.");
-    let id = d.add_span(SpanKind::Word, 0, 4).unwrap();
-    d.set_ghost(&id, true).unwrap();
+    d.ghost(0, 4).unwrap();
     d.annotations.overflow = "many many more words in the stash".into();
     let expected = Counts {
         words: 5,

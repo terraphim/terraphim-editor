@@ -32,8 +32,7 @@ This whole paragraph might go. It hedges and repeats itself.
           "source": "ai",
           "model": "terraphim-thesaurus"
         }
-      ],
-      "ghost": false
+      ]
     },
     {
       "id": "s2",
@@ -67,8 +66,7 @@ This whole paragraph might go. It hedges and repeats itself.
           "source": "ai",
           "model": "llama3"
         }
-      ],
-      "ghost": false
+      ]
     },
     {
       "id": "s3",
@@ -92,25 +90,25 @@ This whole paragraph might go. It hedges and repeats itself.
           "text": "thumbtack",
           "source": "human"
         }
-      ],
-      "ghost": false
+      ]
+    }
+  ],
+  "ghosts": [
+    {
+      "id": "g1",
+      "anchor": {
+        "start": 56,
+        "end": 77,
+        "text": "draft 𝄞 is an eraser"
+      }
     },
     {
-      "id": "s4",
-      "kind": "paragraph",
+      "id": "g2",
       "anchor": {
         "start": 104,
         "end": 164,
         "text": "This whole paragraph might go. It hedges and repeats itself."
-      },
-      "active": 0,
-      "alts": [
-        {
-          "text": "This whole paragraph might go. It hedges and repeats itself.",
-          "source": "original"
-        }
-      ],
-      "ghost": true
+      }
     }
   ],
   "overflow": "Stashed idea.\n\n\u0060\u0060\u0060rust\nfn main() {}\n\u0060\u0060\u0060\nhttps://example.com/a?b=c\n"

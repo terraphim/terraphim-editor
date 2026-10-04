@@ -23,26 +23,16 @@ The tension and the eraser.
           "source": "human"
         }
       ]
-    },
+    }
+  ],
+  "ghosts": [
     {
       "id": "s1",
-      "kind": "word",
       "anchor": {
-        "start": 20,
-        "end": 26,
-        "text": "eraser"
-      },
-      "active": 0,
-      "alts": [
-        {
-          "text": "eraser",
-          "source": "original"
-        },
-        {
-          "text": "thumbtack",
-          "source": "human"
-        }
-      ]
+        "start": 0,
+        "end": 27,
+        "text": "The tension and the eraser."
+      }
     }
   ]
 }
