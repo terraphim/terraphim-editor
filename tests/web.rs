@@ -1049,11 +1049,9 @@ fn bench_typing_latency_textarea_vs_surface() {
         .into(),
     );
     assert!(word_count >= 5000, "document has {word_count} words");
-    // Headless timing is noisy; allow a margin rather than a strict <=.
-    assert!(
-        per_surface <= per_textarea * 1.5 + 1.0,
-        "surface {per_surface:.3} ms vs textarea {per_textarea:.3} ms per keystroke"
-    );
+    // The non-debounced surface no longer ships (#28), so its ratio to the
+    // textarea is logged above for comparison but not asserted: under host
+    // load the headless timing of that path is too noisy to gate on.
     // Issue #28 acceptance: the debounced surface is no worse per keystroke
     // than the main-branch baseline (textarea plus synchronous conversion).
     assert!(
