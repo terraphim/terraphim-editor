@@ -36,7 +36,7 @@ Why this pair:
 - **One score drives both features.** The weakest-sentence mark and the sentence tier of the trim use the same `weakness` score. A sentence the Lab marks as weak is therefore one of the first whole sentences a trim fades, and the two features never contradict each other. The one exception is a sentence holding inline code: it can be marked, but trim never fades it (§5.1). In `zed-plugin-fit` the third-weakest sentence is such a case.
 - **Deterministic and explainable.** Each mark and each cut has a `reason` the UI can show (`filler "quite"`, `aside "which"`, `weak sentence`).
 - **Mapped onto `terraphim_automata` already.** The lists are KG markdown files, and the matcher uses the same automaton configuration as `terraphim_automata::find_matches`. The one gap is the word-boundary filter (§3.3).
-- **The light levels behave like the demo.** At ~10% the cut is mostly faded words and asides, not whole sentences, which is what the demo shows ("Faded words would go", R-8.4).
+- **The light levels behave like the demo.** At ~10% the cut is mostly faded words and asides, not whole sentences, which is what the demo shows ("Faded words would go", R-8.4). Code-dense prose is the exception: with fewer clause candidates, `zed-plugin-fit` already fades two short whole sentences at 10% (§6.4).
 
 ## 2. Constraints taken from the spec
 
@@ -184,7 +184,7 @@ All values are deltas from the target, measured by the prototype:
 
 Two findings:
 - **The fit step is what hits the tolerance.** Taking the ranked list in order until the target is passed fails on three cells: Walden has a single 114-word sentence (+11.3pp at 30%), Three Men overshoots at 50% (+3.5pp), and `zed-plugin-fit`, which has only 21 candidates once code-holding spans are excluded, overshoots at 30% (+3.7pp). With the skip-and-fit passes, even a sentence-only trim lands within 2.6pp. The coarser `zed-plugin-fit` candidate set is also why its recommended-method deltas (up to 1.6pp) are larger than the Gutenberg ones (up to 0.3pp).
-- **Mixed granularity is about quality, not accuracy.** Sentence-only trims also hit the numbers, but at ~10% they delete whole sentences where the recommended method fades fillers and asides. Fading at the smaller granularity is what makes "Slight trim" feel slight.
+- **Mixed granularity is about quality, not accuracy.** Sentence-only trims also hit the numbers, but at ~10% they delete whole sentences where the recommended method fades fillers and asides (on the Gutenberg fixtures entirely; on `zed-plugin-fit`, 19 of the 42 words cut at 10% are still whole sentences, §6.4). Fading at the smaller granularity is what makes "Slight trim" feel slight.
 
 ### 5.3 Nesting
 
@@ -313,7 +313,7 @@ Only 21 of the document's candidates survive the protected-range guard (38 befor
 | `docs/requirements/zed-plugin-fit.md` | 1621 | 9.9% | 20.0% | 29.0% | **29.0%** |
 | `README.md` | 187 | 9.6% | 19.8% | 29.4% | **46.0%** |
 
-**"Cut in half" misses badly on technical documents.** Protected words count in the denominator but cannot be cut, and since the protected-range guard (§5.1) every sentence that holds inline code is protected along with the code. In `zed-plugin-fit.md`, 699 of 1621 words are protected outright (tables, code, headings) and 44 of the 77 prose sentences hold inline code, so it runs out of candidates at 29.0% (the same value at 30% and 50%). In `alternative-control.md`, 60 of 144 sentences (1536 of 2497 words) hold inline code, and it stops at 33.5%. Before the guard these documents reached 50%, but only by fading code spans, which the spec does not allow. An earlier version also protected list items; with that version `zed-plugin-fit.md` and `README.md` reached only about 33%.
+**"Cut in half" misses badly on technical documents.** Protected words count in the denominator but cannot be cut, and since the protected-range guard (§5.1) every sentence that holds inline code is protected along with the code. In `zed-plugin-fit.md`, 699 of 1621 words are protected outright (tables, code, headings) and 44 of the 77 prose sentences hold inline code, so it runs out of candidates at 29.0% (the same value at 30% and 50%). In `alternative-control.md`, 60 of 144 sentences (1536 of 2497 words) hold inline code, and it stops at 33.5%. `README.md` is the mild case: it is short and mostly lists, and it stops at 46.0% (-4.0pp). Before the guard these documents reached 50%, but only by fading code spans, which the spec does not allow. An earlier version also protected list items; with that version `zed-plugin-fit.md` and `README.md` reached only about 33%.
 
 Two consequences. First, the status card must report the achieved percentage honestly (for example `-29%` on "Cut in half") instead of pretending to hit 50%. Second, if 50% matters for technical prose, the candidate rules need a finer cut that keeps code: for example, fading the prose around an inline code span (the clause before or after it) rather than the whole sentence. That is not attempted here; the acceptance fixtures still pass (§6.2), and this is reported rather than tuned.
 
