@@ -16,6 +16,7 @@ const TRUNCATED: &str = include_str!("fixtures/malformed/truncated.md");
 const INVALID_JSON: &str = include_str!("fixtures/malformed/invalid_json.md");
 const UNKNOWN_VERSION: &str = include_str!("fixtures/malformed/unknown_version.md");
 const DUPLICATE_IDS: &str = include_str!("fixtures/malformed/duplicate_ids.md");
+const OVERLAPPING: &str = include_str!("fixtures/malformed/overlapping.md");
 
 const FIXTURES: [(&str, &str); 4] = [
     ("full", FULL),
@@ -135,6 +136,18 @@ fn unknown_version_is_reported_before_schema_checks() {
 fn duplicate_span_ids_are_rejected() {
     let kind = assert_recoverable(DUPLICATE_IDS, "The tension and the eraser.");
     assert_eq!(kind, BlockErrorKind::DuplicateSpanId { id: "s1".into() });
+}
+
+#[test]
+fn overlapping_spans_are_reported_not_accepted() {
+    let kind = assert_recoverable(OVERLAPPING, "The tension and the eraser.");
+    assert_eq!(
+        kind,
+        BlockErrorKind::OverlappingSpans {
+            first: "s2".into(),
+            second: "s1".into(),
+        }
+    );
 }
 
 #[test]

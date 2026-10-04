@@ -79,6 +79,14 @@ pub enum BlockErrorKind {
         /// The repeated id.
         id: String,
     },
+    /// Two spans cover overlapping ranges; spans never overlap in v1.
+    #[error("annotation block has overlapping spans {first:?} and {second:?}")]
+    OverlappingSpans {
+        /// The span that starts first.
+        first: String,
+        /// The span that starts inside it.
+        second: String,
+    },
     /// A span breaks a structural rule.
     #[error("span {id:?} is invalid: {reason}")]
     InvalidSpan {
@@ -217,6 +225,18 @@ fn decode(json: &str) -> Result<Annotations, BlockErrorKind> {
                 id: span.id.clone(),
                 reason,
             })?;
+    }
+    let mut ranges: Vec<_> = wire
+        .spans
+        .iter()
+        .map(|span| (span.anchor.start, span.anchor.end, span.id.as_str()))
+        .collect();
+    ranges.sort_unstable();
+    if let Some(pair) = ranges.windows(2).find(|pair| pair[1].0 < pair[0].1) {
+        return Err(BlockErrorKind::OverlappingSpans {
+            first: pair[0].2.to_string(),
+            second: pair[1].2.to_string(),
+        });
     }
     Ok(Annotations {
         spans: wire.spans,
