@@ -9,8 +9,14 @@
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::{js_sys::Promise, JsFuture};
 use wasm_bindgen_test::*;
 use web_sys::{Document, HtmlElement, HtmlTextAreaElement};
+
+use terraphim_editor::{
+    flush_preview, preview_delay, preview_pending, preview_render_count, set_preview_delay,
+    DEFAULT_PREVIEW_DELAY_MS,
+};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -27,7 +33,12 @@ window.teTest = {
     target.dispatchEvent(ev);
     return ev.defaultPrevented;
   },
-  preview() { return document.querySelector('.markdown-preview').innerHTML; },
+  // The preview is debounced; flush any pending render (the same path a
+  // save or export uses) before reading it.
+  preview() {
+    window.teFlushPreview();
+    return document.querySelector('.markdown-preview').innerHTML;
+  },
   menu() { return window.__teEditor.commandMenu; },
   canonical() {
     const s = window.__teEditor.surface;
@@ -36,9 +47,26 @@ window.teTest = {
 };
 "##;
 
-#[wasm_bindgen(inline_js = "export function js_eval(src) { return (0, eval)(src); }")]
+#[wasm_bindgen(inline_js = r#"
+export function js_eval(src) { return (0, eval)(src); }
+export function sleep_ms(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+export function install_flush(f) { window.teFlushPreview = f; }
+"#)]
 extern "C" {
     fn js_eval(src: &str) -> JsValue;
+    fn sleep_ms(ms: u32) -> Promise;
+    fn install_flush(f: &Closure<dyn FnMut() -> bool>);
+}
+
+/// Wait on a real browser timer (no fake clocks).
+async fn sleep(ms: u32) {
+    JsFuture::from(sleep_ms(ms))
+        .await
+        .expect("timer promise should resolve");
+}
+
+fn now() -> f64 {
+    web_sys::window().unwrap().performance().unwrap().now()
 }
 
 fn js_string(src: &str) -> String {
@@ -93,6 +121,10 @@ fn load_editor_scripts(document: &Document) {
         script.set_text_content(Some(source));
         document.body().unwrap().append_child(&script).unwrap();
     }
+    // Expose the real exported flush to the JavaScript snippets.
+    let flush = Closure::wrap(Box::new(flush_preview) as Box<dyn FnMut() -> bool>);
+    install_flush(&flush);
+    flush.forget();
 }
 
 /// Fresh Rust editor plus the real JavaScript controller.
@@ -186,6 +218,11 @@ fn test_markdown_conversion() {
 
     surface.set_text_content(Some("# Test Heading"));
     dispatch_input(&surface);
+    assert!(
+        preview_pending(),
+        "input should schedule a debounced render"
+    );
+    assert!(flush_preview(), "flush should run the pending render");
 
     let preview_html = preview.inner_html();
     assert!(
@@ -207,11 +244,193 @@ fn bench_markdown_conversion_in_browser() {
     for _ in 0..100 {
         surface.set_text_content(Some(BENCHMARK_TEXT));
         dispatch_input(&surface);
+        // Render now so the timing still bounds the conversion itself.
+        assert!(flush_preview());
     }
     let avg_time = (performance.now() - start) / 100.0;
 
     web_sys::console::log_1(&format!("Average conversion time: {}ms", avg_time).into());
     assert!(avg_time < 50.0, "Conversion took too long: {}ms", avg_time);
+}
+
+fn preview_html(document: &Document) -> String {
+    document
+        .query_selector(".markdown-preview")
+        .unwrap()
+        .expect("Preview div should be present")
+        .inner_html()
+}
+
+#[wasm_bindgen_test]
+fn test_initial_render_is_immediate() {
+    let document = fresh_rust_editor();
+    // No timer has had a chance to run: the initial preview is synchronous.
+    assert!(preview_html(&document).contains("<h1>Welcome to Markdown Editor!</h1>"));
+    assert!(!preview_pending(), "nothing should be pending after load");
+    assert_eq!(preview_render_count(), 0);
+    assert_eq!(preview_delay(), DEFAULT_PREVIEW_DELAY_MS);
+    assert!(!flush_preview(), "flush with nothing pending is a no-op");
+}
+
+#[wasm_bindgen_test]
+fn test_flush_renders_immediately() {
+    let document = fresh_rust_editor();
+    let surface = surface_element(&document);
+    surface.set_text_content(Some("Flushed **now**"));
+    dispatch_input(&surface);
+    assert!(preview_pending());
+    assert_eq!(preview_render_count(), 0);
+    assert!(!preview_html(&document).contains("Flushed"));
+
+    assert!(flush_preview());
+    assert!(!preview_pending());
+    assert_eq!(preview_render_count(), 1);
+    assert!(preview_html(&document).contains("<p>Flushed <strong>now</strong></p>"));
+    // A second flush has nothing to do.
+    assert!(!flush_preview());
+    assert_eq!(preview_render_count(), 1);
+}
+
+#[wasm_bindgen_test]
+async fn test_rapid_input_renders_once_after_window() {
+    let document = fresh_rust_editor();
+    let surface = surface_element(&document);
+    let delay = preview_delay();
+
+    let mut text = String::new();
+    for i in 0..25 {
+        text.push_str(&format!("word{i} "));
+        surface.set_text_content(Some(&text));
+        dispatch_input(&surface);
+    }
+    text.push_str("\n\n# Final heading");
+    surface.set_text_content(Some(&text));
+    dispatch_input(&surface);
+    let last_input = now();
+
+    assert_eq!(preview_render_count(), 0, "rapid input must not render");
+    assert!(preview_pending());
+    assert!(!preview_html(&document).contains("Final heading"));
+
+    // Still inside the window: nothing rendered yet. Timers never fire early,
+    // so this only asserts while the elapsed time really is below the delay.
+    sleep(delay / 3).await;
+    if now() - last_input < f64::from(delay) {
+        assert_eq!(
+            preview_render_count(),
+            0,
+            "rendered before the window closed"
+        );
+    }
+
+    sleep(delay + 100).await;
+    assert_eq!(preview_render_count(), 1, "exactly one trailing render");
+    assert!(!preview_pending());
+    let html = preview_html(&document);
+    assert!(
+        html.contains("<h1>Final heading</h1>"),
+        "final text: {html}"
+    );
+    assert!(html.contains("word24"));
+}
+
+#[wasm_bindgen_test]
+async fn test_each_input_restarts_the_window() {
+    let document = fresh_rust_editor();
+    let surface = surface_element(&document);
+    set_preview_delay(80);
+
+    // Inputs spaced closer than the delay keep pushing the render back.
+    // Timers never fire early, but a loaded runner can oversleep, so the
+    // "not yet rendered" checks only apply while the gap really was short.
+    let mut within_window = true;
+    for i in 0..4 {
+        surface.set_text_content(Some(&format!("step {i}")));
+        dispatch_input(&surface);
+        let last_input = now();
+        sleep(30).await;
+        if now() - last_input < 80.0 {
+            assert_eq!(preview_render_count(), 0, "rendered mid-burst at step {i}");
+        } else {
+            within_window = false;
+        }
+    }
+    sleep(80 + 100).await;
+    if within_window {
+        assert_eq!(preview_render_count(), 1, "one render for the whole burst");
+    }
+    assert!(!preview_pending());
+    assert!(preview_html(&document).contains("<p>step 3</p>"));
+}
+
+#[wasm_bindgen_test]
+async fn test_preview_delay_is_configurable() {
+    let document = fresh_rust_editor();
+    let surface = surface_element(&document);
+
+    // Zero means synchronous rendering inside the input handler.
+    set_preview_delay(0);
+    assert_eq!(preview_delay(), 0);
+    surface.set_text_content(Some("# Sync"));
+    dispatch_input(&surface);
+    assert!(!preview_pending());
+    assert_eq!(preview_render_count(), 1);
+    assert!(preview_html(&document).contains("<h1>Sync</h1>"));
+
+    // A short delay renders after that delay, on a real timer.
+    set_preview_delay(20);
+    surface.set_text_content(Some("# Short"));
+    dispatch_input(&surface);
+    assert!(preview_pending());
+    sleep(20 + 100).await;
+    assert_eq!(preview_render_count(), 2);
+    assert!(preview_html(&document).contains("<h1>Short</h1>"));
+
+    // run() restores the default delay.
+    fresh_rust_editor();
+    assert_eq!(preview_delay(), DEFAULT_PREVIEW_DELAY_MS);
+}
+
+#[wasm_bindgen_test]
+async fn test_rerun_cancels_stale_pending_render() {
+    let document = fresh_rust_editor();
+    let surface = surface_element(&document);
+    surface.set_text_content(Some("# Stale"));
+    dispatch_input(&surface);
+    assert!(preview_pending());
+
+    let document = fresh_rust_editor();
+    assert!(!preview_pending(), "run() must cancel the old timer");
+    sleep(DEFAULT_PREVIEW_DELAY_MS + 100).await;
+    assert_eq!(preview_render_count(), 0, "stale timer fired");
+    assert!(preview_html(&document).contains("<h1>Welcome to Markdown Editor!</h1>"));
+}
+
+#[wasm_bindgen_test]
+async fn test_native_typing_on_surface_renders_once_after_debounce() {
+    let document = fresh_full_editor();
+    // EditorSurface normalises in a capture-phase listener; the debounced
+    // Rust render later reads the normalised text.
+    let before = js_string(
+        r##"(() => {
+          const s = teTest.surface();
+          s.setText('');
+          s.focus();
+          s.setSelectionOffsets(0);
+          for (const ch of '# Typed title') document.execCommand('insertText', false, ch);
+          return s.getText();
+        })()"##,
+    );
+    assert_eq!(before, "# Typed title");
+    assert_eq!(
+        preview_render_count(),
+        0,
+        "typing must not render synchronously"
+    );
+    assert!(preview_pending());
+    sleep(preview_delay() + 100).await;
+    assert_eq!(preview_render_count(), 1);
+    assert!(preview_html(&document).contains("<h1>Typed title</h1>"));
 }
 
 #[wasm_bindgen_test]
@@ -714,7 +933,10 @@ fn bench_typing_latency_textarea_vs_surface() {
             .unwrap();
         time_keystrokes()
     };
-    let run_surface = |bypass_sync: bool| {
+    // `delay` 0 reproduces the previous synchronous preview; anything else
+    // is the debounced preview.
+    let run_surface = |bypass_sync: bool, delay: u32| {
+        set_preview_delay(delay);
         js_eval(&format!(
             "(() => {{ const s = teTest.surface(); s.focus(); s.setSelectionOffsets({middle}); s.programmatic = {bypass_sync}; }})()"
         ));
@@ -723,7 +945,17 @@ fn bench_typing_latency_textarea_vs_surface() {
         js_eval(
             "(() => { const s = teTest.surface(); s.programmatic = false; s.sync('typing'); })()",
         );
-        t
+        // Run the trailing render (if any) now and time it separately.
+        let t_flush = now();
+        let flushed = flush_preview();
+        let flush_ms = now() - t_flush;
+        assert_eq!(
+            flushed,
+            delay != 0,
+            "debounced rounds leave one render pending"
+        );
+        set_preview_delay(0);
+        (t, flush_ms)
     };
     let preview = document
         .query_selector(".markdown-preview")
@@ -746,33 +978,49 @@ fn bench_typing_latency_textarea_vs_surface() {
     let renders_before = js_number("teTest.surface().renderCount");
 
     // Warm up every path, then alternate measured rounds and take medians.
+    let renders_rust_before = preview_render_count();
     run_textarea();
-    run_surface(false);
-    run_surface(true);
+    run_surface(false, 0);
+    run_surface(true, 0);
+    run_surface(false, DEFAULT_PREVIEW_DELAY_MS);
     run_conversion_only();
     let mut textarea_runs = Vec::new();
     let mut surface_runs = Vec::new();
     let mut native_runs = Vec::new();
+    let mut debounced_runs = Vec::new();
+    let mut flush_runs = Vec::new();
     let mut conversion_runs = Vec::new();
     for _ in 0..ROUNDS {
         textarea_runs.push(run_textarea());
-        surface_runs.push(run_surface(false));
-        native_runs.push(run_surface(true));
+        surface_runs.push(run_surface(false, 0).0);
+        native_runs.push(run_surface(true, 0).0);
+        let (debounced, flush_ms) = run_surface(false, DEFAULT_PREVIEW_DELAY_MS);
+        debounced_runs.push(debounced);
+        flush_runs.push(flush_ms);
         conversion_runs.push(run_conversion_only());
     }
     let per_key = |runs: &mut Vec<f64>| median(runs) / f64::from(KEYSTROKES);
     let per_textarea = per_key(&mut textarea_runs);
     let per_surface = per_key(&mut surface_runs);
     let per_native_only = per_key(&mut native_runs);
+    let per_debounced = per_key(&mut debounced_runs);
+    let trailing_render = median(&mut flush_runs);
     let per_conversion = per_key(&mut conversion_runs);
 
     // Every path really received every keystroke (one warm-up round plus
-    // ROUNDS measured rounds; the surface ran two paths).
+    // ROUNDS measured rounds; the surface ran three paths).
     let rounds = (ROUNDS + 1) as usize;
     let typed = rounds * KEYSTROKES as usize;
     assert_eq!(textarea.value().len(), doc_text.len() + typed);
     let surface_len = js_number("teTest.surface().getText().length") as usize;
-    assert_eq!(surface_len, doc_text.encode_utf16().count() + 2 * typed);
+    assert_eq!(surface_len, doc_text.encode_utf16().count() + 3 * typed);
+    // Synchronous rounds render on every keystroke; each debounced round
+    // renders exactly once (its flushed trailing render).
+    assert_eq!(
+        preview_render_count() - renders_rust_before,
+        (2 * typed + rounds) as u32,
+        "debounced rounds must render once each"
+    );
     assert_eq!(
         js_string("String(teTest.canonical())"),
         "true",
@@ -787,11 +1035,16 @@ fn bench_typing_latency_textarea_vs_surface() {
     web_sys::console::log_1(
         &format!(
             "Typing latency on {word_count} words ({} chars), median of {ROUNDS} rounds x {KEYSTROKES} keystrokes, ms per keystroke incl. Rust conversion: \
-             textarea {per_textarea:.3}; contenteditable surface {per_surface:.3}; \
-             surface with EditorSurface sync bypassed {per_native_only:.3}; \
-             conversion + preview update alone {per_conversion:.3}; surface/textarea ratio {:.3}",
+             textarea baseline (sync conversion) {per_textarea:.3}; \
+             surface without debounce {per_surface:.3}; \
+             surface without debounce, EditorSurface sync bypassed {per_native_only:.3}; \
+             surface with {DEFAULT_PREVIEW_DELAY_MS} ms debounce {per_debounced:.3}; \
+             debounced trailing render (once per burst) {trailing_render:.3} ms; \
+             conversion + preview update alone {per_conversion:.3}; \
+             surface/textarea ratio {:.3}; debounced surface/textarea ratio {:.3}",
             doc_text.len(),
-            per_surface / per_textarea
+            per_surface / per_textarea,
+            per_debounced / per_textarea
         )
         .into(),
     );
@@ -800,6 +1053,12 @@ fn bench_typing_latency_textarea_vs_surface() {
     assert!(
         per_surface <= per_textarea * 1.5 + 1.0,
         "surface {per_surface:.3} ms vs textarea {per_textarea:.3} ms per keystroke"
+    );
+    // Issue #28 acceptance: the debounced surface is no worse per keystroke
+    // than the main-branch baseline (textarea plus synchronous conversion).
+    assert!(
+        per_debounced <= per_textarea,
+        "debounced surface {per_debounced:.3} ms vs textarea {per_textarea:.3} ms per keystroke"
     );
 }
 
