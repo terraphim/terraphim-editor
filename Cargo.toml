@@ -35,3 +35,7 @@ criterion = "0.5"
 [[bench]]
 name = "markdown_bench"
 harness = false
+
+[workspace]
+members = [".", "crates/terraphim_alternatives"]
+resolver = "2"
