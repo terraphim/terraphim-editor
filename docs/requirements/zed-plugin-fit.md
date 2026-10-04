@@ -108,7 +108,7 @@ Fields that must stay portable across all clients. "Source" marks where each fie
 |---|---|---|
 | `version` | Block | Schema version, for N/N-1 negotiation |
 | `spans[].id`, `kind`, `anchor{text,start,end}` | KG (matches and positions), Block (spans with human alternatives) | Identity and re-anchoring |
-| `spans[].alts[]{text, source: original\|kg\|human\|ai, model?}` | KG (`kg` synonyms), Block (`human`, `ai`, and `original`) | List and provenance (R-4.4) |
+| `spans[].alts[]{text, source: original\|kg\|human\|ai, model?}` | Document (`original` of a KG span is the matched text on the page), KG (`kg` synonyms), Block (`human`, `ai`, and the `original` of a span that has human or AI alternatives) | List and provenance (R-4.4) |
 | `spans[].active` | Block | Active index (R-2.2, R-3.3) |
 | `ghosts[]{id, anchor{text,start,end}}` | Block | Ghost ranges (R-5.3). An independent layer that may cover or partially overlap alternative spans; ghosts never overlap each other (decision 2026-10-04) |
 | `overflow` | Block | Stash (R-6) |
