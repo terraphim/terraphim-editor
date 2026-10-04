@@ -89,21 +89,21 @@ fn only_the_preceding_article_changes() {
 
 #[test]
 fn later_spans_shift_when_the_article_grows() {
-    let mut d = Document::new("A paperclip and a 🎯 tension.");
+    let mut d = Document::new("A paperclip and a 𝄞 tension.");
     let p = d.add_span(SpanKind::Word, 2, 11).unwrap();
     d.add_alternative(&p, "eraser", Source::Human, None)
         .unwrap();
-    let t_start = utf16_len("A paperclip and a 🎯 ");
+    let t_start = utf16_len("A paperclip and a 𝄞 ");
     let t = d.add_span(SpanKind::Word, t_start, t_start + 7).unwrap();
     d.add_alternative(&t, "struggle", Source::Human, None)
         .unwrap();
 
     d.set_active(&p, 1).unwrap();
-    assert_eq!(d.body, "An eraser and a 🎯 tension.");
+    assert_eq!(d.body, "An eraser and a 𝄞 tension.");
     assert_anchor_matches(&d, &p);
     assert_anchor_matches(&d, &t);
     d.set_active(&t, 1).unwrap();
-    assert_eq!(d.body, "An eraser and a 🎯 struggle.");
+    assert_eq!(d.body, "An eraser and a 𝄞 struggle.");
     assert_anchor_matches(&d, &t);
 }
 

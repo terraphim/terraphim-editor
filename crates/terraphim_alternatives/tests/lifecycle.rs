@@ -230,7 +230,7 @@ fn export_skips_stale_spans_rather_than_cutting_the_wrong_text() {
 
 #[test]
 fn counts_include_ghosted_text_and_exclude_the_block() {
-    let mut d = Document::new("Café 🎯 has five words.");
+    let mut d = Document::new("Café 𝄞 has five words.");
     let id = d.add_span(SpanKind::Word, 0, 4).unwrap();
     d.set_ghost(&id, true).unwrap();
     d.annotations.overflow = "many many more words in the stash".into();

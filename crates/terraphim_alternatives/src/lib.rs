@@ -20,7 +20,7 @@
 //! # Overview
 //!
 //! * [`parse`] splits a `.md` source into a [`Document`] (body plus
-//!   [`Annotations`]); [`write`] appends the block back deterministically. A
+//!   [`Annotations`]); [`write()`] appends the block back deterministically. A
 //!   malformed block yields a [`BlockError`] that keeps the body and the raw
 //!   block.
 //! * [`Document::reanchor`] re-finds spans after outside edits and reports

@@ -4,9 +4,9 @@
 
 use terraphim_alternatives::{Document, Source, SpanKind, UnresolvedReason, utf16_len};
 
-/// "The tension rises. Then 🎯 the end." with a span on "tension".
+/// "The tension rises. Then 𝄞 the end." with a span on "tension".
 fn doc_with_span() -> Document {
-    let mut doc = Document::new("The tension rises. Then 🎯 the end.");
+    let mut doc = Document::new("The tension rises. Then 𝄞 the end.");
     let id = doc.add_span(SpanKind::Word, 4, 11).unwrap();
     doc.add_alternative(&id, "pressure", Source::Human, None)
         .unwrap();
@@ -51,7 +51,7 @@ fn delete_before_shifts_back() {
 #[test]
 fn insert_and_delete_after_leave_the_span_alone() {
     let mut doc = doc_with_span();
-    doc.body.push_str(" Appended 🎯.");
+    doc.body.push_str(" Appended 𝄞.");
     doc.body = doc.body.replacen("rises", "", 1);
     let report = doc.reanchor();
     assert!(report.is_clean());

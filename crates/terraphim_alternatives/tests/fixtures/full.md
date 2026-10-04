@@ -1,6 +1,6 @@
 # Why isn't everything obvious?
 
-The struggle in a café draft 🎯 is an eraser holding `code` together.
+The struggle in a café draft 𝄞 is an eraser holding `code` together.
 
 This whole paragraph might go. It hedges and repeats itself.
 
