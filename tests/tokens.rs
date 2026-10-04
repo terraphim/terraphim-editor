@@ -70,11 +70,15 @@ fn tokens_resolve_on_root() {
         ("--te-color-accent", "#8c86e6"),
         ("--te-color-accent-soft", "rgba(140, 134, 230, 0.4)"),
         ("--te-color-panel", "#11142a"),
+        ("--te-color-panel-border", "#262a4a"),
         ("--te-color-popover", "#171a2e"),
+        ("--te-color-popover-hover", "#1f2340"),
         ("--te-radius-popover", "8px"),
+        ("--te-font-size-body", "1.0625rem"),
         ("--te-line-height", "1.75"),
         ("--te-ghost-opacity", "0.1"),
         ("--te-measure", "70ch"),
+        ("--te-page-margin-top", "clamp(3rem, 12vh, 8rem)"),
     ];
     let mut failures = Vec::new();
     for (name, want) in expected {
