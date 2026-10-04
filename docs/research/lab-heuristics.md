@@ -323,6 +323,8 @@ An earlier version protected list items. With that version, `zed-plugin-fit.md` 
 - **References in technical prose.** In `zed-plugin-fit`, parentheticals holding issue numbers and paths are the first things faded. For a requirements document that removes traceability. A rule worth adding: never fade a parenthetical that contains `#\d+`, `R-\d`, or a backticked identifier, or make it a per-role setting.
 - **Voice.** Comic sentences ("I crawled out a decrepit wreck.", "Then, all of a sudden, it seemed to start off.") read as weak to every feature. The user's "Click one to keep it" is the intended safety net, which is why the review UI matters as much as the heuristic.
 
+- **Fixture-shaped aside openers.** Six entries in `ASIDE_OPENERS` (`src/lib.rs`) were added after reading these fixtures and are not general connectives: "i fancy", "as i expected", "so far as", "in respect to", "in its most", "if any". They influence *which* clauses are faded, not whether the targets are hit. Ablation (2026-10-04, from the structural review of PR #25): with those six removed, all 12 cells stay within +/-3pp (largest deviation -0.6pp, Walden at 10%), and the 20 tests pass. The production list should start from the general connectives only and grow from labelled documents, not from these fixtures.
+
 ## 7. What the UI needs from the API (#14, #15)
 
 The heuristics belong on the Rust side (in `crates/terraphim_alternatives`, compiled to WASM), in line with spec §11. The surface below is a proposal. The prototype implements everything except `kept`, `SpanId` and the `mark` entry point.
