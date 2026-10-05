@@ -320,3 +320,132 @@ body[data-mode="write-on"] .te-warning-dismiss:hover,
 body[data-mode="write-on"] .te-warning-dismiss:focus-visible {
     color: var(--te-color-accent);
 }
+
+/* ---- Inline indicators (issue #8; spec R-3.1 to R-3.5) ----
+   Decoration classes come from public/js/indicators.js (TeIndicatorLayer);
+   the dots and gutter rule live in the out-of-flow `.te-indicators`
+   overlay beside the surface, so they never change line height. Every rule
+   is scoped to Write_On mode: plain mode renders nothing. Design notes:
+   docs/design/indicators.md */
+
+body[data-mode="write-on"] .te-indicator-host {
+    --te-ind-dot: 3px;           /* dot diameter */
+    --te-ind-dot-gap: 3px;       /* spacing ~ one diameter (R-3.2) */
+    --te-ind-row-offset: 2px;    /* dot row below the text box */
+    --te-ind-gutter: 0.625rem;   /* gutter rule distance from the text */
+    position: relative;
+}
+
+/* R-3.1: thin muted underline under word and sentence spans, unchanged on
+   hover. Paragraph spans get no underline (R-3.4). */
+body[data-mode="write-on"] .te-surface .te-ind-word,
+body[data-mode="write-on"] .te-surface .te-ind-sentence {
+    text-decoration-line: underline;
+    text-decoration-style: solid;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--te-color-accent-soft);
+    text-underline-offset: 2px;
+    text-decoration-skip-ink: none;
+}
+
+/* R-3.5: headlines bold, same face and colour, slightly larger. */
+body[data-mode="write-on"] .te-surface .te-ind-headline {
+    font-weight: 700;
+    font-size: 1.15em;
+}
+
+.te-indicators {
+    display: none;
+}
+
+body[data-mode="write-on"] .te-indicators {
+    display: block;
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 1;
+}
+
+body[data-mode="write-on"] .te-indicators [hidden] {
+    display: none;
+}
+
+/* R-3.2: dot row; centred under a word, ending at the underline's right
+   end for sentences and headlines. Left/top are set by the layer. */
+body[data-mode="write-on"] .te-ind-row {
+    position: absolute;
+    margin-top: var(--te-ind-row-offset);
+}
+
+body[data-mode="write-on"] .te-ind-row--centre {
+    transform: translateX(-50%);
+}
+
+body[data-mode="write-on"] .te-ind-row--end {
+    transform: translateX(-100%);
+}
+
+body[data-mode="write-on"] .te-ind-dots,
+body[data-mode="write-on"] .te-ind-col {
+    display: flex;
+    gap: var(--te-ind-dot-gap);
+}
+
+body[data-mode="write-on"] .te-ind-col {
+    flex-direction: column;
+}
+
+/* R-3.3: dim dots at the soft accent; exactly one lit at the full accent
+   (the 40% colour is below 3:1, see docs/design/indicators.md). */
+body[data-mode="write-on"] .te-ind-dot {
+    display: block;
+    flex: none;
+    width: var(--te-ind-dot);
+    height: var(--te-ind-dot);
+    border-radius: 50%;
+    background: var(--te-color-accent-soft);
+    pointer-events: auto;
+    cursor: default;
+}
+
+body[data-mode="write-on"] .te-ind-dot--active {
+    background: var(--te-color-accent);
+}
+
+/* R-3.4: paragraph rule in the left gutter spanning the paragraph, with a
+   dot column immediately to its left. The holder is a zero-width box at
+   the text's left edge; its height is the paragraph's. */
+body[data-mode="write-on"] .te-ind-para {
+    position: absolute;
+    width: 0;
+}
+
+body[data-mode="write-on"] .te-ind-rule {
+    position: absolute;
+    top: 0;
+    right: var(--te-ind-gutter);
+    width: 1px;
+    height: 100%;
+    background: var(--te-color-accent-soft);
+}
+
+body[data-mode="write-on"] .te-ind-para .te-ind-col {
+    position: absolute;
+    top: 0;
+    right: calc(var(--te-ind-gutter) + 1px + var(--te-ind-dot-gap));
+}
+
+/* Screen-reader descriptions referenced by aria-describedby. */
+.te-ind-descriptions {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}

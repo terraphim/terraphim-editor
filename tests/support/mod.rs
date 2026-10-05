@@ -20,6 +20,7 @@ pub use terraphim_editor::{
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
 pub const EDITOR_JS: &str = include_str!("../../public/js/editor.js");
 pub const CHROME_JS: &str = include_str!("../../public/js/chrome.js");
+pub const INDICATORS_JS: &str = include_str!("../../public/js/indicators.js");
 pub const TOKENS_CSS: &str = include_str!("../../public/css/tokens.css");
 pub const WRITE_ON_CSS: &str = include_str!("../../public/css/write-on.css");
 pub const BLOCKS_JS: &str = include_str!("../../public/js/blocks.js");
@@ -193,7 +194,14 @@ pub fn load_editor_scripts(document: &Document) {
         .unwrap()
         .append_child(&style)
         .unwrap();
-    for source in [CONFIG_JS, CHROME_JS, BLOCKS_JS, EDITOR_JS, TEST_HELPERS_JS] {
+    for source in [
+        CONFIG_JS,
+        CHROME_JS,
+        INDICATORS_JS,
+        BLOCKS_JS,
+        EDITOR_JS,
+        TEST_HELPERS_JS,
+    ] {
         let script = document.create_element("script").unwrap();
         script.set_attribute("data-te-test", "").unwrap();
         script.set_text_content(Some(source));
@@ -314,4 +322,42 @@ pub fn js_string_literal(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// Blocks view fixtures (issue #19), exposed to JavaScript as
+/// `window.teBlockFixtures`.
+pub fn install_block_fixtures() {
+    let src = format!(
+        "window.teBlockFixtures = {{ mixed: {}, edge: {}, full: {}, plain: {} }}; 'ok'",
+        js_string_literal(include_str!("../fixtures/blocks/mixed.md")),
+        js_string_literal(include_str!("../fixtures/blocks/edge.md")),
+        js_string_literal(include_str!("../fixtures/persistence/full.md")),
+        js_string_literal(include_str!("../fixtures/persistence/plain.md"))
+    );
+    assert_eq!(js_string(&src), "ok");
+}
+
+/// Run browser test steps with a yield to the event loop between them, so a
+/// long scenario never holds the main thread long enough to starve the
+/// webdriver poll. Each step is a function body with `ed` (the editor), `bv`
+/// (its Blocks view), `s` (the surface), `T` (an object shared by the steps)
+/// and `out` (a problem list) in scope. A step either returns a string or
+/// falls through, in which case `out` is reported. Stops at the first step
+/// that reports a problem and returns "step N: ...", or "" when all pass.
+pub async fn run_steps(steps: &[&str]) -> String {
+    js_eval("window.__teT = {}; 0");
+    for (i, body) in steps.iter().enumerate() {
+        let src = format!(
+            "(() => {{ const ed = window.__teEditor; const bv = ed.blocks; const s = ed.surface; \
+             const T = window.__teT; const out = []; \
+             const r = (() => {{ {body}\n }})(); \
+             return typeof r === 'string' ? r : out.join('; '); }})()"
+        );
+        let r = js_string(&src);
+        if !r.is_empty() {
+            return format!("step {}: {r}", i + 1);
+        }
+        sleep(0).await;
+    }
+    String::new()
 }

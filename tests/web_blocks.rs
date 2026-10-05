@@ -1,9 +1,14 @@
-//! Browser tests for the Blocks view (issue #19). Run with `wasm-pack test
-//! --headless --chrome`. Real scripts (`public/js/blocks.js` with the real
-//! editor and chrome), the real exported document API and real fixtures;
-//! nothing is mocked. See `tests/web.rs` for why the browser tests are split
-//! across binaries; this one has its own 20 s budget, so every test yields
-//! once after setting up and then runs one bounded synchronous snippet.
+//! Browser tests for the Blocks view (issue #19): round trip, view toggle,
+//! block edits with annotations, keyboard navigation and caret mapping. Run
+//! with `wasm-pack test --headless --chrome`. Real scripts
+//! (`public/js/blocks.js` with the real editor and chrome), the real exported
+//! document API and real fixtures; nothing is mocked.
+//!
+//! See `tests/web.rs` for why the browser tests are split across binaries.
+//! The Blocks tests are split between this binary and `web_blocks_edit.rs`
+//! (structural edits, kept drafts, action buttons), and every scenario runs
+//! as short steps with a yield between them (`support::run_steps`), so the
+//! webdriver poll is never starved on a loaded host.
 #![cfg(target_arch = "wasm32")]
 
 mod support;
@@ -12,60 +17,42 @@ use support::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-const MIXED_MD: &str = include_str!("fixtures/blocks/mixed.md");
-const EDGE_MD: &str = include_str!("fixtures/blocks/edge.md");
-const FULL_MD: &str = include_str!("fixtures/persistence/full.md");
-const PLAIN_MD: &str = include_str!("fixtures/persistence/plain.md");
-
-/// Make the fixtures available to JavaScript as `window.teBlockFixtures`.
-fn install_fixtures() {
-    let src = format!(
-        "window.teBlockFixtures = {{ mixed: {}, edge: {}, full: {}, plain: {} }}; 'ok'",
-        js_string_literal(MIXED_MD),
-        js_string_literal(EDGE_MD),
-        js_string_literal(FULL_MD),
-        js_string_literal(PLAIN_MD)
-    );
-    assert_eq!(js_string(&src), "ok");
-}
-
 #[wasm_bindgen_test]
 async fn test_body_to_blocks_round_trip_is_byte_identical() {
     let _document = fresh_full_editor();
-    // Yield so the webdriver poll is never starved (see tests/web.rs).
     sleep(0).await;
-    install_fixtures();
-    let result = js_string(
-        r##"(() => {
-          const out = [];
-          const P = BlocksView.parse;
-          const S = BlocksView.serialise;
-          const check = (name, text) => {
-            const m = P(text);
-            if (S(m) !== text) { out.push(name + ': round trip differs'); return m; }
+    install_block_fixtures();
+    let result = run_steps(&[
+        // Shared checker: every block is a slice, separators hold no content,
+        // and the blocks cover the text.
+        r##"
+          T.check = (problems, name, text) => {
+            const m = BlocksView.parse(text);
+            if (BlocksView.serialise(m) !== text) { problems.push(name + ': round trip differs'); return m; }
             let at = m.lead.length;
             for (const b of m.blocks) {
-              if (b.start !== at) out.push(name + ': gap before block at ' + b.start);
-              if (text.slice(b.start, b.end) !== b.text) out.push(name + ': text slice at ' + b.start);
-              if (/^[ \t\r]*\n|\n[ \t\r]*$/.test(b.text) || b.text.trim() === '') out.push(name + ': blank edge in block at ' + b.start);
-              if (b.sep.trim() !== '') out.push(name + ': content in separator at ' + b.end);
+              if (b.start !== at) problems.push(name + ': gap before block at ' + b.start);
+              if (text.slice(b.start, b.end) !== b.text) problems.push(name + ': text slice at ' + b.start);
+              if (/^[ \t\r]*\n|\n[ \t\r]*$/.test(b.text) || b.text.trim() === '') problems.push(name + ': blank edge in block at ' + b.start);
+              if (b.sep.trim() !== '') problems.push(name + ': content in separator at ' + b.end);
               at = b.end + b.sep.length;
             }
-            if (at !== text.length) out.push(name + ': does not cover the text');
+            if (at !== text.length) problems.push(name + ': does not cover the text');
             return m;
           };
           const types = (m) => m.blocks.map((b) => b.type + (b.level || '')).join(',');
-          const mixed = check('mixed', teBlockFixtures.mixed);
+          const mixed = T.check(out, 'mixed', teBlockFixtures.mixed);
           const wantMixed = 'heading1,paragraph,heading2,list,list,code,quote,table,rule,code,paragraph';
           if (types(mixed) !== wantMixed) out.push('mixed types ' + types(mixed));
-          const edge = check('edge', teBlockFixtures.edge);
+          const edge = T.check(out, 'edge', teBlockFixtures.edge);
           if (types(edge) !== 'paragraph,heading1,paragraph,code') out.push('edge types ' + types(edge));
-          check('plain', teBlockFixtures.plain);
-          check('full', teBlockFixtures.full);
-          for (const t of ['', '\n', '\n\n  \n', 'x', '# h', '```\n\n```', '> q\n\n\n']) check(JSON.stringify(t), t);
-
-          // Property: random documents built from Markdown fragments, joined
-          // by random separators, always round-trip (fixed seed, bounded).
+          T.check(out, 'plain', teBlockFixtures.plain);
+          T.check(out, 'full', teBlockFixtures.full);
+          for (const t of ['', '\n', '\n\n  \n', 'x', '# h', '```\n\n```', '> q\n\n\n']) T.check(out, JSON.stringify(t), t);
+        "##,
+        // Property: random documents built from Markdown fragments, joined
+        // by random separators, always round-trip (fixed seed, bounded).
+        r##"
           const fragments = [
             '# Heading', '## Sub *em*', 'Setext\n======', 'Setext two\n---',
             'Plain paragraph.', 'Two line\nparagraph with `code`.',
@@ -88,26 +75,22 @@ async fn test_body_to_blocks_round_trip_is_byte_identical() {
               if (k + 1 < count) doc += seps[rand(seps.length)];
             }
             doc += ['', '\n', '\n\n', '\n\n\n'][rand(4)];
-            check('random #' + iter, doc);
+            T.check(out, 'random #' + iter, doc);
             if (out.length) out.push('document ' + JSON.stringify(doc));
           }
           return out.slice(0, 5).join('; ');
-        })()"##,
-    );
+        "##,
+    ])
+    .await;
     assert_eq!(result, "");
 }
 
 #[wasm_bindgen_test]
 async fn test_view_toggle_preference_and_destroy() {
     let _document = fresh_full_editor();
-    // Yield so the webdriver poll is never starved (see tests/web.rs).
     sleep(0).await;
-    let result = js_string(
-        r##"(() => {
-          const out = [];
-          const ed = window.__teEditor;
-          const bv = ed.blocks;
-          const s = ed.surface;
+    let result = run_steps(&[
+        r##"
           if (!bv) return 'no blocks view';
           const group = document.querySelector('.toolbar .te-view-toggle');
           if (!group) return 'no view toggle in the toolbar';
@@ -138,11 +121,13 @@ async fn test_view_toggle_preference_and_destroy() {
           if (localStorage.getItem(BLOCKS_VIEW_STORAGE_KEY) !== 'text') out.push('text preference not stored');
           document.removeEventListener('te:view-change', onView);
           if (seen.join() !== 'blocks,text') out.push('events ' + seen.join());
-
-          // The stored preference is restored by the next editor.
+        "##,
+        // The stored preference is restored by the next editor.
+        r##"
           bv.setView('blocks');
           ed.destroy();
           if (document.querySelector('.te-blocks')) out.push('blocks container left behind');
+          if (document.querySelector('.te-blocks-drafts')) out.push('drafts notice left behind');
           if (document.querySelector('.te-view-toggle')) out.push('toggle left behind');
           if (s.root.hidden) out.push('surface left hidden');
           const fresh = new MarkdownEditor(window.EditorConfig);
@@ -150,100 +135,94 @@ async fn test_view_toggle_preference_and_destroy() {
           window.__teEditor = fresh;
           if (!fresh.blocks || fresh.blocks.view !== 'blocks') out.push('preference not restored');
           if (document.querySelectorAll('.te-view-toggle').length !== 1) out.push('toggle duplicated');
-          // Listeners are gone with the old editor: its button is detached and
-          // the old view ignores further calls.
+          // The old view is inert after destroy().
           bv.setView('text');
           if (fresh.blocks.view !== 'blocks') out.push('old view affected the new one');
           teTest.resetBlocks();
-          return out.join('; ');
-        })()"##,
-    );
+        "##,
+    ])
+    .await;
     assert_eq!(result, "");
 }
 
 #[wasm_bindgen_test]
 async fn test_block_edit_updates_body_preview_and_keeps_annotations() {
     let _document = fresh_full_editor();
-    // Yield so the webdriver poll is never starved (see tests/web.rs).
     sleep(0).await;
-    install_fixtures();
-    let result = js_string(
-        r##"(() => {
-          const out = [];
-          const ed = window.__teEditor;
-          const bv = ed.blocks;
-          const s = ed.surface;
+    install_block_fixtures();
+    let result = run_steps(&[
+        r##"
           ed.openDocument(teBlockFixtures.full);
-          const body0 = s.getText();
-          const saved0 = ed.saveDocument();
-          const ann0 = ed.annotations();
+          T.body0 = s.getText();
+          T.saved0 = ed.saveDocument();
+          T.ann0 = ed.annotations();
           bv.setView('blocks');
           // The annotation block is never shown, and switching is lossless.
           if (bv.list.textContent.includes('terraphim-alternatives')) out.push('annotation block shown');
-          if (BlocksView.serialise(bv.model) !== body0) out.push('blocks differ from body');
-          if (ed.saveDocument() !== saved0) out.push('switching changed the saved document');
+          if (BlocksView.serialise(bv.model) !== T.body0) out.push('blocks differ from body');
+          if (ed.saveDocument() !== T.saved0) out.push('switching changed the saved document');
           const types = bv.model.blocks.map((b) => b.type).join(',');
           if (types !== 'heading,paragraph,paragraph') out.push('types ' + types);
-
-          // Edit the middle paragraph (it carries s2, s3 and g1) at its end.
+        "##,
+        // Edit the middle paragraph (it carries s2, s3 and g1) at its end.
+        r##"
           const para = bv.model.blocks[1];
           const ta = bv.editBlock(1);
           if (!ta || ta.value !== para.text) return 'editor did not open with the block text';
           ta.value = para.text + ' More.';
           bv.commitEdit();
-          const body1 = s.getText();
-          if (body1 !== body0.slice(0, para.end) + ' More.' + body0.slice(para.end)) out.push('body ' + JSON.stringify(body1));
-          if (window.wasmBindings.document_body() !== body1) out.push('model body differs from surface');
+          const body0 = T.body0;
+          T.body1 = s.getText();
+          if (T.body1 !== body0.slice(0, para.end) + ' More.' + body0.slice(para.end)) out.push('body ' + JSON.stringify(T.body1));
+          if (window.wasmBindings.document_body() !== T.body1) out.push('model body differs from surface');
           if (!teTest.preview().includes('together. More.')) out.push('preview not updated');
           if (!bv.cards()[1].textContent.includes('More.')) out.push('card not re-rendered');
           if (document.activeElement !== bv.cards()[1]) out.push('focus not back on the edited block');
-          const ann1 = ed.annotations();
+          const ann0 = T.ann0;
+          T.ann1 = ed.annotations();
           const shift = (g) => ({ ...g, anchor: { ...g.anchor, start: g.anchor.start + 6, end: g.anchor.end + 6 } });
-          if (JSON.stringify(ann1.spans) !== JSON.stringify(ann0.spans)) out.push('spans changed ' + JSON.stringify(ann1.spans));
+          if (JSON.stringify(T.ann1.spans) !== JSON.stringify(ann0.spans)) out.push('spans changed ' + JSON.stringify(T.ann1.spans));
           const wantGhosts = [ann0.ghosts[0], shift(ann0.ghosts[1])];
-          if (JSON.stringify(ann1.ghosts) !== JSON.stringify(wantGhosts)) out.push('ghosts ' + JSON.stringify(ann1.ghosts));
-          if (ann1.overflow !== ann0.overflow) out.push('overflow changed');
+          if (JSON.stringify(T.ann1.ghosts) !== JSON.stringify(wantGhosts)) out.push('ghosts ' + JSON.stringify(T.ann1.ghosts));
+          if (T.ann1.overflow !== ann0.overflow) out.push('overflow changed');
           if (ed.setAsideCount !== 0) out.push('set aside ' + ed.setAsideCount);
-
-          // One undo step reverts the block edit, from the Blocks view.
+        "##,
+        // One undo step reverts the block edit, from the Blocks view; then
+        // save and reopen keep the edit and every annotation.
+        r##"
           teTest.key(bv.cards()[1], 'z', { ctrlKey: true });
-          if (s.getText() !== body0) out.push('undo did not restore the body');
-          if (JSON.stringify(ed.annotations()) !== JSON.stringify(ann0)) out.push('undo did not restore annotations');
+          if (s.getText() !== T.body0) out.push('undo did not restore the body');
+          if (JSON.stringify(ed.annotations()) !== JSON.stringify(T.ann0)) out.push('undo did not restore annotations');
           if (bv.cards()[1].textContent.includes('More.')) out.push('cards not refreshed after undo');
           teTest.key(document.activeElement, 'y', { ctrlKey: true });
-          if (s.getText() !== body1) out.push('redo');
-
-          // Save and reopen: the edit and every annotation persist.
+          if (s.getText() !== T.body1) out.push('redo');
           const saved1 = ed.saveDocument();
           ed.openDocument('other');
           ed.openDocument(saved1);
-          if (s.getText() !== body1) out.push('reopened body');
+          if (s.getText() !== T.body1) out.push('reopened body');
           const ann2 = ed.annotations();
+          const ann1 = T.ann1;
           if (JSON.stringify([ann2.spans, ann2.ghosts, ann2.overflow]) !== JSON.stringify([ann1.spans, ann1.ghosts, ann1.overflow])) out.push('annotations lost on reopen');
           if (bv.view !== 'blocks' || bv.cards().length !== 3) out.push('view not refreshed on open');
-          return out.join('; ');
-        })()"##,
-    );
+        "##,
+    ])
+    .await;
     assert_eq!(result, "");
 }
 
 #[wasm_bindgen_test]
 async fn test_keyboard_navigation_focus_and_caret_across_views() {
     let _document = fresh_full_editor();
-    // Yield so the webdriver poll is never starved (see tests/web.rs).
     sleep(0).await;
-    let result = js_string(
-        r##"(() => {
-          const out = [];
-          const ed = window.__teEditor;
-          const bv = ed.blocks;
-          const s = ed.surface;
-          const doc = '# A\n\npara one\n\npara two\n';
-          s.setText(doc);
+    let result = run_steps(&[
+        r##"
+          T.doc = '# A\n\npara one\n\npara two\n';
+          s.setText(T.doc);
           s.focus();
           s.setSelectionOffsets(15);
           bv.setView('blocks');
           const at = () => document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.index : null;
+          T.at = at;
           if (at() !== '2') out.push('caret block not focused: ' + at());
           const focused = document.activeElement;
           if (getComputedStyle(focused).outlineStyle !== 'solid') out.push('no visible focus outline');
@@ -260,27 +239,31 @@ async fn test_keyboard_navigation_focus_and_caret_across_views() {
           if (at() !== '2') out.push('End ' + at());
           teTest.key(document.activeElement, 'ArrowDown');
           if (at() !== '2') out.push('ArrowDown at bottom ' + at());
-
-          // Enter edits, Escape cancels without touching the body.
+        "##,
+        // Enter edits, Escape cancels, Ctrl+Enter commits.
+        r##"
+          const at = T.at;
           teTest.key(document.activeElement, 'Enter');
           let ta = bv.list.querySelector('textarea.te-block-editor');
-          if (!ta || document.activeElement !== ta || ta.value !== 'para two') return out.concat('Enter did not open the editor').join('; ');
+          if (!ta || document.activeElement !== ta || ta.value !== 'para two') return 'Enter did not open the editor';
           ta.value = 'discarded';
           teTest.key(ta, 'Escape');
           if (bv.list.querySelector('textarea')) out.push('Escape left the editor open');
-          if (s.getText() !== doc) out.push('Escape changed the body');
+          if (s.getText() !== T.doc) out.push('Escape changed the body');
           if (at() !== '2') out.push('focus after Escape ' + at());
-
-          // Ctrl+Enter commits.
           teTest.key(document.activeElement, 'Enter');
           ta = bv.list.querySelector('textarea.te-block-editor');
           ta.value = 'para 2';
           teTest.key(ta, 'Enter', { ctrlKey: true });
           if (s.getText() !== '# A\n\npara one\n\npara 2\n') out.push('Ctrl+Enter ' + JSON.stringify(s.getText()));
-
-          // Switching back commits an open edit and maps its selection.
+        "##,
+        // Switching back commits an open edit and maps its selection; without
+        // an edit the caret goes to the start of the focused block; undo in
+        // the text view steps back over the block edits.
+        r##"
+          const at = T.at;
           teTest.key(document.activeElement, 'Enter');
-          ta = bv.list.querySelector('textarea.te-block-editor');
+          const ta = bv.list.querySelector('textarea.te-block-editor');
           ta.value = 'para TWO!';
           ta.setSelectionRange(5, 8);
           bv.setView('text');
@@ -290,263 +273,18 @@ async fn test_keyboard_navigation_focus_and_caret_across_views() {
           if (sel.start !== 20 || sel.end !== 23) out.push('selection ' + JSON.stringify(sel));
           if (document.activeElement !== s.root) out.push('surface not focused');
           if (!teTest.canonical()) out.push('surface not canonical');
-
-          // Without an edit, the caret goes to the start of the focused block.
           bv.setView('blocks');
           if (at() !== '2') out.push('selection block ' + at());
           teTest.key(document.activeElement, 'ArrowUp');
           bv.setView('text');
           const sel2 = s.getSelectionOffsets();
           if (sel2.start !== 5 || sel2.end !== 5) out.push('caret at block start ' + JSON.stringify(sel2));
-
-          // Undo in the text view steps back over the block edits.
           s.undo();
           if (s.getText() !== '# A\n\npara one\n\npara 2\n') out.push('undo across views ' + JSON.stringify(s.getText()));
           s.undo();
-          if (s.getText() !== doc) out.push('second undo ' + JSON.stringify(s.getText()));
-          return out.join('; ');
-        })()"##,
-    );
-    assert_eq!(result, "");
-}
-
-#[wasm_bindgen_test]
-async fn test_insert_delete_and_write_on_mode() {
-    let _document = fresh_full_editor();
-    // Yield so the webdriver poll is never starved (see tests/web.rs).
-    sleep(0).await;
-    install_fixtures();
-    let result = js_string(
-        r##"(() => {
-          const out = [];
-          const ed = window.__teEditor;
-          const bv = ed.blocks;
-          const s = ed.surface;
-          s.setText('# A\n\npara one\n\npara two\n');
-          bv.setView('blocks');
-          const expect = (name, want) => {
-            if (s.getText() !== want) out.push(name + ' ' + JSON.stringify(s.getText()));
-            if (BlocksView.serialise(bv.model) !== s.getText()) out.push(name + ': stale blocks');
-          };
-          let ta = bv.insertBlockAfter(0);
-          ta.value = 'new';
-          bv.commitEdit();
-          expect('insert', '# A\n\nnew\n\npara one\n\npara two\n');
-          teTest.key(bv.cards()[3], 'Delete');
-          expect('delete last', '# A\n\nnew\n\npara one\n');
-          if (document.activeElement !== bv.cards()[2]) out.push('focus after delete');
-          bv.deleteBlock(0);
-          expect('delete first', 'new\n\npara one\n');
-          ta = bv.insertBlockAfter(1);
-          ta.value = 'end';
-          bv.commitEdit();
-          expect('append', 'new\n\npara one\n\nend\n');
-          s.undo();
-          expect('one undo step per operation', 'new\n\npara one\n');
-          ta = bv.insertBlockAfter(0);
-          ta.value = '   ';
-          bv.commitEdit();
-          expect('blank insert ignored', 'new\n\npara one\n');
-          if (bv.list.querySelector('.te-block-move, [data-action="up"], [data-action="down"]')) out.push('move controls present');
-
-          // A new block between annotated blocks shifts every later anchor
-          // and sets nothing aside.
-          ed.openDocument(teBlockFixtures.full);
-          const before = ed.annotations();
-          ta = bv.insertBlockAfter(0);
-          ta.value = 'Inserted.';
-          bv.commitEdit();
-          const after = ed.annotations();
-          const d = 'Inserted.\n\n'.length;
-          const moved = (a) => a.anchor.start >= 31 ? { ...a, anchor: { ...a.anchor, start: a.anchor.start + d, end: a.anchor.end + d } } : a;
-          if (JSON.stringify([after.spans, after.ghosts]) !== JSON.stringify([before.spans.map(moved), before.ghosts.map(moved)])) out.push('anchors after insert ' + JSON.stringify(after.ghosts));
-          if (ed.setAsideCount !== 0) out.push('set aside after insert');
-
-          // Write_On: Blocks is not shown; it resumes in plain mode.
-          const chrome = ed.chrome;
-          chrome.toggle();
-          if (document.body.dataset.mode !== 'write-on') out.push('not in write-on');
-          if (bv.view !== 'text') out.push('blocks still active in write-on');
-          if (!teTest.visible(s.root)) out.push('surface hidden in write-on');
-          if (teTest.visible(bv.container) || teTest.visible(document.querySelector('.te-view-toggle'))) out.push('blocks UI visible in write-on');
-          bv.setView('blocks');
-          if (bv.view !== 'text') out.push('blocks allowed in write-on');
-          chrome.toggle();
-          if (bv.view !== 'blocks') out.push('blocks not resumed in plain mode');
-          return out.join('; ');
-        })()"##,
-    );
-    assert_eq!(result, "");
-}
-
-#[wasm_bindgen_test]
-async fn test_open_block_draft_survives_outside_changes() {
-    let _document = fresh_full_editor();
-    // Yield so the webdriver poll is never starved (see tests/web.rs).
-    sleep(0).await;
-    install_fixtures();
-    let ready = js_string(
-        r##"(() => {
-          const ed = window.__teEditor;
-          ed.surface.setText('# A\n\npara one\n\npara two\n');
-          ed.blocks.setView('blocks');
-          const ta = ed.blocks.editBlock(2);
-          ta.value = 'para two edited';
-          ta.setSelectionRange(5, 8);
-          return ta === document.activeElement ? 'ok' : 'editor not focused';
-        })()"##,
-    );
-    assert_eq!(ready, "ok");
-    // Let the selectionchange for the user's selection be delivered.
-    sleep(0).await;
-    let result = js_string(
-        r##"(() => {
-          const out = [];
-          const ed = window.__teEditor;
-          const bv = ed.blocks;
-          const s = ed.surface;
-          const notice = bv.draftsElement;
-
-          // 1. Edits outside the block keep the editor, its draft, focus and
-          //    selection (set in the previous task, as a user would).
-          let ta = bv.editing.textarea;
-          s.replaceRange(0, 0, 'Intro.\n\n');
-          if (!bv.editing || bv.editing.textarea !== ta || !ta.isConnected) return 'editor closed by an edit before the block';
-          if (ta.value !== 'para two edited' || document.activeElement !== ta) out.push('draft or focus lost');
-          if (ta.selectionStart !== 5 || ta.selectionEnd !== 8) out.push('textarea selection lost');
-          if (bv.editing.start !== 23) out.push('start not shifted: ' + bv.editing.start);
-          if (bv.cards().length !== 4 || bv.cards()[3] !== bv.editing.card) out.push('cards not rebuilt around the editor');
-          s.undo();
-          if (!bv.editing || bv.editing.start !== 15) out.push('undo elsewhere: ' + (bv.editing && bv.editing.start));
-          const end = s.getText().length;
-          s.replaceRange(end, end, '\nTail.\n');
-          if (!bv.editing) out.push('editor closed by an edit after the block');
-          if (!notice.hidden) out.push('notice shown without a conflict');
-          bv.commitEdit();
-          if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('commit after outside edits ' + JSON.stringify(s.getText()));
-
-          // 2. An overlapping edit keeps the draft in the notice; Apply works.
-          ta = bv.editBlock(1);
-          ta.value = 'para ONE draft';
-          s.replaceRange(5, 9, 'PARA');
-          if (bv.editing || bv.list.querySelector('textarea')) out.push('editor still open after overlap');
-          const kept = bv.keptDrafts();
-          if (kept.length !== 1 || kept[0].value !== 'para ONE draft' || kept[0].reason !== 'changed') out.push('draft not kept ' + JSON.stringify(kept));
-          if (!teTest.visible(notice) || !notice.textContent.includes('para ONE draft')) out.push('notice not visible with the draft');
-          if (s.getText() !== '# A\n\nPARA one\n\npara two edited\n\nTail.\n') out.push('outside edit not applied');
-          notice.querySelector('[data-draft-action="apply"]').click();
-          if (s.getText() !== '# A\n\npara ONE draft\n\npara two edited\n\nTail.\n') out.push('apply ' + JSON.stringify(s.getText()));
-          if (!notice.hidden || bv.keptDrafts().length) out.push('notice not cleared after apply');
-          if (window.wasmBindings.document_body() !== s.getText()) out.push('model body differs after apply');
-          s.undo();
-          if (s.getText() !== '# A\n\nPARA one\n\npara two edited\n\nTail.\n') out.push('undo apply ' + JSON.stringify(s.getText()));
-          s.undo();
-          if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('undo outside edit ' + JSON.stringify(s.getText()));
-          if (bv.cards().length !== 4) out.push('cards after undo');
-
-          // 3. openDocument during an edit keeps the draft; Discard works.
-          ta = bv.editBlock(0);
-          ta.value = '# Draft heading';
-          ed.openDocument(teBlockFixtures.full);
-          const k2 = bv.keptDrafts();
-          if (k2.length !== 1 || k2[0].reason !== 'replaced' || k2[0].value !== '# Draft heading') out.push('open: draft ' + JSON.stringify(k2));
-          if (!notice.textContent.includes('replaced')) out.push('open: notice text');
-          const saved = ed.saveDocument();
-          if (ed.annotations().spans.length !== 3) out.push('open: spans');
-          notice.querySelector('[data-draft-action="discard"]').click();
-          if (bv.keptDrafts().length || !notice.hidden) out.push('discard');
-          if (ed.saveDocument() !== saved) out.push('discard changed the document');
-
-          // 4. A kept draft follows typing (execCommand) in the text view and
-          //    applies there.
-          s.setText('# A\n\npara one\n');
-          ta = bv.editBlock(1);
-          ta.value = 'para 1';
-          s.replaceRange(5, 6, 'P');
-          bv.setView('text');
-          if (!teTest.visible(notice)) out.push('notice hidden in the text view');
-          s.focus();
-          s.setSelectionOffsets(0);
-          if (!document.execCommand('insertText', false, 'Top ')) out.push('execCommand failed');
-          if (bv.keptDrafts()[0].anchor !== 9) out.push('anchor not mapped: ' + bv.keptDrafts()[0].anchor);
-          notice.querySelector('[data-draft-action="apply"]').click();
-          if (s.getText() !== 'Top # A\n\npara 1\n') out.push('apply in text view ' + JSON.stringify(s.getText()));
-          if (!teTest.canonical()) out.push('surface not canonical');
-          return out.join('; ');
-        })()"##,
-    );
-    assert_eq!(result, "");
-}
-
-#[wasm_bindgen_test]
-async fn test_every_block_action_is_keyboard_reachable() {
-    let _document = fresh_full_editor();
-    sleep(0).await;
-    let result = js_string(
-        r##"(() => {
-          const out = [];
-          const ed = window.__teEditor;
-          const bv = ed.blocks;
-          const s = ed.surface;
-          s.setText('# A\n\npara one\n');
-          bv.setView('blocks');
-          bv.setCurrent(0);
-          const tabbable = () => Array.from(bv.container.querySelectorAll('*')).filter((el) => el.tabIndex >= 0 && (el.matches('button, textarea') || el.classList.contains('te-block')));
-          const names = (els) => els.map((el) => el.dataset.action || (el.classList.contains('te-block') ? 'card' + el.dataset.index : el.className)).join(',');
-          // Focus order: the focused card, its actions, then Add paragraph.
-          if (names(tabbable()) !== 'card0,edit,insert,delete,te-blocks-add') out.push('tab order ' + names(tabbable()));
-          for (const b of bv.cards()[0].querySelectorAll('.te-block-action')) {
-            if (!b.getAttribute('aria-keyshortcuts')) out.push('no aria-keyshortcuts on ' + b.dataset.action);
-          }
-          if (!/Shift\+Enter/.test(bv.cards()[0].getAttribute('aria-keyshortcuts'))) out.push('card keyshortcuts');
-          teTest.key(document.activeElement, 'ArrowDown');
-          if (names(tabbable()) !== 'card1,edit,insert,delete,te-blocks-add') out.push('roving actions ' + names(tabbable()));
-          const action = (name) => bv.cards()[1].querySelector('[data-action="' + name + '"]');
-
-          // Each action button takes focus; Escape returns to the block.
-          action('edit').focus();
-          if (document.activeElement !== action('edit')) out.push('edit button not focusable');
-          if (!action('edit').parentNode.matches('.te-block:focus-within .te-block-actions')) out.push('actions not revealed while focused');
-          teTest.key(action('edit'), 'Escape');
-          if (document.activeElement !== bv.cards()[1]) out.push('Escape did not return to the block');
-
-          // Edit (button activation and Enter).
-          action('edit').focus();
-          action('edit').click();
-          let ta = bv.list.querySelector('textarea');
-          if (!ta || ta.value !== 'para one') out.push('edit button');
-          teTest.key(ta, 'Escape');
-          teTest.key(document.activeElement, 'Enter');
-          ta = bv.list.querySelector('textarea');
-          if (!ta || ta.value !== 'para one') out.push('Enter edit');
-          teTest.key(ta, 'Escape');
-
-          // Insert below (button and Shift+Enter).
-          action('insert').focus();
-          action('insert').click();
-          ta = bv.list.querySelector('textarea');
-          if (!ta || ta.value !== '') return out.concat('insert button').join('; ');
-          ta.value = 'x';
-          teTest.key(ta, 'Enter', { ctrlKey: true });
-          if (s.getText() !== '# A\n\npara one\n\nx\n') out.push('insert button result ' + JSON.stringify(s.getText()));
-          bv.setCurrent(0);
-          teTest.key(document.activeElement, 'Enter', { shiftKey: true });
-          ta = bv.list.querySelector('textarea');
-          if (!ta) return out.concat('Shift+Enter did not insert').join('; ');
-          ta.value = 'y';
-          teTest.key(ta, 'Enter', { ctrlKey: true });
-          if (s.getText() !== '# A\n\ny\n\npara one\n\nx\n') out.push('Shift+Enter result ' + JSON.stringify(s.getText()));
-
-          // Delete (button and Delete key).
-          bv.setCurrent(3);
-          bv.cards()[3].querySelector('[data-action="delete"]').focus();
-          bv.cards()[3].querySelector('[data-action="delete"]').click();
-          if (s.getText() !== '# A\n\ny\n\npara one\n') out.push('delete button ' + JSON.stringify(s.getText()));
-          bv.setCurrent(1);
-          teTest.key(document.activeElement, 'Delete');
-          if (s.getText() !== '# A\n\npara one\n') out.push('Delete key ' + JSON.stringify(s.getText()));
-          return out.join('; ');
-        })()"##,
-    );
+          if (s.getText() !== T.doc) out.push('second undo ' + JSON.stringify(s.getText()));
+        "##,
+    ])
+    .await;
     assert_eq!(result, "");
 }
