@@ -1,8 +1,9 @@
 //! Helpers shared by the browser test binaries (`tests/web*.rs`): the real
 //! editor scripts, the real exported document API on `window.wasmBindings`,
 //! and small JavaScript interop utilities. `bench` holds the typing-latency
-//! benchmark helpers and `fixtures` the persistence fixtures, each shared by
-//! the two binaries their tests are split across. Nothing is mocked.
+//! benchmark helpers, `fixtures` the persistence fixtures and `indicators`
+//! the inline-indicator fixture and geometry helpers, each shared by the
+//! binaries their tests are split across. Nothing is mocked.
 #![allow(dead_code, unused_imports)]
 
 pub use wasm_bindgen::prelude::*;
@@ -13,6 +14,7 @@ pub use web_sys::{Document, HtmlElement, HtmlTextAreaElement};
 
 mod bench;
 mod fixtures;
+pub mod indicators;
 pub use bench::*;
 pub use fixtures::*;
 
