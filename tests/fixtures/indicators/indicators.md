@@ -15,7 +15,9 @@ This paragraph was rewritten once. The rule in the gutter shows that it has alte
       "anchor": {
         "start": 2,
         "end": 34,
-        "text": "Shouldn't everything be obvious?"
+        "text": "Shouldn't everything be obvious?",
+        "before": "# ",
+        "after": "\n\nThere is a struggle between "
       },
       "active": 0,
       "alts": [
@@ -39,7 +41,9 @@ This paragraph was rewritten once. The rule in the gutter shows that it has alte
       "anchor": {
         "start": 47,
         "end": 55,
-        "text": "struggle"
+        "text": "struggle",
+        "before": " be obvious?\n\nThere is a ",
+        "after": " between clarity and brevity in "
       },
       "active": 4,
       "alts": [
@@ -79,7 +83,9 @@ This paragraph was rewritten once. The rule in the gutter shows that it has alte
       "anchor": {
         "start": 100,
         "end": 121,
-        "text": "Short sentences help."
+        "text": "Short sentences help.",
+        "before": " and brevity in every draft. ",
+        "after": "\n\nThis paragraph was rewritten "
       },
       "active": 0,
       "alts": [
@@ -99,7 +105,9 @@ This paragraph was rewritten once. The rule in the gutter shows that it has alte
       "anchor": {
         "start": 123,
         "end": 265,
-        "text": "This paragraph was rewritten once. The rule in the gutter shows that it has alternatives, and the lit dot shows which one is active right now."
+        "text": "This paragraph was rewritten once. The rule in the gutter shows that it has alternatives, and the lit dot shows which one is active right now.",
+        "before": " draft. Short sentences help.\n\n",
+        "after": "\n"
       },
       "active": 1,
       "alts": [
