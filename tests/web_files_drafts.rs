@@ -69,6 +69,27 @@ async fn test_dirty_state_follows_edits_undo_annotations_and_save() {
           if (p.dirty || document.title !== 'Drafts test' || ctl.classList.contains('te-dirty')) out.push('dirty after save');
           if (draft().text !== p.cleanText) out.push('save did not keep the draft');
           if (changes.join(',') !== 'true,false,true,false') out.push('dirty events ' + changes.join(','));
+          // A host page that opens its own document with editor.openDocument()
+          // gets a clean state and drafts under the new key.
+          teFiles.type(ed, ' Pending.');
+          ed.openDocument(teFixtures.plain.md, 'host.md');
+          if (p.dirty || document.title !== 'Drafts test') out.push('dirty after a host open');
+          if (p.key !== 'host.md' || p.fileName !== 'host.md' || p.handle !== null) out.push('host open key ' + p.key);
+          if (teTest.visible(document.querySelector('.te-files-notice'))) out.push('notice after a host open');
+          teFiles.type(ed, ' Host edit.');
+          await teFiles.wait(150);
+          if (!p.dirty) out.push('host edit not dirty');
+          const hostDraft = JSON.parse(localStorage.getItem(window.TE_DRAFT_PREFIX + 'host.md') || 'null');
+          if (!hostDraft || !hostDraft.text.includes(' Host edit.')) out.push('host draft not under host.md');
+          // A host that stores the text itself marks the document clean.
+          const cancel = (e) => e.preventDefault();
+          document.addEventListener('te:save', cancel);
+          const stored = p.save();
+          document.removeEventListener('te:save', cancel);
+          if (stored !== null || !p.dirty) out.push('cancelled save changed the dirty state');
+          p.markClean();
+          if (p.dirty || document.title !== 'Drafts test' || ctl.classList.contains('te-dirty')) out.push('markClean left it dirty');
+          if (p.cleanText !== p.serialise()) out.push('markClean clean text');
         } finally {
           document.removeEventListener('te:dirty-change', onDirty);
           document.title = title;

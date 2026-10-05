@@ -73,6 +73,15 @@ pub const PERSISTENCE_CSS: &str = include_str!("../../public/css/persistence.css
 
 /// Small helpers shared by the JavaScript snippets below.
 pub const TEST_HELPERS_JS: &str = r##"
+// Saving downloads the document where no file handle is available (issue
+// #76), and headless Chrome would write it to the Downloads folder. A
+// page-level click listener cancels the browser's default action for every
+// <a download>, so no test writes to disk; tests that check downloads
+// record them with teFiles.captureDownloads() (tests/support/files.rs).
+document.addEventListener('click', (e) => {
+  const a = e.target;
+  if (a instanceof HTMLAnchorElement && a.hasAttribute('download')) e.preventDefault();
+}, true);
 window.teTest = {
   surface() { return window.__teEditor.surface; },
   root() { return window.__teEditor.surface.root; },

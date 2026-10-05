@@ -44,7 +44,10 @@
  * dialog then offers Save first / Discard changes / Cancel (Escape cancels).
  * The text goes through editor.openDocument(text, name), so alternatives,
  * ghosts and overflow are restored; the file name becomes the document key.
- * te:opened {name, text} follows.
+ * te:opened {name, text} follows. A host that calls editor.openDocument()
+ * itself gets the same bookkeeping (documentChanged(): clean state, drafts
+ * re-keyed, no file handle); a host that cancels te:save and stores the
+ * text itself calls editor.persistence.markClean() once it is stored.
  *
  * Dirty state. An edit marks the document dirty at once (a dot on the save
  * controls, "• " before document.title, te:dirty-change {dirty}); after
@@ -531,6 +534,8 @@ class TePersistence {
     if (this.destroyed) return;
     const changed = dirty !== this.dirty;
     this.dirty = dirty;
+    // Per keystroke this is only the flag: the DOM changes with it.
+    if (!changed) return;
     this.applyTitle(dirty);
     const control = this.editor.chrome && this.editor.chrome.root
       ? this.editor.chrome.root.querySelector('[data-control="save"]')
@@ -540,7 +545,39 @@ class TePersistence {
       el.classList.toggle('te-dirty', dirty);
       if (el === control) el.setAttribute('aria-label', dirty ? 'Save document (unsaved changes)' : 'Save document');
     }
-    if (changed) this.emit('te:dirty-change', { dirty });
+    this.emit('te:dirty-change', { dirty });
+  }
+
+  /**
+   * Record the current document as saved: clears the dirty state and keeps
+   * a draft. For hosts that cancel te:save and store the text themselves.
+   */
+  markClean() {
+    if (this.destroyed) return;
+    this.cancelTick();
+    const text = this.serialise();
+    if (text === null) return;
+    this.cleanText = text;
+    this.setDirty(false);
+    this.writeDraft(text);
+  }
+
+  /**
+   * editor.openDocument() was called by someone other than this module (a
+   * host page loading its own document): take the opened text as clean,
+   * re-key drafts to the new document key and forget the file handle.
+   * load() and restoreDraft() open quietly and do their own bookkeeping.
+   */
+  documentChanged(name) {
+    if (this.destroyed || this.quiet > 0) return;
+    this.cancelTick();
+    this.handle = null;
+    this.fileName = typeof name === 'string' && name ? name : null;
+    const key = this.editor.documentKey;
+    if (typeof key === 'string' && key) this.key = key;
+    this.cleanText = this.serialise();
+    this.setDirty(false);
+    this.checkDraft(null);
   }
 
   /**

@@ -2095,6 +2095,8 @@ class MarkdownEditor {
         console.error('chrome.documentChanged failed', err);
       }
     }
+    // #76 A host's own open re-keys the dirty state and drafts too.
+    if (this.persistence && typeof this.persistence.documentChanged === 'function') this.persistence.documentChanged(name);
     if (this.indicators) this.indicators.flush();
     if (this.ghosts) this.ghosts.flush();
     return opened;
