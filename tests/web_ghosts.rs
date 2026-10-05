@@ -160,6 +160,15 @@ fn test_ghost_and_revive_via_menu_and_shortcut() {
           teGh.s().setSelectionOffsets(a + 3);
           teGh.ctrlSlash();
           if (teGh.model().length !== 0) out.push('caret revive ' + JSON.stringify(teGh.model()));
+          // Both ends count (a caret placed just before the first or just
+          // after the last ghosted character); one unit outside does not.
+          for (const [at, revives] of [[a, true], [b, true], [a - 1, false], [b + 1, false]]) {
+            teGh.ed().ghosts.ghost(a, b);
+            teGh.s().setSelectionOffsets(at);
+            teGh.ctrlSlash();
+            if ((teGh.model().length === 0) !== revives) out.push('caret at ' + (at - a) + ' revives ' + !revives);
+            teGh.ed().ghosts.revive(a, b);
+          }
           return out.join('\n');
         })()"##,
     );
@@ -416,6 +425,41 @@ fn test_destroy_cleans_up() {
           if (ev.defaultPrevented || document.querySelector('.te-selection-menu')) out.push('contextmenu still handled');
           if (teTest.key(root, '/', { ctrlKey: true })) out.push('Ctrl+/ still handled');
           window.__teEditor = null;
+          return out.join('\n');
+        })()"##,
+    );
+}
+
+#[wasm_bindgen_test]
+fn test_deleting_ghosted_text_then_undo_restores_the_ghost() {
+    setup();
+    problems(
+        r##"(() => {
+          const out = [];
+          teGh.open();
+          const [a, b] = teGh.select('Ghost this whole sentence please.');
+          teGh.ctrlSlash();
+          // Delete exactly the ghosted text: the live ghost goes (R-5.3) but
+          // the model keeps it set aside, and a save keeps it.
+          teGh.select('Ghost this whole sentence please.');
+          document.execCommand('delete');
+          if (teGh.s().getText().includes('Ghost this')) return 'text not deleted';
+          const ann = teGh.ed().annotations();
+          if (ann.ghosts.length !== 0 || ann.setAside.ghosts.length !== 1) out.push('after delete ' + JSON.stringify([ann.ghosts.length, ann.setAside.ghosts.length]));
+          if (!teGh.ed().saveDocument().includes('Ghost this whole sentence please.')) out.push('save lost the ghost');
+          // Undo brings the text back and the ghost with it.
+          teGh.s().undo();
+          if (teGh.s().getText() !== teGh.text) out.push('undo text ' + JSON.stringify(teGh.s().getText()));
+          teGh.ed().ghosts.flush();
+          if (JSON.stringify(teGh.model()) !== JSON.stringify([[a, b, 'Ghost this whole sentence please.']])) out.push('model after undo ' + JSON.stringify(teGh.model()));
+          if (JSON.stringify(teGh.drawn()) !== JSON.stringify([[a, b]])) out.push('drawn after undo ' + JSON.stringify(teGh.drawn()));
+          if (teGh.ed().annotations().setAside.ghosts.length !== 0) out.push('still set aside');
+          // Save and reopen after the undo: one live ghost, nothing set aside.
+          const saved = teGh.ed().saveDocument();
+          teGh.open(saved);
+          if (JSON.stringify(teGh.drawn()) !== JSON.stringify([[a, b]])) out.push('drawn after reopen ' + JSON.stringify(teGh.drawn()));
+          const re = teGh.ed().annotations();
+          if (re.ghosts.length !== 1 || re.setAside.ghosts.length !== 0) out.push('reopen ' + JSON.stringify([re.ghosts.length, re.setAside.ghosts.length]));
           return out.join('\n');
         })()"##,
     );

@@ -7,7 +7,7 @@ Issue: terraphim/terraphim-editor#11 (epic #1). Spec: `docs/requirements/alterna
 - Select text and right-click (or press the Menu key or Shift+F10): a dark rounded menu opens near the selection. It has monospace labels on the left and dim shortcuts on the right, and the hovered or keyboard-active row is slightly lighter. Today it holds one item, **Ghost it** (Ctrl+/), or **Revive** when the selection is already entirely ghosted.
 - Ghosted text recedes to about 10% (`--te-ghost-opacity`). It stays in the document: you can still read, select and edit it, and it is still counted (R-5.1, decision 3). Export drops it (R-9.3). Save keeps it, in the block's `ghosts` list.
 - Ctrl+/ toggles the selection with no menu: if the selection is entirely ghosted it is revived, otherwise it is ghosted.
-- With a collapsed caret, right-click or Ctrl+/ inside a ghost offers Revive for that whole ghost. R-5.2 says "right-click ghosted text"; right-clicking with no selection selects nothing in most browsers, so this case needs its own handling. Both ends count as inside: a caret just before a ghost's first character or just after its last one revives it. With a collapsed caret outside any ghost, the native context menu is left alone and Ctrl+/ does nothing.
+- With a collapsed caret, right-click or Ctrl+/ inside a ghost offers Revive for that whole ghost. R-5.2 says "right-click ghosted text"; right-clicking with no selection selects nothing in most browsers, so this case needs its own handling. Both ends count as inside, deliberately: clicking at the end of a ghosted word puts the caret just after its last character (and clicking its start just before the first), and with no selection there is nothing to ghost, so Revive has no competing action. A browser test pins both ends and one unit outside each. With a collapsed caret outside any ghost, the native context menu is left alone and Ctrl+/ does nothing.
 
 ## The ghost layer (R-5.3)
 
@@ -22,7 +22,7 @@ The WASM document model owns the ghost rules (`terraphim_alternatives::Document:
 | Revive a range covering a ghost | the ghost is removed |
 | Edit before or after a ghost | the ghost moves |
 | Edit inside a ghost | the ghost resizes (elastic) |
-| Delete all of a ghost's text | the ghost is removed |
+| Delete all of a ghost's text (or replace a range wider than the ghost) | the live ghost is removed; the session sets it aside with its pre-edit anchor (see Undo) |
 
 ### Bridge (`src/document.rs`)
 
@@ -46,7 +46,17 @@ The WASM document model owns the ghost rules (`terraphim_alternatives::Document:
 
 Ghosts are annotations, not text. Ghost and revive are therefore **not** entries in the surface's text undo history, and Ctrl+Z does not undo a ghost. Ctrl+/ (or the menu) is the reversal. Putting annotation changes into the text history would make Ctrl+Z after a ghost appear to do nothing to the text, and would need the model to snapshot and restore its ghost layer, which it does not offer.
 
-Text undo and redo still move ghosts, because the model mirrors every replayed edit. One consequence of the elastic rule: undoing an edit that deleted a ghost's whole text brings the text back without the ghost, and redo does not restore it either.
+Text undo and redo still move ghosts, because the model mirrors every replayed edit.
+
+Deleting a ghost's whole text removes the live ghost (R-5.3), but nothing is dropped (#34). `DocumentSession::apply_edit` sets the removed ghost aside with its pre-edit anchor, exactly like a detached span, and reports its id in `EditOutcome.detachedGhosts`. While it is set aside:
+- it is saved in the block's `ghosts` list, and a reopen sets it aside again if its text is still missing;
+- the usual set-aside notice is shown, and it clears when nothing is set aside any more.
+
+When the text returns at the anchor, whether by undo, redo or pasting it back, the existing re-attach path restores the ghost with the same extent and id. If a live ghost now touches or overlaps it, the two are merged by the crate's ghost rule, so ghosts never overlap.
+
+To make this work, set-aside anchor hints no longer shift when an edit inserts the anchor's own text at exactly the anchor's position, because that edit is the text coming back.
+
+Replacing exactly a ghost's text is different: the crate's elastic rule resizes the ghost to cover the new text, so nothing is set aside.
 
 ## The selection context menu (R-7.3)
 
@@ -101,6 +111,7 @@ Known browser-level risks for the hidden items. These are noted for #10, #12 and
   - a partial revive splitting a ghost, and merging it back;
   - the change event and the error object;
   - save and reopen, and export without the ghosted text;
+  - deleting the ghosted text, then undo restoring the ghost (model and decoration), with save and reopen after the undo;
   - typing before a ghost (decoration moved at once with no model read, then one debounced confirmation) and inside it (redrawn on the next frame);
   - keyboard navigation with a second item registered through the plug-in API, and items hidden when unavailable;
   - outside click and scroll closing the menu, Cmd+/ ignored, Ctrl+B unaffected;

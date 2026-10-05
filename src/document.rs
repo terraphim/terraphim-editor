@@ -91,6 +91,11 @@ pub struct Synced {
 pub struct EditOutcome {
     /// Ids of spans this edit detached (now set aside).
     pub detached: Vec<String>,
+    /// Ids of ghosts whose whole text this edit removed. The live layer
+    /// drops them (R-5.3), and the session sets them aside with their
+    /// pre-edit anchors, so undoing the edit (or pasting the text back)
+    /// restores them, and a save in between keeps them.
+    pub detached_ghosts: Vec<String>,
     /// Ids of set-aside spans and ghosts this edit re-attached.
     pub reattached: Vec<String>,
     /// Spans and ghosts set aside after the edit.
@@ -147,19 +152,29 @@ impl SetAside {
     }
 
     /// Moves every anchor hint through an edit replacing `start..end` with
-    /// `inserted` code units: an anchor wholly after the edit (an insertion
-    /// exactly at its start included) shifts; any other anchor keeps its
-    /// position, which is where its text would come back on undo.
-    fn shift_hints(&mut self, start: usize, end: usize, inserted: usize) {
+    /// `inserted`: an anchor wholly after the edit (an insertion exactly at
+    /// its start included) shifts; any other anchor keeps its position, which
+    /// is where its text would come back on undo.
+    ///
+    /// One exception: when the inserted text holds the anchor's own text at
+    /// exactly the anchor's position, that is the text coming back (undoing
+    /// the deletion of a ghost's whole text, or pasting it back), so the
+    /// anchor stays where the text now is.
+    fn shift_hints(&mut self, start: usize, end: usize, inserted: &str) {
+        let inserted_len = utf16_len(inserted);
         let anchors = self
             .spans
             .iter_mut()
             .map(|s| &mut s.anchor)
             .chain(self.ghosts.iter_mut().map(|g| &mut g.anchor));
         for anchor in anchors {
-            if end <= anchor.start {
+            let returning = !anchor.text.is_empty()
+                && end <= anchor.start
+                && utf16_to_byte(inserted, anchor.start - start)
+                    .is_some_and(|b| inserted[b..].starts_with(anchor.text.as_str()));
+            if end <= anchor.start && !returning {
                 let len = anchor.end - anchor.start;
-                anchor.start = anchor.start - (end - start) + inserted;
+                anchor.start = anchor.start - (end - start) + inserted_len;
                 anchor.end = anchor.start + len;
             }
         }
@@ -421,22 +436,37 @@ impl DocumentSession {
                 start,
                 end: usize::MAX,
             })?;
-        let ghosts_before = self.doc.annotations.ghosts.len();
+        let ghosts_before = self.doc.annotations.ghosts.clone();
         let detached = self.doc.apply_edit(start, end, inserted)?;
         let inserted_len = utf16_len(inserted);
-        self.set_aside.shift_hints(start, end, inserted_len);
+        self.set_aside.shift_hints(start, end, inserted);
+        // Ghosts the edit removed (all of their text was deleted or replaced).
+        let live: HashSet<&str> = self
+            .doc
+            .annotations
+            .ghosts
+            .iter()
+            .map(|g| g.id.as_str())
+            .collect();
+        let removed: Vec<Ghost> = ghosts_before
+            .into_iter()
+            .filter(|g| !live.contains(g.id.as_str()))
+            .collect();
         let detached_ids: Vec<String> = detached.iter().map(|s| s.id.clone()).collect();
+        let detached_ghosts: Vec<String> = removed.iter().map(|g| g.id.clone()).collect();
         let warning = detach_warning(&detached);
-        // Freshly detached spans keep their pre-edit anchors: that is exactly
-        // where their text returns if the edit is undone.
-        // Only an item touching the changed text can have its text come back,
-        // unless the edit removed a live item that was blocking it.
-        let freed = !detached.is_empty() || self.doc.annotations.ghosts.len() < ghosts_before;
+        // Freshly detached spans and removed ghosts keep their pre-edit
+        // anchors: that is exactly where their text returns if the edit is
+        // undone. Only an item touching the changed text can have its text
+        // come back, unless the edit removed a live item that was blocking it.
+        let freed = !detached.is_empty() || !removed.is_empty();
         self.set_aside.spans.extend(detached);
+        self.set_aside.ghosts.extend(removed);
         let window = (!freed).then_some((start, start + inserted_len));
         let reattached = self.reattach(window);
         Ok(EditOutcome {
             detached: detached_ids,
+            detached_ghosts,
             reattached,
             set_aside: self.set_aside.len(),
             warning,
@@ -444,10 +474,13 @@ impl DocumentSession {
         })
     }
 
-    /// Re-attaches every set-aside span and ghost whose text is back exactly
-    /// at its anchor and that does not overlap a live item of its kind.
-    /// Returns the re-attached ids (a re-attached item whose id was taken
-    /// meanwhile gets a fresh one).
+    /// Re-attaches every set-aside span whose text is back exactly at its
+    /// anchor and that does not overlap a live span, and every set-aside
+    /// ghost whose text is back exactly at its anchor. A ghost that touches
+    /// or overlaps a live ghost is merged with it by [`Document::ghost`] (the
+    /// crate's rule; the merged ghost keeps the id of the one starting first),
+    /// so ghosts never overlap. Returns the re-attached ids (a re-attached
+    /// item whose id was taken meanwhile gets a fresh one).
     ///
     /// With a `window` (the text just changed, in body offsets), only items
     /// touching it are checked: any other item's text and hint moved
@@ -491,26 +524,36 @@ impl DocumentSession {
 
         let mut waiting = Vec::new();
         for mut ghost in std::mem::take(&mut self.set_aside.ghosts) {
-            let a = &ghost.anchor;
-            let fits = near(a, window)
-                && text_at(body, a)
-                && !annotations
-                    .ghosts
-                    .iter()
-                    .any(|g| overlaps(&g.anchor, a.start, a.end));
-            if fits {
+            let (start, end) = (ghost.anchor.start, ghost.anchor.end);
+            if !(near(&ghost.anchor, window) && text_at(&self.doc.body, &ghost.anchor)) {
+                waiting.push(ghost);
+                continue;
+            }
+            let touches = self
+                .doc
+                .annotations
+                .ghosts
+                .iter()
+                .any(|g| g.anchor.start <= end && start <= g.anchor.end);
+            if touches {
+                match self.doc.ghost(start, end) {
+                    Ok(id) => {
+                        used.insert(id.clone());
+                        reattached.push(id);
+                    }
+                    Err(_) => waiting.push(ghost),
+                }
+            } else {
                 if used.contains(&ghost.id) {
                     ghost.id = fresh_id('g', &used);
                 }
                 used.insert(ghost.id.clone());
                 reattached.push(ghost.id.clone());
-                annotations.ghosts.push(ghost);
-            } else {
-                waiting.push(ghost);
+                self.doc.annotations.ghosts.push(ghost);
             }
         }
         self.set_aside.ghosts = waiting;
-        annotations.ghosts.sort_by_key(|g| g.anchor.start);
+        self.doc.annotations.ghosts.sort_by_key(|g| g.anchor.start);
         reattached
     }
 
@@ -604,10 +647,12 @@ impl Opened {
 }
 
 impl EditOutcome {
-    /// `{ detached, reattached, setAside, warning, notice }` for JavaScript.
+    /// `{ detached, detachedGhosts, reattached, setAside, warning, notice }`
+    /// for JavaScript.
     pub fn to_json(&self) -> Value {
         json!({
             "detached": self.detached,
+            "detachedGhosts": self.detached_ghosts,
             "reattached": self.reattached,
             "setAside": self.set_aside,
             "warning": self.warning,
@@ -664,7 +709,7 @@ pub fn document_counts() -> JsValue {
 }
 
 /// Mirrors a surface edit (`start`, `deletedLength`, `insertedText`, UTF-16)
-/// in the model. Returns `{ detached, reattached, setAside, warning, notice }`; throws
+/// in the model. Returns `{ detached, detachedGhosts, reattached, setAside, warning, notice }`; throws
 /// if the edit does not fit the model, in which case call
 /// [`sync_document_body`].
 #[wasm_bindgen]
@@ -826,6 +871,7 @@ impl DocumentSession {
         };
         Ok(EditOutcome {
             detached: Vec::new(),
+            detached_ghosts: Vec::new(),
             reattached,
             set_aside: self.set_aside.len(),
             warning: None,
@@ -837,7 +883,7 @@ impl DocumentSession {
 /// Moves the body text `start..end` to `to` (UTF-16 code units; `to` is an
 /// insertion point in the pre-move body, outside the range), carrying the
 /// spans and ghosts inside the range. Returns
-/// `{ detached, reattached, setAside, warning, notice }` like [`apply_edit`];
+/// `{ detached, detachedGhosts, reattached, setAside, warning, notice }` like [`apply_edit`];
 /// throws (changing nothing) if the range or destination is invalid or the
 /// move would split a span or ghost.
 ///
@@ -1449,5 +1495,84 @@ mod tests {
             reopened.save(),
             "Oh. One two three. Four five big six. Seven eight."
         );
+    }
+
+    #[test]
+    fn deleting_ghosted_text_sets_the_ghost_aside_and_undo_restores_it() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        session.ghost(15, 29).unwrap();
+        let before = ghosts(&session);
+        // Delete exactly the ghosted text: the live ghost goes (R-5.3) ...
+        let outcome = session.apply_edit(15, 14, "").unwrap();
+        assert_eq!(outcome.detached_ghosts, vec!["g1".to_string()]);
+        assert_eq!(outcome.set_aside, 1);
+        assert_eq!(outcome.to_json()["detachedGhosts"][0], "g1");
+        assert!(ghosts(&session).is_empty());
+        // ... but it is kept, and saved, with its pre-edit anchor.
+        assert_eq!(session.set_aside().ghosts[0].anchor.text, "Four five six.");
+        let saved = session.save();
+        assert_eq!(parse(&saved).unwrap().annotations.ghosts.len(), 1);
+        // Undo (the inverse edit) re-attaches it with the same extent and id.
+        let outcome = session.apply_edit(15, 0, "Four five six.").unwrap();
+        assert_eq!(outcome.reattached, vec!["g1".to_string()]);
+        assert_eq!(outcome.set_aside, 0);
+        assert_eq!(ghosts(&session), before);
+
+        // Reopening the file saved in between sets it aside again (its text
+        // is gone) without losing it; putting the text back restores it.
+        let mut reopened = DocumentSession::new();
+        assert_eq!(reopened.open(&saved).unresolved, 1);
+        assert_eq!(reopened.save(), saved);
+        let outcome = reopened.apply_edit(15, 0, "Four five six.").unwrap();
+        assert_eq!(outcome.reattached, vec!["g1".to_string()]);
+        assert_eq!(ghosts(&reopened), before);
+    }
+
+    #[test]
+    fn partial_deletion_trims_and_a_wider_replacement_sets_the_ghost_aside() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        session.ghost(15, 29).unwrap();
+        // Partial deletion: trimmed, nothing set aside.
+        let outcome = session.apply_edit(15, 5, "").unwrap();
+        assert!(outcome.detached_ghosts.is_empty());
+        assert_eq!(outcome.set_aside, 0);
+        assert_eq!(ghosts(&session), vec![ghost("g1", 15, 24, "five six.")]);
+        // Typing over exactly the ghost's text is elastic (R-5.3): the ghost
+        // now covers the new text, nothing is set aside, and undoing the
+        // replacement resizes it back.
+        let outcome = session.apply_edit(15, 9, "x").unwrap();
+        assert!(outcome.detached_ghosts.is_empty());
+        assert_eq!(ghosts(&session), vec![ghost("g1", 15, 16, "x")]);
+        session.apply_edit(15, 1, "five six.").unwrap();
+        assert_eq!(ghosts(&session), vec![ghost("g1", 15, 24, "five six.")]);
+        // A replacement that also covers text outside the ghost removes it:
+        // set aside, and undoing the replacement restores it.
+        let outcome = session.apply_edit(14, 11, "x").unwrap();
+        assert_eq!(outcome.detached_ghosts, vec!["g1".to_string()]);
+        assert_eq!(outcome.set_aside, 1);
+        session.apply_edit(14, 1, " five six.").unwrap();
+        assert_eq!(ghosts(&session), vec![ghost("g1", 15, 24, "five six.")]);
+        assert!(session.set_aside().is_empty());
+    }
+
+    #[test]
+    fn a_restored_ghost_merges_with_touching_ghosts() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        session.ghost(15, 20).unwrap(); // "Four "
+        session.apply_edit(15, 5, "").unwrap();
+        assert_eq!(session.set_aside().ghosts.len(), 1);
+        // Meanwhile a new ghost right where the text will come back.
+        session.ghost(15, 19).unwrap(); // "five"
+                                        // The text returns at 15..20, touching the live ghost: one merged
+                                        // ghost, never two overlapping or touching ones.
+        let outcome = session.apply_edit(15, 0, "Four ").unwrap();
+        assert_eq!(outcome.set_aside, 0);
+        assert_eq!(outcome.reattached.len(), 1);
+        assert_eq!(ghosts(&session).len(), 1);
+        let g = &ghosts(&session)[0];
+        assert_eq!((g.1, g.2, g.3.as_str()), (15, 24, "Four five"));
     }
 }
