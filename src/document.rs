@@ -1192,14 +1192,20 @@ impl StashOutcome {
 /// `current` with `text` appended as a new entry: directly when `current`
 /// is empty, otherwise after a blank line (completing a trailing newline).
 pub fn append_overflow(current: &str, text: &str) -> String {
-    let separator = if current.is_empty() || current.ends_with("\n\n") {
+    format!("{current}{}{text}", overflow_separator(current))
+}
+
+/// The separator [`append_overflow`] puts between `current` and a new entry:
+/// nothing at the start or after a blank line, otherwise enough newlines to
+/// leave one blank line.
+fn overflow_separator(current: &str) -> &'static str {
+    if current.is_empty() || current.ends_with("\n\n") {
         ""
     } else if current.ends_with('\n') {
         "\n"
     } else {
         "\n\n"
-    };
-    format!("{current}{separator}{text}")
+    }
 }
 
 /// Outcome of [`rebase_overflow`].
@@ -1259,7 +1265,14 @@ pub fn rebase_overflow(current: &str, from: &str, to: &str) -> Rebased {
     if let Some(chunk) = to.strip_prefix(from).filter(|c| !c.is_empty()) {
         let text = match current.strip_prefix(from) {
             Some(rest) => format!("{from}{chunk}{rest}"),
-            None => format!("{current}{chunk}"),
+            // The chunk carries the separator chosen for `from`; re-append
+            // the entry itself so the separator suits `current`.
+            None => append_overflow(
+                current,
+                chunk
+                    .strip_prefix(overflow_separator(from))
+                    .unwrap_or(chunk),
+            ),
         };
         return Rebased {
             text,
@@ -2239,6 +2252,32 @@ mod tests {
     }
 
     // ----- overflow panel (issue #12) ---------------------------------------
+
+    #[test]
+    fn redo_fallback_appends_a_separate_entry() {
+        // Stash onto an overflow ending with a blank line: the recorded chunk
+        // has no separator of its own.
+        let from = "old\n\n";
+        let to = append_overflow(from, "chunk");
+        assert_eq!(to, "old\n\nchunk");
+        // After undo the author rewrote the panel, so redo falls back to
+        // appending: it must still be a separate entry.
+        let redo = rebase_overflow("edited", from, &to);
+        assert!(redo.applied);
+        assert_eq!(redo.text, "edited\n\nchunk");
+        let redo = rebase_overflow("edited\n", from, &to);
+        assert_eq!(redo.text, "edited\n\nchunk");
+        // A separator recorded with the chunk is replaced, not doubled.
+        let to = append_overflow("note", "chunk");
+        assert_eq!(rebase_overflow("other", "note", &to).text, "other\n\nchunk");
+        assert_eq!(rebase_overflow("", "note", &to).text, "chunk");
+        // A stashed entry that itself starts with a newline keeps it.
+        let to = append_overflow("note", "\nchunk");
+        assert_eq!(
+            rebase_overflow("other", "note", &to).text,
+            "other\n\n\nchunk"
+        );
+    }
 
     #[test]
     fn append_overflow_separates_entries_with_a_blank_line() {
