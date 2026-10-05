@@ -17,8 +17,11 @@
 //!
 //! Every occurrence of every distinct anchor text is found in one pass over
 //! the body by a [`terraphim_automata::CompiledMatcher`] built for that pass
-//! (overlapping, case-sensitive, matching inside words), so the cost of
-//! searching no longer grows with the number of distinct texts.
+//! (overlapping, case-sensitive, matching inside words, blank texts allowed),
+//! so the cost of searching no longer grows with the number of distinct
+//! texts. There is no second, hand-rolled search: in the (size-limit only)
+//! case that the matcher cannot be built, every item is returned unresolved
+//! with [`UnresolvedReason::SearchFailed`].
 //!
 //! Known limitation: an edit inside a span or ghost changes its text, so it is
 //! reported missing, unless the old text happens to occur exactly once
@@ -28,7 +31,9 @@
 
 use std::collections::HashMap;
 
-use terraphim_automata::{MatchOverlap, MatcherBuilder, MatcherOptions};
+use terraphim_automata::{
+    MatchOverlap, MatcherBuilder, MatcherOptions, PositionedMatch, TerraphimAutomataError,
+};
 use terraphim_types::{NormalizedTerm, NormalizedTermValue};
 
 use crate::document::Document;
@@ -46,6 +51,15 @@ pub enum UnresolvedReason {
     Ambiguous {
         /// UTF-16 start offsets of the possible matches.
         candidates: Vec<usize>,
+    },
+    /// The body could not be searched at all, so nothing was placed: building
+    /// the matcher over the run's anchor texts failed. Over valid anchors this
+    /// only happens when the automaton would exceed its size limits, which
+    /// needs gigabytes of anchor text. Every span and ghost of the run is
+    /// returned with this reason; none is guessed at.
+    SearchFailed {
+        /// The matcher builder's error, for diagnostics.
+        message: String,
     },
 }
 
@@ -91,20 +105,44 @@ impl Document {
     /// Re-finds every span and ghost in the current body. See the [module
     /// docs](crate::reanchor) for the rules.
     pub fn reanchor(&mut self) -> ReanchorReport {
-        let mut report = ReanchorReport::default();
-
         let spans = std::mem::take(&mut self.annotations.spans);
         let ghosts = std::mem::take(&mut self.annotations.ghosts);
         let texts = spans
             .iter()
             .map(|s| s.anchor.text.as_str())
             .chain(ghosts.iter().map(|g| g.anchor.text.as_str()));
-        let occurrences = Occurrences::find(&self.body, texts);
-        let span_anchors: Vec<&Anchor> = spans.iter().map(|s| &s.anchor).collect();
-        let span_placements = place(&span_anchors, &occurrences);
-        let ghost_anchors: Vec<&Anchor> = ghosts.iter().map(|g| &g.anchor).collect();
-        let ghost_placements = place(&ghost_anchors, &occurrences);
+        let (span_placements, ghost_placements) = match Occurrences::find(&self.body, texts) {
+            Ok(occurrences) => {
+                let span_anchors: Vec<&Anchor> = spans.iter().map(|s| &s.anchor).collect();
+                let ghost_anchors: Vec<&Anchor> = ghosts.iter().map(|g| &g.anchor).collect();
+                (
+                    place(&span_anchors, &occurrences),
+                    place(&ghost_anchors, &occurrences),
+                )
+            }
+            Err(error) => {
+                let reason = UnresolvedReason::SearchFailed {
+                    message: error.to_string(),
+                };
+                (
+                    vec![Err(reason.clone()); spans.len()],
+                    vec![Err(reason); ghosts.len()],
+                )
+            }
+        };
+        self.settle(spans, ghosts, span_placements, ghost_placements)
+    }
 
+    /// Puts each span and ghost back at its placement, or into the report
+    /// with the reason it could not be placed.
+    fn settle(
+        &mut self,
+        spans: Vec<Span>,
+        ghosts: Vec<Ghost>,
+        span_placements: Vec<Placement>,
+        ghost_placements: Vec<Placement>,
+    ) -> ReanchorReport {
+        let mut report = ReanchorReport::default();
         for (mut span, placement) in spans.into_iter().zip(span_placements) {
             match placement {
                 Ok((start, end)) => {
@@ -137,6 +175,9 @@ impl Document {
     }
 }
 
+/// Where one span or ghost lands (UTF-16 `start..end`), or why it cannot.
+type Placement = Result<(usize, usize), UnresolvedReason>;
+
 /// Every occurrence of each distinct anchor text in the body, found in one
 /// pass for the whole re-anchor run.
 struct Occurrences<'a> {
@@ -151,11 +192,18 @@ impl<'a> Occurrences<'a> {
     /// Finds every occurrence of every distinct text in `texts`.
     ///
     /// The texts are compiled into one [`terraphim_automata::CompiledMatcher`]
-    /// and the body is scanned once. A text the matcher builder rejects (it
-    /// refuses blank patterns, but a span or ghost may cover only whitespace)
-    /// is searched for by [`occurrences_without_matcher`] instead, so every
-    /// text the span model accepts can still be re-anchored.
-    fn find(body: &str, texts: impl IntoIterator<Item = &'a str>) -> Self {
+    /// and the body is scanned once. Blank (whitespace-only) texts are valid
+    /// span and ghost anchors, so the matcher is told to accept them; only the
+    /// empty text is refused, and it occurs nowhere.
+    ///
+    /// Fails only when building the automaton fails, which over validated
+    /// patterns means an automaton size limit was exceeded. There is no
+    /// second search to fall back to: the caller reports every item as
+    /// [`UnresolvedReason::SearchFailed`] instead.
+    fn find(
+        body: &str,
+        texts: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Self, TerraphimAutomataError> {
         let mut slot: HashMap<&'a str, usize> = HashMap::new();
         let mut distinct: Vec<&'a str> = Vec::new();
         for text in texts {
@@ -170,45 +218,40 @@ impl<'a> Occurrences<'a> {
             .with_overlap(MatchOverlap::All)
             .with_word_boundaries(false)
             .with_case_insensitive(false)
-            .with_min_pattern_length(1);
+            .with_min_pattern_length(1)
+            .with_allow_blank_patterns(true);
         let mut builder = MatcherBuilder::new(options);
-        let mut rejected: Vec<usize> = Vec::new();
+        // `PositionedMatch::pattern_index` is the insertion index among the
+        // patterns the builder accepted, so record the slot each one fills.
+        let mut slot_of_pattern: Vec<usize> = Vec::with_capacity(distinct.len());
         for (i, text) in distinct.iter().enumerate() {
-            // The term id carries the slot back out of each match. Texts are
-            // distinct, so the builder's duplicate check never fires.
+            // Texts are distinct and every non-empty text passes the checks,
+            // so the only refusal is the empty text, which occurs nowhere.
+            // The term is unused: matches are mapped by `pattern_index`.
             let term = NormalizedTerm::new(i as u64, NormalizedTermValue::default());
-            if builder.insert((*text).to_owned(), term).is_err() {
-                rejected.push(i);
+            if builder.insert((*text).to_owned(), term).is_ok() {
+                slot_of_pattern.push(i);
+            } else {
+                debug_assert!(text.is_empty(), "matcher refused {text:?}");
             }
         }
-        let matches = if builder.is_empty() {
-            Ok(Vec::new())
-        } else {
-            builder.build().and_then(|m| m.find_matches(body, true))
-        };
-        match matches {
-            Ok(matches) => {
-                // Matches arrive sorted by start byte, so one running count
-                // converts every start to UTF-16 in a single walk of the body.
-                let (mut byte, mut units) = (0, 0);
-                for matched in matches {
-                    let Some((start, _)) = matched.pos else {
-                        continue;
-                    };
-                    units += utf16_len(&body[byte..start]);
-                    byte = start;
-                    debug_assert_eq!(Some(units), byte_to_utf16(body, start));
-                    starts[matched.normalized_term.id as usize].push(units);
-                }
-            }
-            // Only automaton size limits can fail a build over validated
-            // patterns. Degrade to the per-text search rather than lose spans.
-            Err(_) => rejected = (0..distinct.len()).collect(),
+        if builder.is_empty() {
+            return Ok(Self { slot, starts });
         }
-        for i in rejected {
-            starts[i] = occurrences_without_matcher(body, distinct[i]);
+        let matcher = builder.build()?;
+        let mut positions: Vec<PositionedMatch> = Vec::new();
+        matcher.push_positions(body, &mut positions);
+
+        // Positions arrive sorted by start byte, so one running count
+        // converts every start to UTF-16 in a single walk of the body.
+        let (mut byte, mut units) = (0, 0);
+        for found in &positions {
+            units += utf16_len(&body[byte..found.start]);
+            byte = found.start;
+            debug_assert_eq!(Some(units), byte_to_utf16(body, found.start));
+            starts[slot_of_pattern[found.pattern_index]].push(units);
         }
-        Self { slot, starts }
+        Ok(Self { slot, starts })
     }
 
     /// Occurrences of `text`, which must be one of the texts passed to
@@ -218,32 +261,9 @@ impl<'a> Occurrences<'a> {
     }
 }
 
-/// UTF-16 start offsets of every (possibly overlapping) occurrence of
-/// `needle` in `haystack`, for the texts the matcher cannot take: blank
-/// anchors, which [`MatcherBuilder::insert`] rejects, and every text in the
-/// (not expected) case that building the matcher fails.
-fn occurrences_without_matcher(haystack: &str, needle: &str) -> Vec<usize> {
-    let mut found = Vec::new();
-    if needle.is_empty() {
-        return found;
-    }
-    let (mut from, mut byte, mut units) = (0, 0, 0);
-    while let Some(pos) = haystack[from..].find(needle) {
-        let start = from + pos;
-        units += utf16_len(&haystack[byte..start]);
-        byte = start;
-        found.push(units);
-        from = start + haystack[start..].chars().next().map_or(1, char::len_utf8);
-    }
-    found
-}
-
 /// Places each anchor by the module rules, given every occurrence of its
 /// text. Items placed by one call never overlap each other.
-fn place(
-    anchors: &[&Anchor],
-    occurrences: &Occurrences<'_>,
-) -> Vec<Result<(usize, usize), UnresolvedReason>> {
+fn place(anchors: &[&Anchor], occurrences: &Occurrences<'_>) -> Vec<Placement> {
     let occurrences: Vec<&[usize]> = anchors.iter().map(|a| occurrences.of(&a.text)).collect();
     let lengths: Vec<usize> = anchors.iter().map(|a| utf16_len(&a.text)).collect();
 
@@ -256,7 +276,9 @@ fn place(
     // Rule 1: exact hint.
     for (i, anchor) in anchors.iter().enumerate() {
         let hint = anchor.start;
-        if occurrences[i].contains(&hint) && !overlaps_claim(&claimed, hint, lengths[i]) {
+        // Starts are in body order, so the hint can be looked up by halving.
+        let at_hint = occurrences[i].binary_search(&hint).is_ok();
+        if at_hint && !overlaps_claim(&claimed, hint, lengths[i]) {
             placed[i] = Some(hint);
             claimed.push((hint, hint + lengths[i]));
         }
@@ -315,6 +337,7 @@ mod tests {
 
     fn starts(body: &str, texts: &[&str], text: &str) -> Vec<usize> {
         Occurrences::find(body, texts.iter().copied())
+            .unwrap()
             .of(text)
             .to_vec()
     }
@@ -330,7 +353,7 @@ mod tests {
     #[test]
     fn one_pass_serves_every_distinct_text() {
         let texts = ["concatenate", "cat", "cat", "nope"];
-        let occ = Occurrences::find("concatenate the cat", texts);
+        let occ = Occurrences::find("concatenate the cat", texts).unwrap();
         assert_eq!(occ.starts.len(), 3, "duplicate texts share a slot");
         assert_eq!(occ.of("concatenate"), &[0]);
         assert_eq!(occ.of("cat"), &[3, 16], "inside another text's match too");
@@ -352,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn blank_texts_bypass_the_matcher() {
+    fn blank_texts_go_through_the_matcher() {
         let texts = ["\n\n", " ", "b"];
         let body = "a\n\n\nb  c";
         assert_eq!(starts(body, &texts, "\n\n"), vec![1, 2]);
@@ -362,22 +385,73 @@ mod tests {
 
     #[test]
     fn no_texts_and_empty_text_find_nothing() {
-        let occ = Occurrences::find("abc", std::iter::empty());
+        let occ = Occurrences::find("abc", std::iter::empty()).unwrap();
         assert!(occ.starts.is_empty());
         // Empty anchor text cannot be parsed, but `annotations` is public.
         assert_eq!(starts("abc", &[""], ""), Vec::<usize>::new());
-        assert_eq!(occurrences_without_matcher("abc", ""), Vec::<usize>::new());
     }
 
     #[test]
-    fn fallback_agrees_with_the_matcher() {
+    fn refused_empty_text_does_not_shift_other_slots() {
+        // The matcher refuses "", so "cat" is its pattern 0 but slot 1, and
+        // "a" its pattern 1 but slot 2: matches must still land in the slot.
+        let texts = ["", "cat", "a"];
+        let occ = Occurrences::find("a cat", texts).unwrap();
+        assert_eq!(occ.of(""), &[] as &[usize]);
+        assert_eq!(occ.of("cat"), &[2]);
+        assert_eq!(occ.of("a"), &[0, 3]);
+    }
+
+    #[test]
+    fn mixed_texts_in_one_pass_report_every_occurrence() {
+        // UTF-16: clef 0-1, aaa 3-5, cat 7-9, e-acute 11, cat 13-15,
+        // CJK 17-20, then " \n\n" at 21-23. These are the cases the removed
+        // per-text search used to cover, now asserted through the matcher.
         let body = "𝄞 aaa cat é cat 中文中文 \n\n";
-        for text in ["aa", "cat", "中文", "𝄞", "a", "x"] {
-            assert_eq!(
-                starts(body, &[text], text),
-                occurrences_without_matcher(body, text),
-                "{text:?}"
-            );
-        }
+        let texts = ["aa", "cat", "中文", "𝄞", "a", "x", "\n", " ", "\n\n"];
+        let occ = Occurrences::find(body, texts).unwrap();
+        assert_eq!(occ.of("aa"), &[3, 4]);
+        assert_eq!(occ.of("cat"), &[7, 13]);
+        assert_eq!(occ.of("中文"), &[17, 19]);
+        assert_eq!(occ.of("𝄞"), &[0]);
+        assert_eq!(occ.of("a"), &[3, 4, 5, 8, 14]);
+        assert_eq!(occ.of("x"), &[] as &[usize]);
+        assert_eq!(occ.of("\n"), &[22, 23]);
+        assert_eq!(occ.of(" "), &[2, 6, 10, 12, 16, 21]);
+        assert_eq!(occ.of("\n\n"), &[22]);
+    }
+
+    #[test]
+    fn search_failure_returns_every_item_unresolved() {
+        // A real build failure needs an automaton past aho-corasick's state
+        // limits (gigabytes of anchor text), so the failure branch's
+        // placements are fed to `settle` directly.
+        let mut doc = Document::new("one cat two dogs");
+        let span = doc
+            .add_span(crate::model::SpanKind::Word, 4, 7)
+            .expect("span");
+        doc.ghost(12, 16).expect("ghost");
+        let spans = std::mem::take(&mut doc.annotations.spans);
+        let ghosts = std::mem::take(&mut doc.annotations.ghosts);
+        let before = (spans.clone(), ghosts.clone());
+        let reason = UnresolvedReason::SearchFailed {
+            message: "automaton too large".to_string(),
+        };
+        let report = doc.settle(
+            spans,
+            ghosts,
+            vec![Err(reason.clone())],
+            vec![Err(reason.clone())],
+        );
+        assert!(!report.is_clean());
+        assert!(report.moved.is_empty());
+        assert!(doc.annotations.spans.is_empty());
+        assert!(doc.annotations.ghosts.is_empty());
+        assert_eq!(report.unresolved.len(), 1);
+        assert_eq!(report.unresolved[0].span.id, span);
+        assert_eq!(report.unresolved[0].span, before.0[0], "returned as it was");
+        assert_eq!(report.unresolved[0].reason, reason);
+        assert_eq!(report.unresolved_ghosts[0].ghost, before.1[0]);
+        assert_eq!(report.unresolved_ghosts[0].reason, reason);
     }
 }

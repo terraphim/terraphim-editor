@@ -1078,9 +1078,9 @@ dependencies = [
 
 [[package]]
 name = "terraphim_automata"
-version = "2.0.0"
+version = "2.1.0"
 source = "sparse+https://git.terraphim.cloud/api/packages/terraphim/cargo/"
-checksum = "5dd696bf249a751c09985258451258c0819a4a8b349feb6324d9df9645217fc1"
+checksum = "ad5a407db023baabcaec8b33df8389e23c3ca7588c982ae0015085fbdfecd34f"
 dependencies = [
  "ahash 0.8.12",
  "aho-corasick",
