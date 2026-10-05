@@ -338,6 +338,13 @@ fn test_menu_keyboard_navigation_and_plugins() {
             if (!act || act.dataset.item !== want) out.push(key + ' highlight');
           };
           if (teGh.active() !== 'ghost') out.push('first focus ' + teGh.active());
+          // Keyboard-opened: just below the selection's line, at its left edge.
+          const lineRects = Array.from(teGh.s().rangeForOffsets(a, b).getClientRects()).filter((r) => r.width > 0);
+          const mr = teGh.menu().getBoundingClientRect();
+          const lineBottom = Math.max(...lineRects.map((r) => r.bottom));
+          const lineLeft = Math.min(...lineRects.map((r) => r.left));
+          if (mr.top < lineBottom || mr.top - lineBottom > 12) out.push('menu top ' + mr.top + ' vs line bottom ' + lineBottom);
+          if (Math.abs(mr.left - lineLeft) > 2) out.push('menu left ' + mr.left + ' vs ' + lineLeft);
           nav('ArrowDown', 'stash');
           nav('ArrowDown', 'ghost');
           nav('ArrowUp', 'stash');

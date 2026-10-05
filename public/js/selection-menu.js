@@ -588,13 +588,20 @@ class TeSelectionMenu {
     return true;
   }
 
-  /** Viewport point under the end of the selection. */
+  /**
+   * Viewport point under the last line of the selection, at its left edge.
+   * Decorations split a line into several rects, so the whole line is used.
+   */
   selectionPoint(ctx) {
     const range = this.surface.rangeForOffsets(ctx.start, ctx.end);
-    const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 || r.height > 0);
+    const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
     if (rects.length > 0) {
-      const last = rects[rects.length - 1];
-      return { x: last.left, y: last.bottom + 4 };
+      const lastTop = Math.max(...rects.map((r) => r.top));
+      const line = rects.filter((r) => r.bottom > lastTop);
+      return {
+        x: Math.min(...line.map((r) => r.left)),
+        y: Math.max(...line.map((r) => r.bottom)) + 4,
+      };
     }
     const caret = this.surface.getCaretRect(ctx.end);
     return { x: caret.left, y: caret.bottom + 4 };
