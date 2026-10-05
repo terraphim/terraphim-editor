@@ -15,7 +15,9 @@ vendor/
 terraphim-grep/
 artifact
 nohup.out
-.cargo/
+.cargo/*
+# The registry declaration is shared; credentials stay local and ignored.
+!.cargo/config.toml
 .desktop/package-lock.kdl
 localsearch
 
