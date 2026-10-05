@@ -237,12 +237,14 @@ fn test_keyboard_navigation_mode_change_and_destroy_cleanup() {
 
           // Closed with marks: the chip says what is marked and clears.
           pill.click();
-          items[1].focus();
-          items[1].click();
-          if (document.activeElement !== items[1]) out.push('running an action moved focus out of the popover');
+          // The cheap actions (long sentences, off-tone) keep this test light;
+          // the first test covers every action against the engine.
+          items[2].focus();
+          items[2].click();
+          if (document.activeElement !== items[2]) out.push('running an action moved focus out of the popover');
           key('Escape');
           const chip = ed.lab.chip;
-          if (chip.hidden || !/weak sentence/.test(chip.textContent)) out.push('chip ' + chip.hidden + ' ' + chip.textContent);
+          if (chip.hidden || !/2 long sentences/.test(chip.textContent)) out.push('chip ' + chip.hidden + ' ' + chip.textContent);
           chip.querySelector('button').focus();
           chip.querySelector('button').click();
           if (teLab.marks().length || !chip.hidden) out.push('chip clear');
@@ -255,8 +257,8 @@ fn test_keyboard_navigation_mode_change_and_destroy_cleanup() {
 
           // Leaving Write_On closes the popover and clears the marks.
           pill.click();
-          items[5].click();
-          if (!teLab.marks().length) out.push('no hedge marks');
+          items[4].click();
+          if (!teLab.marks().length) out.push('no off-tone marks');
           ed.chrome.setMode('plain');
           if (!pop.hidden) out.push('plain mode left the popover open');
           if (teLab.marks().length) out.push('plain mode left marks');
