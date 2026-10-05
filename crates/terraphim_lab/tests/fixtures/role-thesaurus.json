@@ -1,0 +1,125 @@
+{
+  "data": {
+    "alternatives": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "annotation": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "annotation format": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "annotations": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "code actions": {
+      "id": 1,
+      "nterm": "language server"
+    },
+    "diagnostics": {
+      "id": 1,
+      "nterm": "language server"
+    },
+    "foldingrange": {
+      "id": 1,
+      "nterm": "language server"
+    },
+    "kg": {
+      "id": 3,
+      "nterm": "thesaurus"
+    },
+    "knowledge graph": {
+      "id": 3,
+      "nterm": "thesaurus"
+    },
+    "language server": {
+      "id": 1,
+      "nterm": "language server"
+    },
+    "language server protocol": {
+      "id": 1,
+      "nterm": "language server"
+    },
+    "lsp": {
+      "id": 1,
+      "nterm": "language server"
+    },
+    "re-anchoring": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "schema": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "span": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "span model": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "spans": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "synonyms": {
+      "id": 3,
+      "nterm": "thesaurus"
+    },
+    "terraphim_automata": {
+      "id": 3,
+      "nterm": "thesaurus"
+    },
+    "terraphim_lsp": {
+      "id": 1,
+      "nterm": "language server"
+    },
+    "thesaurus": {
+      "id": 3,
+      "nterm": "thesaurus"
+    },
+    "trailing fenced block": {
+      "id": 2,
+      "nterm": "span model"
+    },
+    "wasm": {
+      "id": 4,
+      "nterm": "wasm"
+    },
+    "wasm32-unknown-unknown": {
+      "id": 4,
+      "nterm": "wasm"
+    },
+    "wasm32-wasip2": {
+      "id": 4,
+      "nterm": "wasm"
+    },
+    "webassembly": {
+      "id": 4,
+      "nterm": "wasm"
+    },
+    "zed": {
+      "id": 5,
+      "nterm": "zed"
+    },
+    "zed extension": {
+      "id": 5,
+      "nterm": "zed"
+    },
+    "zed-terraphim": {
+      "id": 5,
+      "nterm": "zed"
+    },
+    "zed_extension_api": {
+      "id": 5,
+      "nterm": "zed"
+    }
+  },
+  "name": "Lab fixture role"
+}

@@ -25,6 +25,7 @@ pub use terraphim_editor::{
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
 pub const EDITOR_JS: &str = include_str!("../../public/js/editor.js");
 pub const CHROME_JS: &str = include_str!("../../public/js/chrome.js");
+pub const INDICATORS_JS: &str = include_str!("../../public/js/indicators.js");
 pub const TOKENS_CSS: &str = include_str!("../../public/css/tokens.css");
 pub const WRITE_ON_CSS: &str = include_str!("../../public/css/write-on.css");
 
@@ -191,7 +192,13 @@ pub fn load_editor_scripts(document: &Document) {
         .unwrap()
         .append_child(&style)
         .unwrap();
-    for source in [CONFIG_JS, CHROME_JS, EDITOR_JS, TEST_HELPERS_JS] {
+    for source in [
+        CONFIG_JS,
+        CHROME_JS,
+        INDICATORS_JS,
+        EDITOR_JS,
+        TEST_HELPERS_JS,
+    ] {
         let script = document.create_element("script").unwrap();
         script.set_attribute("data-te-test", "").unwrap();
         script.set_text_content(Some(source));
