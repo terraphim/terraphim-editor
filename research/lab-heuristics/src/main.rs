@@ -38,11 +38,9 @@ fn main() {
     let out_dir = root.join("out");
     fs::create_dir_all(&out_dir).expect("create out/");
 
-    let mut all_terms = lists.style_terms.clone();
-    all_terms.extend(lists.domain_terms.iter().cloned());
     fs::write(
         out_dir.join("thesaurus.json"),
-        thesaurus_json("Lab heuristics", &all_terms),
+        thesaurus_json("Lab heuristics", &lists.thesaurus_terms()),
     )
     .unwrap();
 

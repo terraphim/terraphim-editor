@@ -12,6 +12,10 @@ license = "MIT"
 [workspace]
 
 [dependencies]
-# Same matcher and configuration that terraphim_automata::find_matches uses
-# (LeftmostLongest, ascii_case_insensitive).
-aho-corasick = "1"
+# KG matching (Aho-Corasick LeftmostLongest, ASCII case-insensitive,
+# word-boundary filtered) and KG markdown parsing are delegated to
+# terraphim_automata 1.22 from the private Terraphim registry (configured in
+# ~/.cargo/config.toml as `terraphim`, sparse index on git.terraphim.cloud).
+# Default features build for both native and wasm32-unknown-unknown.
+terraphim_automata = { version = "1.22", registry = "terraphim" }
+serde_json = "1"

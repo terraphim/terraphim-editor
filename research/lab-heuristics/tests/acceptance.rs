@@ -354,9 +354,17 @@ fn shipped_lists_load_and_compile_to_thesaurus_json() {
     }
     // every entry is at least terraphim_automata's MIN_FIND_PATTERN_LENGTH (2)
     assert!(l.style_terms.iter().all(|t| t.term.len() >= 2));
+    // The emitted JSON is exactly what terraphim_automata loads.
     let json = thesaurus_json("Lab", &l.style_terms);
-    assert!(json.contains("\"perhaps\": {\"id\": "));
-    assert!(json.contains("\"nterm\": \"lab-hedge\""));
+    let th = terraphim_automata::load_thesaurus_from_json(&json).unwrap();
+    assert_eq!(th.len(), l.style_terms.len());
+    let (_, perhaps) = (&th)
+        .into_iter()
+        .find(|(k, _)| k.as_str() == "perhaps")
+        .expect("perhaps in thesaurus");
+    assert_eq!(perhaps.value.as_str(), "lab-hedge");
+    // Deterministic: same input, same bytes.
+    assert_eq!(json, thesaurus_json("Lab", &l.style_terms));
 }
 
 #[test]

@@ -8,10 +8,12 @@
 //! ever rewritten: the UI fades the spans (ghost treatment, R-5.1) and
 //! "Make the cuts" deletes them verbatim.
 
-use aho_corasick::{AhoCorasick, MatchKind};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+use terraphim_automata::{
+    load_thesaurus_from_json, parse_markdown_directives_str, CompiledMatcher, MatcherOptions,
+};
 
 /// Trim levels from R-8.3: (label, target fraction of words to cut).
 pub const LEVELS: [(&str, f64); 4] = [
@@ -94,6 +96,17 @@ pub fn target_words(total_words: usize, fraction: f64) -> usize {
 }
 
 // ---------------------------------------------------------------- KG
+//
+// Matching is delegated to `terraphim_automata`: the KG markdown is parsed
+// with its portable `parse_markdown_directives_str`, the thesaurus is loaded
+// with `load_thesaurus_from_json`, and a `CompiledMatcher` (Aho-Corasick,
+// LeftmostLongest, ASCII case-insensitive, word-boundary filtered) is built
+// once per list and reused for every query. Nothing here re-implements the
+// automaton, overlap resolution or the boundary rule.
+
+/// `terraphim_automata`'s minimum pattern length (`MatcherBuilder` rejects
+/// shorter patterns, so they are dropped while loading the lists).
+const MIN_PATTERN_LENGTH: usize = terraphim_automata::compiled::DEFAULT_MIN_PATTERN_LENGTH;
 
 /// One thesaurus entry: a surface term and the concept (file stem) it maps to.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -102,32 +115,26 @@ pub struct Term {
     pub concept: String,
 }
 
-/// Parse a Terraphim KG markdown file (`synonyms:: a, b, c`).
+/// Parse a Terraphim KG markdown file (`synonyms:: a, b, c`) with
+/// `terraphim_automata::parse_markdown_directives_str`.
 /// `include_name` mirrors the terraphim_automata builder, which also adds the
 /// concept name itself as a pattern.
 pub fn parse_kg_markdown(concept: &str, md: &str, include_name: bool) -> Vec<Term> {
-    let mut out = Vec::new();
-    if include_name {
-        out.push(Term {
-            term: concept.to_lowercase(),
+    let parsed = parse_markdown_directives_str(concept, md);
+    let synonyms = parsed
+        .directives
+        .get(concept)
+        .map(|d| d.synonyms.clone())
+        .unwrap_or_default();
+    let name = include_name.then(|| concept.to_lowercase());
+    name.into_iter()
+        .chain(synonyms.into_iter().map(|s| s.to_lowercase()))
+        .filter(|s| s.len() >= MIN_PATTERN_LENGTH)
+        .map(|term| Term {
+            term,
             concept: concept.to_string(),
-        });
-    }
-    for line in md.lines() {
-        let t = line.trim();
-        if t.to_lowercase().starts_with("synonyms::") {
-            for s in t["synonyms::".len()..].split(',') {
-                let s = s.trim().to_lowercase();
-                if s.len() >= 2 {
-                    out.push(Term {
-                        term: s,
-                        concept: concept.to_string(),
-                    });
-                }
-            }
-        }
-    }
-    out
+        })
+        .collect()
 }
 
 /// Load every `*.md` in `dir` (non-recursive), sorted by file name.
@@ -147,31 +154,42 @@ pub fn load_kg_dir(dir: &Path, include_name: bool) -> Vec<Term> {
     out
 }
 
-/// Emit the terms in the terraphim thesaurus JSON shape
-/// `{"name": .., "data": {term: {"id": n, "nterm": concept}}}`.
-pub fn thesaurus_json(name: &str, terms: &[Term]) -> String {
-    let mut ids: BTreeMap<&str, usize> = BTreeMap::new();
+/// Thesaurus content for prose: curly apostrophes (Gutenberg, smart quotes)
+/// must match the ASCII apostrophes in the lists, so both spellings become
+/// thesaurus keys for the same concept. This is data, not matcher logic.
+fn with_apostrophe_variants(terms: &[Term]) -> Vec<Term> {
+    let mut out = Vec::with_capacity(terms.len());
     for t in terms {
-        let next = 100 + ids.len();
+        out.push(t.clone());
+        if t.term.contains('\'') {
+            out.push(Term {
+                term: t.term.replace('\'', "\u{2019}"),
+                concept: t.concept.clone(),
+            });
+        }
+    }
+    out
+}
+
+/// Emit the terms in the terraphim thesaurus JSON shape
+/// `{"name": .., "data": {term: {"id": n, "nterm": concept}}}`, with sorted
+/// keys so the artefact is deterministic. Concept ids start at 100 in order
+/// of first appearance; a term listed under two concepts keeps the first.
+pub fn thesaurus_json(name: &str, terms: &[Term]) -> String {
+    let mut ids: BTreeMap<&str, u64> = BTreeMap::new();
+    for t in terms {
+        let next = 100 + ids.len() as u64;
         ids.entry(t.concept.as_str()).or_insert(next);
     }
-    let mut data: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut data: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
     for t in terms {
-        data.entry(t.term.as_str()).or_insert(t.concept.as_str());
+        data.entry(t.term.as_str()).or_insert_with(
+            || serde_json::json!({"id": ids[t.concept.as_str()], "nterm": t.concept}),
+        );
     }
-    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-    let mut s = format!("{{\n  \"name\": \"{}\",\n  \"data\": {{\n", esc(name));
-    let n = data.len();
-    for (i, (term, concept)) in data.iter().enumerate() {
-        s.push_str(&format!(
-            "    \"{}\": {{\"id\": {}, \"nterm\": \"{}\"}}{}\n",
-            esc(term),
-            ids[concept],
-            esc(concept),
-            if i + 1 < n { "," } else { "" }
-        ));
-    }
-    s.push_str("  }\n}\n");
+    let doc = serde_json::json!({"name": name, "data": data});
+    let mut s = serde_json::to_string_pretty(&doc).expect("thesaurus JSON serialises");
+    s.push('\n');
     s
 }
 
@@ -183,62 +201,39 @@ pub struct Hit {
     pub concept: String,
 }
 
-/// Aho-Corasick matcher configured exactly like
-/// `terraphim_automata::find_matches` (LeftmostLongest,
-/// ascii_case_insensitive), plus the word-boundary post-filter that
-/// `find_matches` lacks (without it `very` matches inside `every`).
+/// A compiled `terraphim_automata` matcher over one KG list.
 pub struct Matcher {
-    ac: AhoCorasick,
-    terms: Vec<Term>,
+    compiled: CompiledMatcher,
 }
 
 impl Matcher {
+    /// Build the thesaurus JSON, load it with `load_thesaurus_from_json` and
+    /// compile it once. The JSON is exactly what `out/thesaurus.json` ships.
     pub fn new(terms: &[Term]) -> Matcher {
-        // Curly apostrophes in prose (Gutenberg, smart quotes) must match the
-        // ASCII apostrophes in the lists, so add both spellings.
-        let mut all: BTreeSet<Term> = BTreeSet::new();
-        for t in terms {
-            all.insert(t.clone());
-            if t.term.contains('\'') {
-                all.insert(Term {
-                    term: t.term.replace('\'', "\u{2019}"),
-                    concept: t.concept.clone(),
-                });
-            }
-        }
-        let terms: Vec<Term> = all.into_iter().collect();
-        let ac = AhoCorasick::builder()
-            .match_kind(MatchKind::LeftmostLongest)
-            .ascii_case_insensitive(true)
-            .build(terms.iter().map(|t| t.term.as_str()))
-            .expect("automaton");
-        Matcher { ac, terms }
+        let json = thesaurus_json("Lab heuristics", &with_apostrophe_variants(terms));
+        let thesaurus = load_thesaurus_from_json(&json).expect("valid thesaurus JSON");
+        let compiled = CompiledMatcher::from_thesaurus(&thesaurus, MatcherOptions::default())
+            .expect("KG terms compile");
+        Matcher { compiled }
     }
 
+    /// Positioned, non-overlapping (leftmost-longest), word-boundary-filtered
+    /// matches, in text order.
     pub fn find(&self, text: &str) -> Vec<Hit> {
-        let mut out = Vec::new();
-        for m in self.ac.find_iter(text) {
-            let before_ok = text[..m.start()]
-                .chars()
-                .next_back()
-                .map(|c| !is_word_char(c))
-                .unwrap_or(true);
-            let after_ok = text[m.end()..]
-                .chars()
-                .next()
-                .map(|c| !is_word_char(c))
-                .unwrap_or(true);
-            if before_ok && after_ok {
-                let t = &self.terms[m.pattern().as_usize()];
-                out.push(Hit {
-                    start: m.start(),
-                    end: m.end(),
-                    term: t.term.clone(),
-                    concept: t.concept.clone(),
-                });
-            }
-        }
-        out
+        self.compiled
+            .find_matches(text, true)
+            .expect("CompiledMatcher::find_matches does not fail")
+            .into_iter()
+            .filter_map(|m| {
+                let (start, end) = m.pos?;
+                Some(Hit {
+                    start,
+                    end,
+                    term: m.term,
+                    concept: m.normalized_term.value.as_str().to_string(),
+                })
+            })
+            .collect()
     }
 }
 
@@ -264,6 +259,14 @@ impl Lists {
             style_terms,
             domain_terms,
         }
+    }
+
+    /// Every thesaurus key the matchers were compiled from (style and domain,
+    /// including apostrophe variants), for `out/thesaurus.json`.
+    pub fn thesaurus_terms(&self) -> Vec<Term> {
+        let mut all = with_apostrophe_variants(&self.style_terms);
+        all.extend(with_apostrophe_variants(&self.domain_terms));
+        all
     }
 }
 
