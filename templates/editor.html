@@ -12,7 +12,7 @@
           </sl-button>
         </sl-button-group>
       </div>
-      <textarea class="markdown-input" placeholder="Enter markdown here...">{{ initial_content }}</textarea>
+      <div class="markdown-input" contenteditable="plaintext-only" role="textbox" aria-multiline="true" aria-label="Markdown source" aria-placeholder="Enter markdown here..." data-placeholder="Enter markdown here..." spellcheck="false">{{ initial_content }}</div>
     </div>
     <div slot="end">
       <div class="markdown-preview">{{ initial_preview|safe }}</div>
@@ -49,5 +49,21 @@
 
   sl-divider {
     margin: 0.5rem 0;
+  }
+
+  /* Structural rules for the contenteditable editing surface: newlines are
+     literal characters in text nodes, so whitespace must be preserved. */
+  .markdown-input {
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+    contain: layout paint;
+  }
+
+  .markdown-input:empty::before {
+    content: attr(data-placeholder);
+    opacity: 0.5;
+    pointer-events: none;
   }
 </style>
