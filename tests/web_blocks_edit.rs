@@ -365,7 +365,7 @@ async fn test_escape_keeps_typed_drafts() {
           const ret = ed.destroy();
           document.removeEventListener('te:blocks-drafts', on);
           const want = JSON.stringify([{ value: 'new para', originalText: '', anchor: 5, index: 1, isNew: true }]);
-          if (JSON.stringify(ret) !== want) out.push('destroy returned ' + JSON.stringify(ret));
+          if (JSON.stringify(ret) !== JSON.stringify(JSON.parse(want).map((d) => ({ kind: 'block', ...d })))) out.push('destroy returned ' + JSON.stringify(ret));
           if (events.length !== 1 || JSON.stringify(events[0]) !== want) out.push('event ' + JSON.stringify(events));
           if (s.getText() !== T.doc) out.push('teardown changed the document');
           const fresh = new MarkdownEditor(window.EditorConfig);

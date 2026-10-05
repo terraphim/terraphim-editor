@@ -96,7 +96,8 @@ The menu and ghosting work in **both plain and Write_On mode**. The spec describ
 |---|---|---|
 | Ctrl+/ | Ghost it / Revive (implemented) | `config.js` and `editor_config.toml` bind only Ctrl+B/I/K/L/H. The command palette opens on `/` only without Ctrl. The surface takes only Ctrl/Cmd+Z/Y. No browser binding was found for Ctrl+/ in page content. Matched by `key === '/'`, or by `code === 'Slash'` without Shift. Shift is ignored when the `/` key itself arrives, because some layouts (for example German, Shift+7) need Shift to type `/`. |
 | Cmd+/ | not handled | Ctrl is not aliased to Cmd: Safari binds Cmd+/ to the status bar, and macOS browsers bind Cmd+Shift+A and Cmd+Shift+G. A browser test checks that Cmd+/ is left alone. |
-| Ctrl+Shift+A, Ctrl+Shift+G | hidden until #10, #13 register them | `MarkdownEditor.setupShortcuts` matches config shortcuts as `ctrl+<key>` and **ignores Shift**. A future `ctrl+a`, `ctrl+g` or `ctrl+x` entry in `config.js` would therefore also fire on the R-7.3 Ctrl+Shift item; avoid those keys or make that matcher Shift-aware. |
+| Ctrl+Shift+A | Alternatives for selection (#10) | Always available while the document model is, so it is always cancelled in the editor; see [alternatives-panel.md](alternatives-panel.md). |
+| Ctrl+Shift+G | hidden until #13 registers it | `MarkdownEditor.setupShortcuts` matches config shortcuts as `ctrl+<key>` and **ignores Shift**. A future `ctrl+a`, `ctrl+g` or `ctrl+x` entry in `config.js` would therefore also fire on the R-7.3 Ctrl+Shift item; avoid those keys or make that matcher Shift-aware. |
 | Ctrl+Shift+X | Stash this in Overflow (#12), Write_On mode only | Registered by `public/js/overflow.js`; `preventDefault` on keydown when handled. Firefox's text-direction switch on Ctrl+Shift+X (Windows and Linux) has not been verified against this. |
 | Menu key, Shift+F10 | opens the menu when an item is available | otherwise the browser's own menu |
 

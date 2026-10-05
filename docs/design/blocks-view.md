@@ -242,7 +242,8 @@ change the document, because the host may already have saved it. It:
    from the surface root, with `detail: { editor, drafts }`, before any DOM
    is removed;
 3. removes its DOM and returns the array. `MarkdownEditor.destroy()` returns
-   it too.
+   these drafts too, each tagged `kind: 'block'`, together with any
+   alternatives-panel drafts tagged `kind: 'alternative'` (issue #10).
 
 With nothing pending there is no event and the returned array is empty. A
 second `destroy()` returns `[]`. A host can call `editor.blocks.pendingDrafts()`

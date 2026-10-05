@@ -1,0 +1,230 @@
+/*
+ * The alternatives side panel (issue #10, spec R-4.1 to R-4.4, section 10)
+ * ========================================================================
+ *
+ * Consumes the design tokens from tokens.css; the panel adds only its own
+ * geometry and the dim level of the text behind it, defined once here:
+ *
+ *   --te-alt-panel-width   about 330px at a 1140px window (R-4.1: ~29%)
+ *   --te-alt-dim-opacity   the main text while the panel is open (R-4.1)
+ *
+ * The DOM is built by public/js/alternatives-panel.js. The panel is fixed to
+ * the left edge; on windows wide enough, the writing column moves right so
+ * the panel never covers it, and it stays centred when there is room.
+ */
+
+:root {
+    --te-alt-panel-width: clamp(16rem, 29vw, 22rem);
+    --te-alt-dim-opacity: 0.7;
+}
+
+.te-alt-panel[hidden] {
+    display: none !important;
+}
+
+.te-alt-panel {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    box-sizing: border-box;
+    width: var(--te-alt-panel-width);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem 1.25rem 1.25rem;
+    background-color: var(--te-color-panel);
+    border-right: 1px solid var(--te-color-panel-border);
+    color: var(--te-color-text);
+    font-family: var(--te-font-mono);
+    font-size: 0.9375rem;
+    line-height: var(--te-line-height);
+    color-scheme: dark;
+    overflow-y: auto;
+}
+
+/* ---- Tabs (R-4.2): cursive, active lavender, the others cream ---- */
+
+.te-alt-tabs {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.te-alt-tab {
+    margin: 0;
+    padding: 0 0.125rem;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--te-color-text);
+    font-family: var(--te-font-display);
+    font-size: 1.3125rem;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.te-alt-tab:hover {
+    color: var(--te-color-accent);
+}
+
+.te-alt-tab.te-alt-tab--active,
+.te-alt-tab[aria-selected="true"] {
+    color: var(--te-color-accent);
+}
+
+.te-alt-tab:focus-visible,
+.te-alt-delete:focus-visible {
+    outline: 2px solid var(--te-color-accent);
+    outline-offset: 2px;
+}
+
+/* ---- Status and hint ---- */
+
+.te-alt-status {
+    margin: 0 0 0.75rem;
+    color: var(--te-color-text-dim);
+    font-size: 0.8125rem;
+}
+
+.te-alt-hint {
+    margin: auto 0 0;
+    padding-top: 1rem;
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+}
+
+/* ---- Lines (R-4.3, R-4.4) ---- */
+
+.te-alt-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.te-alt-list[hidden] {
+    display: none;
+}
+
+.te-alt-line {
+    display: grid;
+    grid-template-columns: 1.25rem 1fr auto;
+    align-items: center;
+    column-gap: 0.25rem;
+    border-radius: 4px;
+}
+
+.te-alt-glyph {
+    justify-self: center;
+    color: var(--te-color-text-dim);
+}
+
+/* The author's dot is small ("bullet point"); the robot is a touch larger. */
+.te-alt-glyph--human {
+    font-size: 0.3125rem;
+}
+
+.te-alt-glyph--ai {
+    font-size: 0.75rem;
+}
+
+.te-alt-glyph--new {
+    font-size: 0.625rem;
+    opacity: 0.6;
+}
+
+.te-alt-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 0.125rem 0.25rem;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    background: transparent;
+    /* Inactive lines sit back; the active one is brighter (R-4.4). */
+    color: var(--te-color-text-dim);
+    font: inherit;
+    caret-color: var(--te-color-accent);
+}
+
+.te-alt-input:focus {
+    outline: none;
+    border-bottom-color: var(--te-color-accent-soft);
+}
+
+.te-alt-input:focus-visible {
+    border-bottom-color: var(--te-color-accent);
+}
+
+.te-alt-input[readonly] {
+    cursor: default;
+}
+
+.te-alt-input::placeholder {
+    color: var(--te-color-text-dim);
+    opacity: 0.7;
+}
+
+.te-alt-line--active .te-alt-input {
+    color: var(--te-color-text);
+    font-weight: 700;
+}
+
+.te-alt-line--active .te-alt-glyph {
+    color: var(--te-color-accent);
+}
+
+.te-alt-line:hover:not(.te-alt-line--new) {
+    background-color: var(--te-color-popover-hover);
+}
+
+.te-alt-delete {
+    margin: 0;
+    padding: 0 0.375rem;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+    cursor: pointer;
+    visibility: hidden;
+}
+
+.te-alt-line:hover .te-alt-delete,
+.te-alt-line:focus-within .te-alt-delete {
+    visibility: visible;
+}
+
+.te-alt-delete:hover {
+    color: var(--te-color-text);
+}
+
+/* ---- The writing surface while the panel is open (R-4.1) ---- */
+
+.te-alt-open .markdown-input.te-surface {
+    opacity: var(--te-alt-dim-opacity);
+    transition: opacity 160ms ease-out;
+}
+
+@media (min-width: 48rem) {
+    body[data-mode="write-on"] .te-alt-open .markdown-input.te-surface {
+        margin-left: max(
+            calc(var(--te-alt-panel-width) + 1rem),
+            calc((100% - var(--te-measure) - 3rem) / 2)
+        );
+        margin-right: auto;
+    }
+}
+
+@media (max-width: 47.99rem) {
+    .te-alt-panel {
+        width: min(100vw, 22rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .te-alt-open .markdown-input.te-surface {
+        transition: none;
+    }
+}
