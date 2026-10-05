@@ -105,11 +105,11 @@ Summary: §2, §6, §8.2/8.3/8.5–8.7 and §9 carry over in full. The context m
 
 ## Provider path
 
-Unlike Zed, Sublime has no extension sandbox, so the engine can run in-process. The `terraphim-automata` 1.0.0 wheel on PyPI is `cp39-abi3-macosx_11_0_arm64`. It uses Python's stable ABI, so it loads in the 3.14 plugin host. It provides `load_thesaurus`, `build_index`, `find_all_matches` and the `AutocompleteIndex` class, which is enough for thesaurus alternatives (R-8.6) and the KG-list marks (R-8.2). This repeats the approach in `editors_research/editor_autocomplete_integration_options.md`.
+Unlike Zed, Sublime has no extension sandbox, so the engine can run in-process. The `terraphim-automata` 1.0.0 wheel on PyPI is `cp39-abi3-macosx_11_0_arm64`. It uses Python's stable ABI, so it loads in the 3.14 plugin host. It provides `load_thesaurus`, `build_index`, `find_all_matches` and the `AutocompleteIndex` class, which is enough for thesaurus alternatives (R-8.6) and the KG-list marks (R-8.2). This repeats the approach in `editor_autocomplete_integration_options.md` (in the sibling `editors_research` directory, outside this repository).
 
-Caveats: only a macOS arm64 wheel was confirmed. Other platforms need their own wheels, vendored into the package because Package Control does not install arbitrary PyPI wheels.
+Caveats: the 1.0.0 wheel is evidence that a Python binding works, not the current engine: the Rust crate is now `terraphim_automata` 2.1 (overlap mode, allocation-free positions), so a rebuilt 2.x binding would be needed for the re-anchoring features. Only a macOS arm64 wheel was confirmed. Other platforms need their own wheels, vendored into the package because Package Control does not install arbitrary PyPI wheels.
 
-The **span model must not be rewritten in Python.** Re-anchoring, the a/an rule, the trim/ghost span set and the annotation block format belong in `terraphim_alternatives` (`terraphim/terraphim-editor#2`). The Sublime package should reach it in one of two ways:
+The **span model must not be rewritten in Python.** Under the current plan (`zed-plugin-fit.md`, "Shared model"), KG spans and their alternatives come from the `terraphim_lsp` core (`terraphim/terraphim-ai#3409`, KG synonyms from `terraphim/terraphim-core#75`), and `terraphim_alternatives` (`terraphim/terraphim-editor#2`) owns only the non-KG state: human-written alternatives, ghost ranges, overflow, the a/an rule, re-anchoring of those spans and ghosts, and the annotation block format. The Sublime package should reach them in one of two ways:
 
 - **(a) via `terraphim_lsp` and the `LSP` package (sublimelsp).** Marks become diagnostics and alternatives become code actions, the same server work as `terraphim/terraphim-ai#3409`. The Python package then only does the UI that LSP cannot (dots, panes, context menu).
 - **(b) via a small Python binding** of `terraphim_alternatives`, built as an abi3 wheel like `terraphim_automata_py`.
