@@ -4,10 +4,13 @@
 mkdir -p dist
 
 # Copy and minify JS files
-terser public/js/config.js public/js/editor.js public/js/terraphim-editor.js -o dist/terraphim-editor.min.js
+# Order matters: config, then the Write_On chrome, then the editor that
+# instantiates it, then the embeddable wrapper.
+terser public/js/config.js public/js/chrome.js public/js/editor.js public/js/terraphim-editor.js -o dist/terraphim-editor.min.js
 
 # Copy and minify CSS
-cleancss public/styles.css -o dist/terraphim-editor.min.css
+# Design tokens before the Write_On layout and chrome that consume them.
+cleancss public/styles.css public/css/tokens.css public/css/write-on.css -o dist/terraphim-editor.min.css
 
 # Create example usage file
 cat > dist/example.html << EOL
@@ -15,6 +18,7 @@ cat > dist/example.html << EOL
 <html>
 <head>
   <title>Terraphim Editor Example</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="terraphim-editor.min.css">
 </head>
 <body>
@@ -28,4 +32,4 @@ cat > dist/example.html << EOL
   </script>
 </body>
 </html>
-EOL 
+EOL
