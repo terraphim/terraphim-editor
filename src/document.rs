@@ -900,10 +900,364 @@ pub fn move_document_range(start: u32, end: u32, to: u32) -> Result<JsValue, JsV
 // End of moving text (issue #44).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// In-place cycling of alternatives (issue #9). Kept in one block, apart from
+// the other exports, so parallel additions to this file merge cleanly.
+// ---------------------------------------------------------------------------
+
+/// The one text edit a swap made to the body, in UTF-16 code units of the
+/// pre-swap body: `deleted_text` at `start` was replaced by `inserted_text`.
+/// It covers the a/an fix-up (if any) and the span text as one contiguous
+/// region; everything before and after it is unchanged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwapEdit {
+    /// Start of the replaced region (UTF-16).
+    pub start: usize,
+    /// The body text the swap removed.
+    pub deleted_text: String,
+    /// The body text the swap inserted.
+    pub inserted_text: String,
+}
+
+/// Outcome of [`DocumentSession::set_active`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwapOutcome {
+    /// The span swapped.
+    pub span: String,
+    /// The previously active alternative.
+    pub from: usize,
+    /// The newly active alternative.
+    pub to: usize,
+    /// The text edit made, or `None` when `to` was already active.
+    pub edit: Option<SwapEdit>,
+    /// The span's range after the call (UTF-16, `start..end`).
+    pub range: (usize, usize),
+    /// The usual bookkeeping. A swap never detaches anything, so `detached`
+    /// is empty and `warning` is `None`.
+    pub outcome: EditOutcome,
+}
+
+impl SwapOutcome {
+    /// `{ span, from, to, edit, range, detached, reattached, setAside,
+    /// warning, notice }` for JavaScript; `edit` is `{ start, deletedLength,
+    /// deletedText, insertedText }` (UTF-16) or `null`, and `range` is
+    /// `{ start, end }`.
+    pub fn to_json(&self) -> Value {
+        let mut value = self.outcome.to_json();
+        let edit = self.edit.as_ref().map(|e| {
+            json!({
+                "start": e.start,
+                "deletedLength": utf16_len(&e.deleted_text),
+                "deletedText": e.deleted_text,
+                "insertedText": e.inserted_text,
+            })
+        });
+        if let Value::Object(map) = &mut value {
+            map.insert("span".into(), json!(self.span));
+            map.insert("from".into(), json!(self.from));
+            map.insert("to".into(), json!(self.to));
+            map.insert("edit".into(), json!(edit));
+            map.insert(
+                "range".into(),
+                json!({ "start": self.range.0, "end": self.range.1 }),
+            );
+        }
+        value
+    }
+}
+
+impl DocumentSession {
+    /// Makes alternative `index` of span `id` active through
+    /// [`Document::set_active`], which swaps the span's text, applies the
+    /// a/an fix-up to an immediately preceding article (R-2.6) and refreshes
+    /// the anchors' context. Returns the exact text edit it made, so the
+    /// editing surface can apply the same change without mirroring it back.
+    ///
+    /// Atomic: an unknown id, an invalid index or a stale anchor returns the
+    /// crate's error and changes nothing. Making the active alternative
+    /// active again is a no-op (`edit` is `None` and the article is left
+    /// alone). Set-aside hints after the edit shift, and set-aside items
+    /// whose text is back are re-attached, as for
+    /// [`apply_edit`](Self::apply_edit).
+    pub fn set_active(&mut self, id: &str, index: usize) -> Result<SwapOutcome, EditError> {
+        let span = self
+            .doc
+            .annotations
+            .spans
+            .iter()
+            .find(|s| s.id == id)
+            .ok_or_else(|| EditError::UnknownSpan(id.to_string()))?;
+        if index >= span.alts.len() {
+            return Err(EditError::InvalidIndex {
+                id: id.to_string(),
+                index,
+            });
+        }
+        let from = span.active;
+        let (old_start, old_end) = (span.anchor.start, span.anchor.end);
+        let mut swap = SwapOutcome {
+            span: id.to_string(),
+            from,
+            to: index,
+            edit: None,
+            range: (old_start, old_end),
+            outcome: EditOutcome::default(),
+        };
+        if index != from {
+            let old_body = self.doc.body.clone();
+            self.doc.set_active(id, index)?;
+            let edit = swap_edit(&self.doc, id, &old_body, old_start, old_end);
+            let start = edit.start;
+            let end = start + utf16_len(&edit.deleted_text);
+            let inserted = utf16_len(&edit.inserted_text);
+            self.set_aside.shift_hints(start, end, &edit.inserted_text);
+            swap.outcome.reattached = self.reattach(Some((start, start + inserted)));
+            swap.edit = Some(edit);
+            // The span's new text ends where the edit's inserted text ends.
+            let len = self
+                .doc
+                .annotations
+                .spans
+                .iter()
+                .find(|s| s.id == id)
+                .map_or(0, |s| s.anchor.end - s.anchor.start);
+            swap.range = (start + inserted - len, start + inserted);
+        }
+        swap.outcome.set_aside = self.set_aside.len();
+        swap.outcome.notice = self.set_aside_notice();
+        Ok(swap)
+    }
+}
+
+/// The single edit that turned `old_body` (span `id` at `old_start..old_end`,
+/// UTF-16) into `doc.body` after a successful [`Document::set_active`]. Only
+/// an article before the span and the span itself can have changed, so the
+/// bodies agree up to the first difference (at most the span start) and
+/// after the span.
+fn swap_edit(
+    doc: &Document,
+    id: &str,
+    old_body: &str,
+    old_start: usize,
+    old_end: usize,
+) -> SwapEdit {
+    let anchor = &doc
+        .annotations
+        .spans
+        .iter()
+        .find(|s| s.id == id)
+        .expect("set_active keeps the span")
+        .anchor;
+    let body = &doc.body;
+    // set_active checked the old anchor and wrote the new one, so all four
+    // offsets fall on character boundaries.
+    let old_span_byte = utf16_to_byte(old_body, old_start).expect("checked anchor");
+    let old_end_byte = utf16_to_byte(old_body, old_end).expect("checked anchor");
+    let new_span_byte = utf16_to_byte(body, anchor.start).expect("fresh anchor");
+    let new_end_byte = utf16_to_byte(body, anchor.end).expect("fresh anchor");
+    let cap = old_span_byte.min(new_span_byte);
+    let mut prefix = old_body
+        .bytes()
+        .zip(body.bytes())
+        .take(cap)
+        .take_while(|(a, b)| a == b)
+        .count();
+    while !old_body.is_char_boundary(prefix) || !body.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    SwapEdit {
+        start: utf16_len(&old_body[..prefix]),
+        deleted_text: old_body[prefix..old_end_byte].to_string(),
+        inserted_text: body[prefix..new_end_byte].to_string(),
+    }
+}
+
+/// Makes alternative `index` of span `span_id` active (R-2.4): the span's
+/// text is swapped and a preceding "a"/"an" fixed up (R-2.6) in the model.
+/// Returns `{ span, from, to, edit, range, detached, reattached, setAside,
+/// warning, notice }`, where `edit` (`{ start, deletedLength, deletedText,
+/// insertedText }` in UTF-16 code units, or `null` when `index` was already
+/// active) is the exact change made to the body and `range` (`{ start, end }`)
+/// is the span's text afterwards. Throws, changing nothing,
+/// for an unknown span, an invalid index or a stale anchor.
+///
+/// `MarkdownEditor.swapAlternative` calls this and then applies `edit` to
+/// the editing surface without mirroring it through [`apply_edit`].
+#[wasm_bindgen]
+pub fn set_active_alternative(span_id: &str, index: u32) -> Result<JsValue, JsValue> {
+    with_session(|s| s.set_active(span_id, index as usize))
+        .map(|outcome| to_js(&outcome.to_json()))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// End of in-place cycling (issue #9).
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use terraphim_alternatives::{Source, SpanKind};
+
+    // ----- in-place cycling (issue #9) --------------------------------------
+
+    /// "Pass me a paperclip. Drop this." with span `s1` over "paperclip"
+    /// (alternatives "eraser", "thumbtack") and a ghost over " Drop this.".
+    fn cycling_source() -> String {
+        let mut doc = Document::new("Pass me a paperclip. Drop this.");
+        let id = doc.add_span(SpanKind::Word, 10, 19).unwrap();
+        doc.add_alternative(&id, "eraser", Source::Human, None)
+            .unwrap();
+        doc.add_alternative(&id, "thumbtack", Source::Human, None)
+            .unwrap();
+        doc.ghost(20, 31).unwrap();
+        write(&doc)
+    }
+
+    /// Applies a swap edit to `text`, checking the deleted text matches.
+    fn apply_swap_edit(text: &str, edit: &SwapEdit) -> String {
+        let start = utf16_to_byte(text, edit.start).unwrap();
+        let end = start + edit.deleted_text.len();
+        assert_eq!(&text[start..end], edit.deleted_text);
+        format!("{}{}{}", &text[..start], edit.inserted_text, &text[end..])
+    }
+
+    #[test]
+    fn swap_returns_the_exact_edit_and_fixes_the_article() {
+        let mut session = DocumentSession::new();
+        session.open(&cycling_source());
+        let mut text = session.body().to_string();
+
+        // a paperclip -> an eraser: one edit covering the article and span.
+        let swap = session.set_active("s1", 1).unwrap();
+        assert_eq!((swap.span.as_str(), swap.from, swap.to), ("s1", 0, 1));
+        let edit = swap.edit.clone().unwrap();
+        assert_eq!(edit.start, 9, "the edit starts after the shared 'a'");
+        assert_eq!(edit.deleted_text, " paperclip");
+        assert_eq!(edit.inserted_text, "n eraser");
+        text = apply_swap_edit(&text, &edit);
+        assert_eq!(text, "Pass me an eraser. Drop this.");
+        assert_eq!(session.body(), text);
+        assert_eq!(swap.outcome, EditOutcome::default());
+        assert_eq!(swap.range, (11, 17));
+
+        // an eraser -> a thumbtack, then wrap back to the original.
+        let edit = session.set_active("s1", 2).unwrap().edit.unwrap();
+        text = apply_swap_edit(&text, &edit);
+        assert_eq!(text, "Pass me a thumbtack. Drop this.");
+        let edit = session.set_active("s1", 0).unwrap().edit.unwrap();
+        text = apply_swap_edit(&text, &edit);
+        assert_eq!(text, "Pass me a paperclip. Drop this.");
+        assert_eq!(session.body(), text);
+
+        // Back where it started: the saved file is the original one.
+        assert_eq!(session.save(), cycling_source());
+    }
+
+    #[test]
+    fn swap_refreshes_context_and_moves_the_ghost() {
+        let mut session = DocumentSession::new();
+        session.open(&cycling_source());
+        session.set_active("s1", 1).unwrap();
+        let doc = session.document();
+        let span = &doc.annotations.spans[0];
+        assert_eq!(span.active, 1);
+        assert_eq!(
+            (
+                span.anchor.start,
+                span.anchor.end,
+                span.anchor.text.as_str()
+            ),
+            (11, 17, "eraser")
+        );
+        assert_eq!(span.anchor.before.as_deref(), Some("Pass me an "));
+        assert_eq!(span.anchor.after.as_deref(), Some(". Drop this."));
+        let ghost = &doc.annotations.ghosts[0];
+        assert_eq!(
+            (ghost.anchor.start, ghost.anchor.text.as_str()),
+            (18, " Drop this.")
+        );
+        // The saved file reopens with the chosen alternative active.
+        let mut reopened = DocumentSession::new();
+        let opened = reopened.open(&session.save());
+        assert_eq!(opened.unresolved, 0);
+        assert_eq!(opened.body, "Pass me an eraser. Drop this.");
+        assert_eq!(reopened.document().annotations.spans[0].active, 1);
+        assert_eq!(reopened.export(), "Pass me an eraser.");
+    }
+
+    #[test]
+    fn a_refused_swap_changes_nothing() {
+        let mut session = DocumentSession::new();
+        session.open(&cycling_source());
+        let before = session.clone();
+        assert_eq!(
+            session.set_active("s1", 3).unwrap_err(),
+            EditError::InvalidIndex {
+                id: "s1".into(),
+                index: 3
+            }
+        );
+        assert_eq!(
+            session.set_active("s9", 1).unwrap_err(),
+            EditError::UnknownSpan("s9".into())
+        );
+        assert_eq!(session, before);
+        // Making the active alternative active again is a quiet no-op.
+        let swap = session.set_active("s1", 0).unwrap();
+        assert_eq!(swap.edit, None);
+        assert_eq!((swap.from, swap.to), (0, 0));
+        assert_eq!(session, before);
+        // JSON shape for JavaScript.
+        let json = session.set_active("s1", 0).unwrap().to_json();
+        assert_eq!(json["edit"], Value::Null);
+        assert_eq!(json["span"], "s1");
+        let json = session.set_active("s1", 2).unwrap().to_json();
+        assert_eq!(
+            json["edit"],
+            json!({ "start": 10, "deletedLength": 9, "deletedText": "paperclip", "insertedText": "thumbtack" })
+        );
+        assert_eq!(
+            (json["from"].clone(), json["to"].clone()),
+            (json!(0), json!(2))
+        );
+        assert_eq!(json["range"], json!({ "start": 10, "end": 19 }));
+    }
+
+    #[test]
+    fn swap_offsets_are_utf16_and_set_aside_hints_follow() {
+        // A non-BMP character before the span: offsets are UTF-16 units.
+        let mut doc = Document::new("\u{1F600} a apple and a pear.");
+        let id = doc.add_span(SpanKind::Word, 5, 10).unwrap();
+        doc.add_alternative(&id, "banana", Source::Human, None)
+            .unwrap();
+        let id2 = doc.add_span(SpanKind::Word, 17, 21).unwrap();
+        doc.add_alternative(&id2, "plum", Source::Human, None)
+            .unwrap();
+        let mut session = DocumentSession::new();
+        session.open(&write(&doc));
+        // Detach s2 by typing inside it ("peXar").
+        session.apply_edit(19, 0, "X").unwrap();
+        assert_eq!(session.set_aside().spans.len(), 1);
+        let hint = session.set_aside().spans[0].anchor.start;
+
+        let swap = session.set_active("s1", 1).unwrap();
+        let edit = swap.edit.unwrap();
+        // "a apple" was ungrammatical; the fix-up follows "banana" ("a").
+        assert_eq!(edit.start, 5);
+        assert_eq!(edit.deleted_text, "apple");
+        assert_eq!(edit.inserted_text, "banana");
+        assert_eq!(session.body(), "\u{1F600} a banana and a peXar.");
+        // The hint after the swap shifted by one unit.
+        assert_eq!(session.set_aside().spans[0].anchor.start, hint + 1);
+        assert_eq!(swap.outcome.set_aside, 1);
+        assert!(swap.outcome.notice.is_some());
+        // Removing the typo where the text now is re-attaches s2.
+        let outcome = session.apply_edit(20, 1, "").unwrap();
+        assert_eq!(outcome.reattached, vec!["s2".to_string()]);
+    }
+
+    // ----- end of in-place cycling (issue #9) -------------------------------
 
     // ----- moving text (issue #44) ------------------------------------------
 

@@ -63,10 +63,18 @@
  *   the active dot uses the full accent and every indicated span carries
  *   `aria-describedby` pointing at a visually hidden description such as
  *   "Word: 7 alternatives, 5 of 7 active".
- * - Dot clicks (R-3.6, where jumping to an alternative is only inferred) do
- *   not change the document: they dispatch a bubbling, cancelable
- *   `te:dot` CustomEvent with detail { editor, spanId, index, kind, active }
- *   for the alternatives work (issue #9) to act on.
+ * - Dot clicks (R-3.6, where jumping to an alternative is only inferred)
+ *   dispatch a bubbling, cancelable `te:dot` CustomEvent with detail
+ *   { editor, spanId, index, kind, active }. Unless a listener calls
+ *   preventDefault(), the default action jumps to that alternative through
+ *   `editor.swapAlternative` (issue #9).
+ * - In-place cycling (issue #9, R-2.4, R-3.6): while the pointer is over an
+ *   indicated span's text, ArrowUp/ArrowDown (no modifiers) make the
+ *   previous/next alternative active, wrapping at either end. With the caret
+ *   (or the whole selection) inside or at the edge of an indicated span,
+ *   Alt+ArrowUp/Alt+ArrowDown do the same for keyboard users. Any other
+ *   arrow key, or an arrow with nothing hovered, is left to the browser.
+ *   Each swap is one undo step; see docs/design/cycling.md.
  *
  * Load order: after chrome.js and before editor.js, which instantiates both
  * classes in MarkdownEditor.initialize() when they exist. Full design notes:
@@ -244,21 +252,54 @@ class TeIndicatorLayer {
       else options.signal.addEventListener('abort', () => this.destroy(), { signal });
     }
 
-    this.offChange = this.surface.onChange(() => this.onSurfaceChange());
-    this.offApply = this.registry.onApply(() => this.scheduleLayout());
+    // Span id under the pointer (issue #9), with the pointer's last client
+    // coordinates. A plain arrow re-checks that the pointer is still over
+    // that span's rendered text before taking the key, so a hover left
+    // stale by typing, caret moves, scrolling or re-layout never swallows
+    // caret movement. `hoverHeld` keeps the hover across the re-render of a
+    // swap of that same span (the new text may no longer be under the
+    // pointer), until the pointer moves, the layout changes, another
+    // decoration layer re-renders, or any other change happens.
+    this.hoverSpan = null;
+    this.pointer = null;
+    this.hoverHeld = false;
+    this.surface.root.addEventListener('mouseover', (e) => this.onPointer(e), { signal });
+    this.surface.root.addEventListener('mousemove', (e) => this.onPointer(e), { signal, passive: true });
+    this.surface.root.addEventListener('mouseleave', () => this.clearHover(), { signal });
+    window.addEventListener('blur', () => this.clearHover(), { signal });
+    this.surface.root.addEventListener('keydown', (e) => this.onCycleKey(e), { signal });
+
+    this.offChange = this.surface.onChange((change) => this.onSurfaceChange(change));
+    // Any re-render the registry applies for another layer (Lab marks,
+    // ghosts, ...) can move text under a still pointer, so it ends a
+    // post-swap hold. Only this layer's own refresh keeps it (`ownApply`).
+    this.ownApply = false;
+    this.offApply = this.registry.onApply(() => {
+      if (!this.ownApply) this.hoverHeld = false;
+      this.scheduleLayout();
+    });
     document.addEventListener('te:mode-change', (e) => {
       if (!e.detail || !e.detail.editor || e.detail.editor === this.editor) {
         this.setActive(e.detail && e.detail.mode === 'write-on');
       }
     }, { signal });
-    window.addEventListener('resize', () => this.scheduleLayout(), { signal });
-    this.surface.root.addEventListener('scroll', () => this.scheduleLayout(), { signal, passive: true });
+    // Layout-only changes (resize, container reflow, late fonts) can move
+    // text under a still pointer, so they end a post-swap hold too.
+    const relayout = () => {
+      this.hoverHeld = false;
+      this.scheduleLayout();
+    };
+    window.addEventListener('resize', relayout, { signal });
+    this.surface.root.addEventListener('scroll', () => {
+      this.hoverHeld = false;
+      this.scheduleLayout();
+    }, { signal, passive: true });
     // Observed only while active, so plain mode pays nothing per keystroke.
     if (typeof ResizeObserver === 'function') {
-      this.resizeObserver = new ResizeObserver(() => this.scheduleLayout());
+      this.resizeObserver = new ResizeObserver(relayout);
     }
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => this.scheduleLayout()).catch(() => {});
+      document.fonts.ready.then(relayout).catch(() => {});
     }
 
     this.setActive(this.isWriteOn());
@@ -291,6 +332,7 @@ class TeIndicatorLayer {
       this.flush();
     } else {
       this.cancelPending();
+      this.clearHover();
       this.registry.clear(TeIndicatorLayer.LAYER);
       this.removeAllSpans();
       this.unmountOverlay();
@@ -360,8 +402,12 @@ class TeIndicatorLayer {
   // Scheduling
   // ---------------------------------------------------------------------
 
-  onSurfaceChange() {
+  onSurfaceChange(change) {
     if (!this.active) return;
+    // Only a swap of the hovered span itself keeps the hover held; after any
+    // other change the next plain arrow re-checks the pointer (issue #9).
+    const swap = change && change.edit && change.edit.swap;
+    this.hoverHeld = !!swap && this.hoverSpan !== null && String(swap.span) === this.hoverSpan;
     // Geometry follows the mapped decorations at once (next frame); the model
     // read waits for a pause in typing.
     this.scheduleLayout();
@@ -457,7 +503,12 @@ class TeIndicatorLayer {
         this.spans.delete(id);
       }
     }
-    this.registry.set(TeIndicatorLayer.LAYER, items);
+    this.ownApply = true;
+    try {
+      this.registry.set(TeIndicatorLayer.LAYER, items);
+    } finally {
+      this.ownApply = false;
+    }
     // New or rebuilt indicators start hidden; place them now even when the
     // decorations were unchanged and the surface did not re-render.
     this.layout();
@@ -562,7 +613,8 @@ class TeIndicatorLayer {
     const entry = holder && this.spans.get(holder.dataset.spanId);
     if (!entry) return;
     const index = Number(dot.dataset.index);
-    this.overlay.dispatchEvent(new CustomEvent('te:dot', {
+    const active = index === entry.activeIndex;
+    const event = new CustomEvent('te:dot', {
       bubbles: true,
       cancelable: true,
       detail: {
@@ -570,9 +622,125 @@ class TeIndicatorLayer {
         spanId: entry.id,
         index,
         kind: entry.headline ? 'headline' : entry.kind,
-        active: index === entry.activeIndex,
+        active,
       },
-    }));
+    });
+    this.overlay.dispatchEvent(event);
+    // Default action (issue #9): jump to that alternative.
+    if (!event.defaultPrevented && !active) this.jump(entry.id, index);
+  }
+
+  // ---------------------------------------------------------------------
+  // In-place cycling (issue #9)
+  // ---------------------------------------------------------------------
+
+  /** Track the pointer and the indicated span under it (its text, not its dots). */
+  onPointer(e) {
+    if (!this.active) return;
+    this.pointer = { x: e.clientX, y: e.clientY };
+    this.hoverHeld = false;
+    this.hoverSpan = this.spanOfElement(e.target);
+  }
+
+  clearHover() {
+    this.hoverSpan = null;
+    this.pointer = null;
+    this.hoverHeld = false;
+  }
+
+  /**
+   * The indicated span whose rendered text holds `el`, or null. Walks out
+   * through nested decorations (a Lab mark inside an indicated span, say).
+   */
+  spanOfElement(el) {
+    const prefix = `${TeIndicatorLayer.LAYER}:`;
+    const root = this.surface.root;
+    let node = el && el.closest ? el.closest('[data-te-decoration]') : null;
+    while (node && root.contains(node) && node !== root) {
+      const token = (node.getAttribute('data-te-decoration') || '').split(' ').find((t) => t.startsWith(prefix));
+      if (token) return token.slice(prefix.length);
+      node = node.parentElement ? node.parentElement.closest('[data-te-decoration]') : null;
+    }
+    return null;
+  }
+
+  /** The indicated span rendered under the last pointer position, or null. */
+  spanAtPointer() {
+    if (!this.pointer || typeof document.elementsFromPoint !== 'function') return null;
+    const root = this.surface.root;
+    for (const el of document.elementsFromPoint(this.pointer.x, this.pointer.y)) {
+      if (el === root || !root.contains(el)) continue;
+      const id = this.spanOfElement(el);
+      if (id !== null) return id;
+    }
+    return null;
+  }
+
+  /**
+   * The hovered span id, if it is still indicated and the pointer is still
+   * over its rendered text (or the hover is held across a swap of it).
+   * A hover that fails the check is dropped.
+   */
+  hoveredSpan() {
+    const id = this.hoverSpan;
+    if (id === null || !this.spans.has(id)) return null;
+    if (this.hoverHeld || this.spanAtPointer() === id) return id;
+    this.hoverSpan = null;
+    this.hoverHeld = false;
+    return null;
+  }
+
+  /**
+   * The indicated span holding the whole selection (a caret at either edge
+   * of the span counts as inside), or null.
+   */
+  spanAtSelection() {
+    const sel = this.surface.getSelectionOffsets();
+    const live = this.registry.current(TeIndicatorLayer.LAYER);
+    const hit = live.find((d) => d.start <= sel.start && sel.end <= d.end);
+    return hit && this.spans.has(hit.id) ? hit.id : null;
+  }
+
+  commandMenuOpen() {
+    const menu = this.editor.commandMenu;
+    return !!menu && menu.isConnected && menu.style.display !== 'none';
+  }
+
+  onCycleKey(e) {
+    if (!this.active || this.destroyed || e.isComposing) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey || this.commandMenuOpen()) return;
+    // Bring the span list up to date before choosing (a refresh may still
+    // be waiting after typing, undo or redo).
+    if (this.pending()) this.flush();
+    const id = e.altKey ? this.spanAtSelection() : this.hoveredSpan();
+    if (id === null) return;
+    e.preventDefault();
+    this.cycle(id, e.key === 'ArrowDown' ? 1 : -1);
+  }
+
+  /**
+   * Make the alternative `step` places from the active one active, wrapping
+   * at either end (ArrowDown from the last returns to the original).
+   * Returns the model outcome, or null if nothing changed.
+   */
+  cycle(spanId, step) {
+    if (this.pending()) this.flush();
+    const entry = this.spans.get(String(spanId));
+    if (!entry || entry.count < 2) return null;
+    const next = (((entry.activeIndex + step) % entry.count) + entry.count) % entry.count;
+    return this.jump(entry.id, next);
+  }
+
+  /** Make alternative `index` of `spanId` active. A refused swap changes nothing. */
+  jump(spanId, index) {
+    if (typeof this.editor.swapAlternative !== 'function') return null;
+    try {
+      return this.editor.swapAlternative(spanId, index);
+    } catch (err) {
+      console.warn('Could not swap the alternative', err);
+      return null;
+    }
   }
 }
 
