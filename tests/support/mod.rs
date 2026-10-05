@@ -23,6 +23,8 @@ pub use terraphim_editor::{
     save_document, set_preview_delay, sync_document_body, trim_make_cuts, trim_plan_json,
     trim_status, DEFAULT_PREVIEW_DELAY_MS,
 };
+// In-place cycling of alternatives (issue #9).
+pub use terraphim_editor::set_active_alternative;
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
 pub const EDITOR_JS: &str = include_str!("../../public/js/editor.js");
@@ -323,6 +325,14 @@ pub fn install_document_bindings() {
         "move_document_range",
         Closure::<dyn FnMut(u32, u32, u32) -> Result<JsValue, JsValue>>::new(move_document_range)
             .into_js_value(),
+    );
+    // In-place cycling of alternatives (issue #9).
+    install(
+        "set_active_alternative",
+        Closure::<dyn FnMut(String, u32) -> Result<JsValue, JsValue>>::new(
+            |span: String, index: u32| set_active_alternative(&span, index),
+        )
+        .into_js_value(),
     );
 }
 
