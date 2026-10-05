@@ -3,6 +3,9 @@
 //! when they meet, split on revive, re-anchored like spans, and dropped on
 //! export.
 
+mod common;
+
+use common::strip_context;
 use terraphim_alternatives::{
     Document, EditError, Ghost, Source, SpanKind, UnresolvedReason, parse, utf16_len, write,
 };
@@ -489,8 +492,10 @@ fn reanchor_reports_missing_and_ambiguous_ghosts() {
     );
     assert!(d.annotations.ghosts.is_empty());
 
+    // Without context, two occurrences away from the hint are ambiguous.
     let mut d = Document::new("the cat and the cat");
     d.ghost(16, 19).unwrap();
+    strip_context(&mut d);
     d.body.insert_str(0, "Oh, ");
     let report = d.reanchor();
     assert_eq!(
@@ -500,6 +505,15 @@ fn reanchor_reports_missing_and_ambiguous_ghosts() {
         }
     );
     assert!(report.unresolved.is_empty());
+
+    // With context (decision 2026-10-05), only the second occurrence is
+    // preceded by "the cat and the " and ends the document.
+    let mut d = Document::new("the cat and the cat");
+    d.ghost(16, 19).unwrap();
+    d.body.insert_str(0, "Oh, ");
+    let report = d.reanchor();
+    assert!(report.is_clean(), "{report:?}");
+    assert_eq!(d.annotations.ghosts[0].anchor.start, 20);
 
     // Unchanged body: hint wins, nothing moves.
     let mut d = Document::new("the cat and the cat");
@@ -511,13 +525,30 @@ fn reanchor_reports_missing_and_ambiguous_ghosts() {
 
 #[test]
 fn ghosts_sharing_text_do_not_claim_the_same_occurrence() {
+    // Without context, neither ghost can claim the one remaining "cat".
     let mut d = Document::new("x cat y cat z");
     d.ghost(2, 5).unwrap();
     d.ghost(8, 11).unwrap();
+    strip_context(&mut d);
     d.body = "x y cat z".into();
     let report = d.reanchor();
     assert_eq!(report.unresolved_ghosts.len(), 2);
     assert!(d.annotations.ghosts.is_empty());
+
+    // With context, the remaining "cat" is followed by " z", as only the
+    // second ghost's was; the first ghost is missing, not attached.
+    let mut d = Document::new("x cat y cat z");
+    d.ghost(2, 5).unwrap();
+    let second = d.ghost(8, 11).unwrap();
+    d.body = "x y cat z".into();
+    let report = d.reanchor();
+    assert_eq!(report.unresolved_ghosts.len(), 1);
+    assert_eq!(report.unresolved_ghosts[0].ghost.id, "g1");
+    assert_eq!(
+        report.unresolved_ghosts[0].reason,
+        UnresolvedReason::Missing
+    );
+    assert_eq!(ghost_view(&d), vec![(second.as_str(), 4, 7, "cat")]);
 }
 
 // ----- persistence and counts -----------------------------------------------

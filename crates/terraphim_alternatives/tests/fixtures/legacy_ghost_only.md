@@ -10,9 +10,7 @@ Only a ghost here, nothing else.
       "anchor": {
         "start": 19,
         "end": 31,
-        "text": "nothing else",
-        "before": "Only a ghost here, ",
-        "after": "."
+        "text": "nothing else"
       }
     }
   ]

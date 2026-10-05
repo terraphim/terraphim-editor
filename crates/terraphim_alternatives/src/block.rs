@@ -21,6 +21,13 @@
 //!   `overflow`. `spans` and `ghosts` are always written, even when empty;
 //!   `overflow` is omitted when empty. A block without `ghosts` reads as no
 //!   ghosts.
+//! * Each anchor is written as `start`, `end`, `text`, then the optional
+//!   context fields `before` and `after` (decision 2026-10-05: context
+//!   re-anchoring). The writer refreshes them from the body for every anchor
+//!   that still matches it. An anchor without them (a file written before
+//!   context existed) reads as having no context and is re-anchored by the
+//!   rules that applied before; a context field of the wrong type is
+//!   [`BlockErrorKind::InvalidSchema`].
 //!
 //! # Empty blocks and fenced examples
 //!
@@ -80,6 +87,7 @@ use std::collections::HashSet;
 
 use thiserror::Error;
 
+use crate::context;
 use crate::document::Document;
 use crate::model::{Anchor, Annotations, SCHEMA_VERSION, WireV1};
 
@@ -235,9 +243,17 @@ pub fn parse(source: &str) -> Result<Document, BlockError> {
 
 /// Serialises a document: the body followed by the annotation block.
 ///
+/// Every anchor that still matches the body is written with its current
+/// context ([`Anchor::before`](crate::Anchor::before),
+/// [`Anchor::after`](crate::Anchor::after)); a stale anchor is written with the
+/// context it has (none, for one loaded from a file without context).
+///
 /// Deterministic: equal documents produce identical bytes, and
 /// `parse(&write(doc)) == Ok(doc.clone())` for any document whose spans pass
-/// structural validation.
+/// structural validation and whose context is current. Context is always
+/// current after the [`Document`] operations; for a document whose `body` or
+/// `annotations` were changed directly, call
+/// [`Document::refresh_context`] first.
 pub fn write(doc: &Document) -> String {
     let body = doc.body.as_str();
     // An empty annotation set normally writes no block. If the reader would
@@ -247,7 +263,9 @@ pub fn write(doc: &Document) -> String {
     if doc.annotations.is_empty() && !needs_guard_block(body) {
         return body.to_string();
     }
-    let json = encode(&doc.annotations);
+    let mut annotations = doc.annotations.clone();
+    context::refresh_all(body, &mut annotations);
+    let json = encode(annotations);
 
     let mut out = String::with_capacity(body.len() + json.len() + 64);
     out.push_str(body);
@@ -265,12 +283,12 @@ pub fn write(doc: &Document) -> String {
 }
 
 /// The block's JSON exactly as the writer emits it, backticks escaped.
-fn encode(annotations: &Annotations) -> String {
+fn encode(annotations: Annotations) -> String {
     let wire = WireV1 {
         version: SCHEMA_VERSION,
-        spans: annotations.spans.clone(),
-        ghosts: annotations.ghosts.clone(),
-        overflow: annotations.overflow.clone(),
+        spans: annotations.spans,
+        ghosts: annotations.ghosts,
+        overflow: annotations.overflow,
     };
     serde_json::to_string_pretty(&wire)
         .expect("annotation types always serialise")
@@ -299,7 +317,7 @@ fn is_writer_guard_block(body: &str, json: &str) -> bool {
     }
     let normalised = json.replace("\r\n", "\n");
     let normalised = normalised.trim();
-    normalised == encode(&Annotations::default()) || normalised == LEGACY_GUARD_JSON
+    normalised == encode(Annotations::default()) || normalised == LEGACY_GUARD_JSON
 }
 
 fn decode(json: &str) -> Result<Annotations, BlockErrorKind> {
@@ -420,11 +438,7 @@ mod tests {
         Span {
             id: id.into(),
             kind: SpanKind::Word,
-            anchor: Anchor {
-                start: 4,
-                end: 11,
-                text: "tension".into(),
-            },
+            anchor: Anchor::new(4, 11, "tension"),
             active: 0,
             alts: vec![
                 Alternative::new("tension", Source::Original),
@@ -433,9 +447,12 @@ mod tests {
         }
     }
 
+    /// A body with a hand-built span over UTF-16 4..11. Its context is made
+    /// current, as the writer would make it, so `parse(write(d)) == d`.
     fn doc(body: &str) -> Document {
         let mut d = Document::new(body);
         d.annotations.spans.push(sample_span("s1"));
+        d.refresh_context();
         d
     }
 
@@ -536,13 +553,13 @@ mod tests {
         let mut d = doc("The tension rises.");
         d.annotations.ghosts.push(Ghost {
             id: "g1".into(),
-            anchor: Anchor {
-                start: 0,
-                end: 18,
-                text: "The tension rises.".into(),
-            },
+            anchor: Anchor::new(0, 18, "The tension rises."),
         });
         let written = write(&d);
+        // The writer stored the ghost's context; the in-memory ghost has none
+        // until it is refreshed.
+        assert_ne!(parse(&written).unwrap(), d);
+        d.refresh_context();
         let spans_at = written.find("\"spans\"").unwrap();
         let ghosts_at = written.find("\"ghosts\"").unwrap();
         assert!(spans_at < ghosts_at);
@@ -553,14 +570,11 @@ mod tests {
     fn touching_ghosts_are_accepted_and_invalid_ghosts_rejected() {
         let ghost = |id: &str, start: usize, text: &str| Ghost {
             id: id.into(),
-            anchor: Anchor {
-                start,
-                end: start + text.len(),
-                text: text.into(),
-            },
+            anchor: Anchor::new(start, start + text.len(), text),
         };
         let mut d = Document::new("abcdef");
         d.annotations.ghosts = vec![ghost("g1", 0, "abc"), ghost("g2", 3, "def")];
+        d.refresh_context();
         assert_eq!(parse(&write(&d)).unwrap(), d);
 
         d.annotations.ghosts = vec![ghost("g1", 0, "")];
@@ -573,11 +587,7 @@ mod tests {
         let mut d = doc("The tension rises.");
         d.annotations.ghosts.push(Ghost {
             id: "s1".into(),
-            anchor: Anchor {
-                start: 0,
-                end: 3,
-                text: "The".into(),
-            },
+            anchor: Anchor::new(0, 3, "The"),
         });
         let err = parse(&write(&d)).unwrap_err();
         assert_eq!(err.kind, BlockErrorKind::DuplicateId { id: "s1".into() });
@@ -703,7 +713,7 @@ mod tests {
     fn guard_constant_matches_the_writer() {
         let expected = format!(
             "{FENCE}{FENCE_INFO}\n{}\n{FENCE}\n",
-            encode(&Annotations::default())
+            encode(Annotations::default())
         );
         assert_eq!(GUARD, expected);
     }
