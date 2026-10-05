@@ -56,7 +56,7 @@ Key: **Full** = implementable as specified; **Partial** = an approximation; **No
 | Req | Feature | Sublime | How / why not |
 |---|---|---|---|
 | R-2.1 | Plain mode / Write_On toggle | Partial | Plain mode = distraction-free mode with a centred 70-column wrap. The toggle is a command or key, not a click on the word count (the status bar cannot be clicked). |
-| R-2.2, R-2.3 | Span-anchored alternatives, 3 granularities | Full | The span model lives in the plugin. Each granularity gets its own region key. |
+| R-2.2, R-2.3 | Span-anchored alternatives, 3 granularities | Full | The span model is not reimplemented in the plugin: KG spans come from the `terraphim_lsp` core and non-KG spans from `terraphim_alternatives` (see "Provider path"); the plugin only renders them, with one region key per granularity. |
 | R-2.4 | Hover + ↑/↓ cycling in place | Partial | `on_hover` records the span under the pointer, and a keymap context enables ↑/↓ only while that span is active. Sublime does not report when the pointer leaves a span, so cycling the span under the caret is more reliable. |
 | R-2.5 | Persistence | Full | Trailing fenced block (decision §12.2), written on `on_pre_save` and folded on load. |
 | R-2.6 | a/an fix-up on swap | Full | The same `TextCommand` edits the swap and the article, so one undo reverts both. |
@@ -73,7 +73,7 @@ Key: **Full** = implementable as specified; **Partial** = an approximation; **No
 | R-4.3 | Editable list, Enter adds live | Full | `on_modified` on the pane view syncs lines to the span's list. |
 | R-4.4 | Provenance markers (human dot / bot glyph) | Full | Gutter icons per line in the pane: a dot for human, a custom bot icon for AI. Tinted when active. |
 | R-4.5 | ↑/↓ in panel moves active alternative | Full | Keymap context scoped to the pane view. |
-| R-4.6 | Undo removes AI alternatives | Partial | Buffer undo works for document text. The list lives in plugin state until save, so its undo needs a small history of its own. |
+| R-4.6 | Undo removes AI alternatives | Partial | Buffer undo works for document text. The plugin holds a working copy of the list (obtained from the engine, see "Provider path") until save, so its undo needs a small history of its own. |
 | R-5.1–R-5.3 | Ghost it / Revive | **Partial** | Fading text is not possible (spike). Options below. Revive and persistence are Full. |
 | R-6.1–R-6.2 | Overflow panel | Full | A right pane holding a scratch view, with a cursive per-view font. |
 | R-6.3 | Stash (move selection) | Full | One command: erase in the document, append to the Overflow view. |
@@ -92,7 +92,7 @@ Key: **Full** = implementable as specified; **Partial** = an approximation; **No
 | R-8.5 | Click to keep, Make the cuts, Walk through, Done | Full | Click → `on_text_command("drag_select")` with an event, or a phantom link. Walk through = step the selection through the regions. |
 | R-8.6 | AI alternatives for selection | Full | Bot-tagged entries appended from the thesaurus provider. |
 | R-8.7 | Provider abstraction | Full | See "Provider path". |
-| R-9.1–R-9.3 | Embedded block, schema, export | Full | Parsing and writing the block, and export, belong to the shared crate (see below). |
+| R-9.1–R-9.3 | Embedded block, schema, export | Full | Parsing and writing the block, and export, belong to `terraphim_alternatives` (non-KG state and the annotation block); KG-derived spans are recomputed by the `terraphim_lsp` core (see "Provider path"). |
 | R-10 | Visual tokens | Partial | Colours and monospace font: Full. Cursive titles: per-view only. ~10% ghost: not possible. |
 
 Summary: §2, §6, §8.2/8.3/8.5–8.7 and §9 carry over in full. The context menus carry over in substance (native styling). §3 and §4 carry over approximately, with phantom rows changing line spacing. **§5 ghosting and §8.4 trim preview carry over only partly, because Sublime cannot fade text in a region.** §7.2 chrome does not carry over.
