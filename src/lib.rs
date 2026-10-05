@@ -7,8 +7,9 @@ use web_sys::{Document, Element, Event, Window};
 mod document;
 pub use document::{
     apply_edit, counts_json, document_annotations, document_body, document_counts, export_document,
-    move_document_range, open_document, save_document, sync_document_body, sync_json, with_session,
-    DocumentSession, Opened, SetAside, Synced,
+    ghost_json, ghost_range, move_document_range, open_document, revive_json, revive_range,
+    save_document, sync_document_body, sync_json, with_session, DocumentSession, Opened, SetAside,
+    Synced,
 };
 
 mod lab;
