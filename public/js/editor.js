@@ -673,7 +673,10 @@ class EditorSurface {
       edits: step ? [step] : null,
     };
     const top = this.history[this.historyIndex];
-    if (top && top.text === entry.text) {
+    // A text move always gets its own entry, even when the text is unchanged
+    // (text moved past an identical copy): the move it carries still changes
+    // the annotations, and undo must replay its inverse in the model.
+    if (top && top.text === entry.text && !(step && step.move)) {
       top.start = entry.start;
       top.end = entry.end;
       return;
@@ -1505,8 +1508,12 @@ class MarkdownEditor {
    * The step carries the move, so undo and redo replay it in the model as
    * the inverse move and the move again: text and annotations both return.
    *
-   * A move that leaves the text unchanged (`to` at either end of the range,
-   * or text moved past an identical copy) is a no-op and changes nothing.
+   * The model validates every move, even one that leaves the text as it is.
+   * `to` at either end of the range is a no-op: after the model's checks it
+   * returns { moved: false } and records nothing. Moving text past an
+   * identical copy (for example the first "ab" of "abab" to the end) leaves
+   * the text unchanged but still moves the annotations, so it is recorded as
+   * an undo step with no text change that carries the move.
    * Returns { moved, start, end } (the moved text's new range) plus the
    * model outcome ({ detached, reattached, setAside, warning, notice }).
    */
@@ -1516,18 +1523,16 @@ class MarkdownEditor {
       throw new Error('The WASM document API cannot move text');
     }
     this.alignDocumentModel(api);
+    // Throws, changing nothing, if the model refuses the move (invalid range
+    // or destination, or an item it would split).
+    const outcome = api.move_document_range(start, end, to);
+    if (to === start || to === end) return { ...outcome, moved: false, start, end };
     const text = this.surface.getText();
     const len = end - start;
     const lo = Math.min(start, to);
     const hi = Math.max(end, to);
     const moved = text.slice(start, end);
     const reordered = to > end ? text.slice(end, to) + moved : moved + text.slice(to, start);
-    const valid = [start, end, to].every(Number.isInteger) && start >= 0 && len > 0 && hi <= text.length;
-    if (valid && (to <= start || to >= end) && reordered === text.slice(lo, hi)) {
-      return { moved: false, start, end };
-    }
-    // Throws, changing nothing, if the model refuses the move.
-    const outcome = api.move_document_range(start, end, to);
     const newStart = to > end ? to - len : to;
     this.suppressModelSync = true;
     try {
