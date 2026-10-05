@@ -51,10 +51,15 @@ async fn test_insert_delete_and_write_on_mode() {
         // sets nothing aside.
         r##"
           ed.openDocument(teBlockFixtures.full);
-          const before = ed.annotations();
+          T.before = ed.annotations();
+        "##,
+        r##"
           const ta = bv.insertBlockAfter(0);
           ta.value = 'Inserted.';
           bv.commitEdit();
+        "##,
+        r##"
+          const before = T.before;
           const after = ed.annotations();
           const d = 'Inserted.\n\n'.length;
           // Anchor context (#36) legitimately changes next to the insertion;
@@ -169,7 +174,11 @@ async fn test_open_block_draft_survives_outside_changes() {
           let ta = bv.editBlock(0);
           ta.value = '# Draft heading';
           ed.openDocument(teBlockFixtures.full);
-          const body = s.getText();
+          T.body = s.getText();
+        "##,
+        r##"
+          const notice = bv.draftsElement;
+          const body = T.body;
           const k2 = bv.keptDrafts();
           if (k2.length !== 1 || k2[0].reason !== 'replaced' || k2[0].value !== '# Draft heading' || k2[0].anchor !== null) out.push('open: draft ' + JSON.stringify(k2));
           if (!notice.textContent.includes('replaced')) out.push('open: notice text');
@@ -177,15 +186,24 @@ async fn test_open_block_draft_survives_outside_changes() {
           if (apply.textContent !== 'Insert as new paragraph') out.push('open: label ' + apply.textContent);
           apply.click();
           if (s.getText() !== '# Draft heading\n\n' + body) out.push('open: apply ' + JSON.stringify(s.getText().slice(0, 60)));
+        "##,
+        r##"
           const ann = ed.annotations();
           if (ann.spans.length !== 3 || ann.ghosts.length !== 2 || ed.setAsideCount !== 0) out.push('open: annotations after apply');
-          ta = bv.editBlock(1);
+        "##,
+        r##"
+          const ta = bv.editBlock(1);
           ta.value = 'Throwaway draft';
           ed.openDocument(teBlockFixtures.full);
-          const saved = ed.saveDocument();
+        "##,
+        r##"
+          T.saved = ed.saveDocument();
+        "##,
+        r##"
+          const notice = bv.draftsElement;
           notice.querySelector('[data-draft-action="discard"]').click();
           if (bv.keptDrafts().length || !notice.hidden) out.push('discard');
-          if (ed.saveDocument() !== saved) out.push('discard changed the document');
+          if (ed.saveDocument() !== T.saved) out.push('discard changed the document');
         "##,
         // 5. A kept draft follows typing (execCommand) in the text view and
         //    applies there (after the rewritten block).

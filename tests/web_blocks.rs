@@ -41,12 +41,17 @@ async fn test_body_to_blocks_round_trip_is_byte_identical() {
             if (at !== text.length) problems.push(name + ': does not cover the text');
             return m;
           };
-          const types = (m) => m.blocks.map((b) => b.type + (b.level || '')).join(',');
+          T.types = (m) => m.blocks.map((b) => b.type + (b.level || '')).join(',');
+        "##,
+        r##"
+          const types = T.types;
           const mixed = T.check(out, 'mixed', teBlockFixtures.mixed);
           const wantMixed = 'heading1,paragraph,heading2,list,list,code,quote,table,rule,code,paragraph';
           if (types(mixed) !== wantMixed) out.push('mixed types ' + types(mixed));
           const edge = T.check(out, 'edge', teBlockFixtures.edge);
           if (types(edge) !== 'paragraph,heading1,paragraph,code') out.push('edge types ' + types(edge));
+        "##,
+        r##"
           T.check(out, 'plain', teBlockFixtures.plain);
           T.check(out, 'full', teBlockFixtures.full);
           for (const t of ['', '\n', '\n\n  \n', 'x', '# h', '```\n\n```', '> q\n\n\n']) T.check(out, JSON.stringify(t), t);
@@ -179,14 +184,20 @@ async fn test_block_edit_updates_body_preview_and_keeps_annotations() {
           ed.openDocument(teBlockFixtures.full);
           T.body0 = s.getText();
           T.saved0 = ed.saveDocument();
+        "##,
+        r##"
           T.ann0 = ed.annotations();
+        "##,
+        r##"
           bv.setView('blocks');
           // The annotation block is never shown, and switching is lossless.
           if (bv.list.textContent.includes('terraphim-alternatives')) out.push('annotation block shown');
           if (BlocksView.serialise(bv.model) !== T.body0) out.push('blocks differ from body');
-          if (ed.saveDocument() !== T.saved0) out.push('switching changed the saved document');
           const types = bv.model.blocks.map((b) => b.type).join(',');
           if (types !== 'heading,paragraph,paragraph') out.push('types ' + types);
+        "##,
+        r##"
+          if (ed.saveDocument() !== T.saved0) out.push('switching changed the saved document');
         "##,
         // Edit the middle paragraph (it carries s2, s3 and g1) at its end.
         r##"
@@ -202,6 +213,8 @@ async fn test_block_edit_updates_body_preview_and_keeps_annotations() {
           if (!teTest.preview().includes('together. More.')) out.push('preview not updated');
           if (!bv.cards()[1].textContent.includes('More.')) out.push('card not re-rendered');
           if (document.activeElement !== bv.cards()[1]) out.push('focus not back on the edited block');
+        "##,
+        r##"
           const ann0 = T.ann0;
           T.ann1 = ed.annotations();
           // Anchors carry before/after context (#36), which legitimately
@@ -223,11 +236,15 @@ async fn test_block_edit_updates_body_preview_and_keeps_annotations() {
           if (s.getText() !== T.body0) out.push('undo did not restore the body');
           if (JSON.stringify(ed.annotations()) !== JSON.stringify(T.ann0)) out.push('undo did not restore annotations');
           if (bv.cards()[1].textContent.includes('More.')) out.push('cards not refreshed after undo');
+        "##,
+        r##"
           teTest.key(document.activeElement, 'y', { ctrlKey: true });
           if (s.getText() !== T.body1) out.push('redo');
-          const saved1 = ed.saveDocument();
+          T.saved1 = ed.saveDocument();
+        "##,
+        r##"
           ed.openDocument('other');
-          ed.openDocument(saved1);
+          ed.openDocument(T.saved1);
           if (s.getText() !== T.body1) out.push('reopened body');
           const ann2 = ed.annotations();
           const ann1 = T.ann1;
