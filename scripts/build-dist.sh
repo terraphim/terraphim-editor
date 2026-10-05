@@ -4,13 +4,14 @@
 mkdir -p dist
 
 # Copy and minify JS files
-# Order matters: config, then the Write_On chrome, then the editor that
-# instantiates it, then the embeddable wrapper.
-terser public/js/config.js public/js/chrome.js public/js/editor.js public/js/terraphim-editor.js -o dist/terraphim-editor.min.js
+# Order matters: config, then the Write_On chrome and the Blocks view, then
+# the editor that instantiates them, then the embeddable wrapper.
+terser public/js/config.js public/js/chrome.js public/js/blocks.js public/js/editor.js public/js/terraphim-editor.js -o dist/terraphim-editor.min.js
 
 # Copy and minify CSS
-# Design tokens before the Write_On layout and chrome that consume them.
-cleancss public/styles.css public/css/tokens.css public/css/write-on.css -o dist/terraphim-editor.min.css
+# Design tokens before the Write_On layout, chrome and Blocks view that
+# consume them.
+cleancss public/styles.css public/css/tokens.css public/css/write-on.css public/css/blocks.css -o dist/terraphim-editor.min.css
 
 # Create example usage file
 cat > dist/example.html << EOL

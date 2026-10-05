@@ -1112,6 +1112,8 @@ class MarkdownEditor {
       node.remove();
     }
     this.createdNodes = [];
+    // Blocks view (issue #19).
+    if (this.blocks) this.blocks.destroy();
     if (this.chrome) this.chrome.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();
@@ -1146,6 +1148,12 @@ class MarkdownEditor {
     // Write_On mode toggle and corner chrome (public/js/chrome.js, issue #7).
     if (typeof window.WriteOnChrome === 'function') {
       this.chrome = new window.WriteOnChrome(this, { signal: this.abortController.signal });
+    }
+
+    // Blocks view (public/js/blocks.js, issue #19): a separate view of the
+    // same body, created after the chrome so it can see the Write_On mode.
+    if (typeof window.BlocksView === 'function') {
+      this.blocks = new window.BlocksView(this, { signal: this.abortController.signal });
     }
   }
 

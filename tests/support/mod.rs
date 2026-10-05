@@ -13,7 +13,8 @@ pub use web_sys::{Document, HtmlElement, HtmlTextAreaElement};
 pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
     flush_preview, open_document, preview_delay, preview_pending, preview_render_count,
-    save_document, set_preview_delay, sync_document_body, DEFAULT_PREVIEW_DELAY_MS,
+    render_markdown, save_document, set_preview_delay, sync_document_body,
+    DEFAULT_PREVIEW_DELAY_MS,
 };
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
@@ -21,6 +22,8 @@ pub const EDITOR_JS: &str = include_str!("../../public/js/editor.js");
 pub const CHROME_JS: &str = include_str!("../../public/js/chrome.js");
 pub const TOKENS_CSS: &str = include_str!("../../public/css/tokens.css");
 pub const WRITE_ON_CSS: &str = include_str!("../../public/css/write-on.css");
+pub const BLOCKS_JS: &str = include_str!("../../public/js/blocks.js");
+pub const BLOCKS_CSS: &str = include_str!("../../public/css/blocks.css");
 
 /// Small helpers shared by the JavaScript snippets below.
 pub const TEST_HELPERS_JS: &str = r##"
@@ -46,6 +49,11 @@ window.teTest = {
     }
     delete document.body.dataset.mode;
   },
+  // Forget the per-viewer Blocks view preference (issue #19).
+  resetBlocks() {
+    try { localStorage.removeItem(window.BLOCKS_VIEW_STORAGE_KEY); } catch (e) {}
+  },
+  blocks() { return window.__teEditor.blocks; },
   // Rendered and not hidden by CSS (display, visibility or the hidden attribute).
   visible(el) {
     return !!el && el.isConnected && el.getClientRects().length > 0 &&
@@ -153,7 +161,7 @@ pub fn document() -> Document {
 pub fn fresh_rust_editor() -> Document {
     let document = document();
     while let Some(node) = document
-        .query_selector("#app, .command-menu, .te-bench, .te-chrome")
+        .query_selector("#app, .command-menu, .te-bench, .te-chrome, .te-blocks")
         .unwrap()
     {
         node.remove();
@@ -179,13 +187,13 @@ pub fn load_editor_scripts(document: &Document) {
     // styles exactly as Trunk ships them.
     let style = document.create_element("style").unwrap();
     style.set_attribute("data-te-test", "").unwrap();
-    style.set_text_content(Some(&format!("{TOKENS_CSS}\n{WRITE_ON_CSS}")));
+    style.set_text_content(Some(&format!("{TOKENS_CSS}\n{WRITE_ON_CSS}\n{BLOCKS_CSS}")));
     document
         .document_element()
         .unwrap()
         .append_child(&style)
         .unwrap();
-    for source in [CONFIG_JS, CHROME_JS, EDITOR_JS, TEST_HELPERS_JS] {
+    for source in [CONFIG_JS, CHROME_JS, BLOCKS_JS, EDITOR_JS, TEST_HELPERS_JS] {
         let script = document.create_element("script").unwrap();
         script.set_attribute("data-te-test", "").unwrap();
         script.set_text_content(Some(source));
@@ -235,6 +243,13 @@ pub fn install_document_bindings() {
             .into_js_value(),
     );
     install(
+        "render_markdown",
+        Closure::<dyn FnMut(String) -> Result<String, JsValue>>::new(|s: String| {
+            render_markdown(&s)
+        })
+        .into_js_value(),
+    );
+    install(
         "apply_edit",
         Closure::<dyn FnMut(u32, u32, String) -> Result<JsValue, JsValue>>::new(
             |start: u32, deleted: u32, inserted: String| apply_edit(start, deleted, &inserted),
@@ -253,6 +268,7 @@ pub fn fresh_full_editor() -> Document {
           // Tests share one page: start every editor in plain mode with no
           // persisted Write_On state.
           teTest.resetWriteOn();
+          teTest.resetBlocks();
           const ed = new MarkdownEditor(window.EditorConfig);
           ed.initialize();
           window.__teEditor = ed;
