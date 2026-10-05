@@ -382,6 +382,18 @@ fn test_stale_hover_never_swallows_plain_arrows() {
           expect('down 2', {THUMBTACK:?});
           teCyc.key('ArrowDown');
           expect('down 3', {PAPERCLIP:?});
+
+          // 6. A re-layout ends the post-swap hold: swap to the shorter
+          // "an eraser" under a still pointer past its end, resize, and the
+          // next plain arrow is the browser's again.
+          const el2 = root.querySelector('[data-te-decoration~="indicators:s1"]');
+          const r2 = el2.getClientRects()[0];
+          teCyc.pointAt(el2, r2.right - 2, r2.top + r2.height / 2);
+          if (!teCyc.key('ArrowDown')) out.push('relayout: first swap not prevented');
+          expect('relayout swap', {ERASER:?});
+          window.dispatchEvent(new Event('resize'));
+          if (teCyc.key('ArrowDown')) out.push('relayout: held hover took the arrow');
+          expect('after relayout', {ERASER:?});
         "##
     );
     assert_eq!(run(&body), "");

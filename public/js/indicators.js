@@ -258,7 +258,8 @@ class TeIndicatorLayer {
     // stale by typing, caret moves, scrolling or re-layout never swallows
     // caret movement. `hoverHeld` keeps the hover across the re-render of a
     // swap of that same span (the new text may no longer be under the
-    // pointer), until the pointer moves or any other change happens.
+    // pointer), until the pointer moves, the layout changes or any other
+    // change happens.
     this.hoverSpan = null;
     this.pointer = null;
     this.hoverHeld = false;
@@ -275,17 +276,23 @@ class TeIndicatorLayer {
         this.setActive(e.detail && e.detail.mode === 'write-on');
       }
     }, { signal });
-    window.addEventListener('resize', () => this.scheduleLayout(), { signal });
+    // Layout-only changes (resize, container reflow, late fonts) can move
+    // text under a still pointer, so they end a post-swap hold too.
+    const relayout = () => {
+      this.hoverHeld = false;
+      this.scheduleLayout();
+    };
+    window.addEventListener('resize', relayout, { signal });
     this.surface.root.addEventListener('scroll', () => {
       this.hoverHeld = false;
       this.scheduleLayout();
     }, { signal, passive: true });
     // Observed only while active, so plain mode pays nothing per keystroke.
     if (typeof ResizeObserver === 'function') {
-      this.resizeObserver = new ResizeObserver(() => this.scheduleLayout());
+      this.resizeObserver = new ResizeObserver(relayout);
     }
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => this.scheduleLayout()).catch(() => {});
+      document.fonts.ready.then(relayout).catch(() => {});
     }
 
     this.setActive(this.isWriteOn());
