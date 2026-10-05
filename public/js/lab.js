@@ -6,8 +6,10 @@
  * chrome dispatches `te:lab` (public/js/chrome.js; the pill only acts in
  * Write_On mode). Header `The Lab guide…` / `what each idea does`, then the
  * six actions in engine order (labels from `wasmBindings.lab_actions()`),
- * then an empty slot for the trim levels of issue #15 (R-8.3 to R-8.5), then
- * the results: a legend, proposed fixes with Accept, and Clear marks.
+ * then the trim levels of issue #15 (R-8.3 to R-8.5; TeLabTrim in
+ * public/js/trim.js fills the `data-slot="trim"` slot and owns the faded
+ * preview and the status card, reachable as `lab.trim`), then the results:
+ * a legend, proposed fixes with Accept, and Clear marks.
  *
  * Marking never changes text
  * --------------------------
@@ -62,8 +64,8 @@
  *
  * Lifecycle: every listener uses this instance's AbortController, which
  * follows the editor's signal; destroy() clears the layer, removes the DOM
- * and the pill attributes. Load order: after indicators.js, before
- * editor.js. Design notes: docs/design/lab-popover.md
+ * and the pill attributes. Load order: after indicators.js and trim.js,
+ * before editor.js. Design notes: docs/design/lab-popover.md
  */
 
 let teLabInstances = 0;
@@ -131,6 +133,7 @@ class TeLabPopover {
       if (!e.detail || e.detail.mode !== 'write-on') {
         this.close(false);
         this.clear();
+        if (this.trim) this.trim.reset();
       }
     }, { signal });
     document.addEventListener('pointerdown', (e) => this.onOutsidePointer(e), { signal, capture: true });
@@ -241,12 +244,15 @@ class TeLabPopover {
     hint.id = id('hint');
     this.hint = hint;
 
-    // Trim levels (R-8.3 to R-8.5) belong to issue #15, which fills this
-    // slot with its buttons and unhides it.
+    // Trim levels (R-8.3 to R-8.5, issue #15): TeLabTrim (trim.js) fills
+    // this slot with its buttons and unhides it.
     const trim = el('div', 'te-lab-trim');
     trim.dataset.slot = 'trim';
     trim.hidden = true;
     this.trimSlot = trim;
+    this.trim = api && typeof window.TeLabTrim === 'function'
+      ? new window.TeLabTrim(this, trim, { signal })
+      : null;
 
     const results = el('div', 'te-lab-results');
     results.hidden = true;
@@ -337,6 +343,7 @@ class TeLabPopover {
     const pill = this.pill();
     if (pill) pill.setAttribute('aria-expanded', 'true');
     this.renderResults();
+    if (this.trim) this.trim.sync();
     this.position();
     const checked = this.items.findIndex((item) => item.dataset.action === this.action);
     this.focusItem(checked >= 0 ? checked : 0);
@@ -350,6 +357,7 @@ class TeLabPopover {
     const pill = this.pill();
     if (pill) pill.setAttribute('aria-expanded', 'false');
     this.renderResults();
+    if (this.trim) this.trim.sync();
     if (restoreFocus && hadFocus && pill) pill.focus();
   }
 
@@ -600,6 +608,7 @@ class TeLabPopover {
   destroy() {
     if (this.destroyed) return;
     if (this.surface && !this.surface.destroyed && this.registry) this.registry.clear(TE_LAB_LAYER);
+    if (this.trim) this.trim.destroy();
     this.destroyed = true;
     this.isOpen = false;
     this.offChange();
