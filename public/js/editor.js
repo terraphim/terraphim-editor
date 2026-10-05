@@ -1177,6 +1177,8 @@ class MarkdownEditor {
     }
     this.createdNodes = [];
     if (this.chrome) this.chrome.destroy();
+    if (this.selectionMenu) this.selectionMenu.destroy();
+    if (this.ghosts) this.ghosts.destroy();
     if (this.indicators) this.indicators.destroy();
     if (this.lab) this.lab.destroy();
     if (this.decorations) this.decorations.destroy();
@@ -1222,6 +1224,14 @@ class MarkdownEditor {
       this.decorations = new window.TeDecorationRegistry(this.surface);
       if (typeof window.TeIndicatorLayer === 'function') {
         this.indicators = new window.TeIndicatorLayer(this, { signal: this.abortController.signal });
+      }
+      // Ghost layer and selection context menu (public/js/selection-menu.js,
+      // issue #11).
+      if (typeof window.TeGhostLayer === 'function') {
+        this.ghosts = new window.TeGhostLayer(this, { signal: this.abortController.signal });
+      }
+      if (typeof window.TeSelectionMenu === 'function') {
+        this.selectionMenu = new window.TeSelectionMenu(this, { signal: this.abortController.signal });
       }
       // The Lab popover and its marks (public/js/lab.js, issue #14).
       if (typeof window.TeLabPopover === 'function') {
@@ -1727,6 +1737,7 @@ class MarkdownEditor {
       }
     }
     if (this.indicators) this.indicators.flush();
+    if (this.ghosts) this.ghosts.flush();
     return opened;
   }
 
