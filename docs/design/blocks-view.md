@@ -171,5 +171,10 @@ Dropped:
   together with its anchors (for example `move_range(from, to, at)` in
   `src/document.rs`), and a surface history step that replays as a move, so
   that undo does not run the deletion through `apply_edit`.
+- **Outside changes during an edit.** If the body changes from outside
+  while a block editor is open (for example `openDocument` from the open
+  flow), the cards re-render and the uncommitted textarea text is
+  discarded. This matches `openDocument` resetting the undo history. A
+  future change could commit or prompt first.
 - **Inline indicators (#8).** When the decoration registry lands, cards
   could show the alternatives and ghosts inside each block.
