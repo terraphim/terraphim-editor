@@ -227,6 +227,31 @@ fn a_swap_that_would_change_a_block_span_is_refused() {
 }
 
 #[test]
+fn a_kg_word_inside_a_larger_block_span_is_not_offered() {
+    // A sentence span over the whole line: its words are the writer's.
+    let body = DOC;
+    let line = "Use an eraser, then use a paperclip.";
+    let start = at(body, line, 0);
+    let mut doc = Document::new(body);
+    let id = doc
+        .add_span(SpanKind::Sentence, start, start + line.len())
+        .unwrap();
+    doc.add_alternative(&id, "Use a rubber.", Source::Human, None)
+        .unwrap();
+    let mut s = session(&write(&doc));
+    let ids: Vec<String> = kg_spans(&s).into_iter().map(|k| k.id).collect();
+    assert_eq!(ids, ["kg-8-2", "kg-1-0"], "only the words outside the span");
+    let eraser = at(s.body(), "eraser", 0);
+    assert!(kg_lookup(&s, eraser, eraser + 6).is_null());
+    let before = s.clone();
+    assert_eq!(
+        kg_append(&mut s, eraser, eraser + 6).unwrap_err(),
+        KgError::Overlaps(id)
+    );
+    assert_eq!(s, before);
+}
+
+#[test]
 fn ai_alternatives_for_selection_append_after_the_writers_own() {
     let mut s = session(&annotated());
     let body = s.body().to_string();

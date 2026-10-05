@@ -75,9 +75,10 @@ pub enum KgError {
         /// The refused index.
         index: usize,
     },
-    /// The replacement would change the text of a span from the annotation
-    /// block (an article inside the writer's span).
-    #[error("the replacement would change the text of span {0}")]
+    /// A span from the annotation block is in the way: a swap would change
+    /// its text (an article inside the writer's span), or an append would
+    /// overlap it (a sentence span around the word). The writer's span wins.
+    #[error("span {0} from the annotation block overlaps the knowledge-graph term")]
     Overlaps(String),
     /// No KG term at the selection.
     #[error("no knowledge-graph term at the selection")]
@@ -397,14 +398,36 @@ fn term_at(session: &DocumentSession, start: usize, end: usize) -> Option<Altern
     (intersects && !set.replacements.is_empty()).then_some(set)
 }
 
+/// The id of a live block span that overlaps the term of `set` without being
+/// exactly over it (a sentence or paragraph span around the word, say). The
+/// writer's span wins there, so the term is not offered.
+fn blocking_span(session: &DocumentSession, set: &AlternativeSet) -> Option<String> {
+    let (s, e) = (set.term.range.start.utf16, set.term.range.end.utf16);
+    session
+        .document()
+        .annotations
+        .spans
+        .iter()
+        .find(|sp| {
+            sp.anchor.start < e
+                && s < sp.anchor.end
+                && !(sp.anchor.start == s && sp.anchor.end == e)
+        })
+        .map(|sp| sp.id.clone())
+}
+
 /// `{ term, conceptId, nterm, range: { start, end }, alternatives: [{ text,
 /// source: "kg" }], span }` for the KG term at the selection, where `span` is
 /// the id of the block span exactly over the term (or `null`); `null` when
-/// there is no term. Read-only.
+/// there is no term, or when another block span overlaps it (see
+/// [`kg_append`]). Read-only.
 pub fn kg_lookup(session: &DocumentSession, start: usize, end: usize) -> Value {
     let Some(set) = term_at(session, start, end) else {
         return Value::Null;
     };
+    if blocking_span(session, &set).is_some() {
+        return Value::Null;
+    }
     let (s, e) = (set.term.range.start.utf16, set.term.range.end.utf16);
     let span = session
         .document()
@@ -440,6 +463,9 @@ pub fn kg_append(
     end: usize,
 ) -> Result<Option<AltChange>, KgError> {
     let set = term_at(session, start, end).ok_or(KgError::NoTerm)?;
+    if let Some(id) = blocking_span(session, &set) {
+        return Err(KgError::Overlaps(id));
+    }
     let texts: Vec<String> = set.replacements.iter().map(|r| r.text.clone()).collect();
     session
         .append_alternatives(

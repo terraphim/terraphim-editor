@@ -86,6 +86,11 @@ Decisions:
    `benches/kg_bench.rs` (native, criterion): fresh analysis 1.7 ms, cached
    read 0.35 ms, one swap 1.9 ms on that document.
 
+Only `document_annotations()` carries `kg`; the `annotations` objects
+returned by `ghost_range`, `revive_range` and the panel operations keep the
+block's own shape (the editor re-reads `annotations()` before drawing
+indicators).
+
 ## Swapping
 
 `swapAlternative(id, index)` routes `kg-…` ids to `kg_swap_alternative`.
@@ -115,7 +120,10 @@ selection (the term covering its start, or a caret just after a word). It
 calls `alternativeOp('kg_append', start, end)`: `alt_kg_append` appends the
 term's synonyms to the block span exactly over the term, creating a word
 span when there is none, as `source: "ai"` with `model: "kg"` and after the
-alternatives already there; synonyms already offered are skipped. R-8.6 says
+alternatives already there; synonyms already offered are skipped. A KG word
+inside a larger block span (a sentence or paragraph span around it) is the
+writer's: the lookup returns `null`, so the item is hidden, and the append is
+refused with nothing changed. R-8.6 says
 the result is appended to the span's list, so these are persisted.
 
 `Source` has no `kg` variant: adding one would change the block schema and
