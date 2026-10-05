@@ -51,7 +51,9 @@ use terraphim_alternatives::{Source, SpanKind};
 use terraphim_lsp_core::{utf16_len, AlternativeSet, KgEngine, TermMatch};
 use wasm_bindgen::prelude::*;
 
-use crate::document::{with_session, DocumentSession, EditOutcome, SwapEdit, SwapOutcome};
+use crate::document::{
+    with_session, AltChange, DocumentSession, EditOutcome, SwapEdit, SwapOutcome,
+};
 
 /// The model name recorded on alternatives appended from the KG (R-8.6).
 pub const KG_MODEL: &str = "kg";
@@ -429,14 +431,14 @@ pub fn kg_lookup(session: &DocumentSession, start: usize, end: usize) -> Value {
 /// "AI alternatives for selection" (R-8.6): appends the KG synonyms of the
 /// term at the selection to the block span over that term (creating a word
 /// span when there is none), as `source: "ai"`, `model: "kg"`, after the
-/// alternatives already there; synonyms the span already offers are skipped.
-/// Returns `(span id, number appended)`. Refused, changing nothing, when
+/// alternatives already there; synonyms the span already offers are skipped
+/// (`Ok(None)` when nothing is left to add). Refused, changing nothing, when
 /// there is no KG term at the selection or a different span overlaps it.
 pub fn kg_append(
     session: &mut DocumentSession,
     start: usize,
     end: usize,
-) -> Result<(String, usize), KgError> {
+) -> Result<Option<AltChange>, KgError> {
     let set = term_at(session, start, end).ok_or(KgError::NoTerm)?;
     let texts: Vec<String> = set.replacements.iter().map(|r| r.text.clone()).collect();
     session
@@ -448,7 +450,7 @@ pub fn kg_append(
             Source::Ai,
             Some(KG_MODEL),
         )
-        .map_err(|e| KgError::Model(e.to_string()))
+        .map_err(KgError::Model)
 }
 
 /// The thesaurus name, if one is loaded.
@@ -508,20 +510,17 @@ pub fn kg_lookup_selection(start: u32, end: u32) -> JsValue {
     }))
 }
 
-/// "AI alternatives for selection" (R-8.6, see [`kg_append`]). Returns
-/// `{ ok: true, span, added, annotations }` or `{ ok: false, error }` with the
-/// document unchanged. Never throws.
+/// "AI alternatives for selection" (R-8.6, see [`kg_append`]), in the shape
+/// of the #10 panel operations so `MarkdownEditor.alternativeOp('kg_append',
+/// start, end)` records it as one undo step: returns the change (see
+/// `AltChange::to_json`), `null` when the span already offers every synonym,
+/// and throws, changing nothing, when there is no KG term at the selection
+/// or another span overlaps it.
 #[wasm_bindgen]
-pub fn kg_append_alternatives(start: u32, end: u32) -> JsValue {
-    to_js(&with_session(|s| {
-        match kg_append(s, start as usize, end as usize) {
-            Ok((span, added)) => json!({
-                "ok": true,
-                "span": span,
-                "added": added,
-                "annotations": s.annotations_json(),
-            }),
-            Err(error) => json!({ "ok": false, "error": error.to_string() }),
-        }
-    }))
+pub fn alt_kg_append(start: u32, end: u32) -> Result<JsValue, JsValue> {
+    match with_session(|s| kg_append(s, start as usize, end as usize)) {
+        Ok(Some(change)) => Ok(to_js(&change.to_json())),
+        Ok(None) => Ok(JsValue::NULL),
+        Err(error) => Err(JsValue::from_str(&error.to_string())),
+    }
 }

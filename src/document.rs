@@ -55,7 +55,7 @@ use std::collections::HashSet;
 use serde_json::{json, Value};
 use terraphim_alternatives::{
     parse, utf16_len, utf16_to_byte, write, Anchor, Counts, Document, EditError, Ghost,
-    ReanchorReport, Source, Span, SpanKind,
+    ReanchorReport, Span,
 };
 use wasm_bindgen::prelude::*;
 
@@ -812,6 +812,498 @@ pub fn revive_range(start: u32, end: u32) -> JsValue {
 }
 
 // ---------------------------------------------------------------------------
+// #10 The alternatives side panel. Kept in one block, apart from the other
+// exports, so parallel additions to this file merge cleanly.
+//
+// Every panel operation runs model first and returns an [`AltChange`]: the
+// one span it touched before and after (`None` when the span did not exist,
+// or no longer exists), plus the single contiguous text edit it made to the
+// body (only when the active alternative's text changed, a/an fix-up
+// included). The editor records that as ONE undo step and replays it with
+// [`DocumentSession::alt_restore`], which puts the span back exactly as it
+// was snapshotted, so undo and redo never re-run the operation itself.
+// ---------------------------------------------------------------------------
+
+use terraphim_alternatives::{Source, SpanKind};
+
+/// The one text edit a panel operation made to the body, in UTF-16 code
+/// units of the body before it: `deleted_text` at `start` became
+/// `inserted_text`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AltEdit {
+    /// Start of the replaced region (UTF-16).
+    pub start: usize,
+    /// The body text removed.
+    pub deleted_text: String,
+    /// The body text inserted.
+    pub inserted_text: String,
+}
+
+/// Outcome of a panel operation (see the block comment above).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AltChange {
+    /// Id of the span operated on (for a create, the new span's id).
+    pub span: String,
+    /// The alternative the operation is about afterwards (added, edited or
+    /// moved line, newly active line), if any.
+    pub index: Option<usize>,
+    /// The span before the operation, `None` if it did not exist.
+    pub before: Option<Span>,
+    /// The span after the operation, `None` if it no longer exists (removing
+    /// its last non-original alternative prunes it, R-2.7).
+    pub after: Option<Span>,
+    /// The body edit made, `None` when only annotations changed.
+    pub edit: Option<AltEdit>,
+    /// Set-aside bookkeeping, as for [`DocumentSession::apply_edit`].
+    pub outcome: EditOutcome,
+}
+
+impl AltChange {
+    /// `{ span, index, before, after, edit, detached, reattached, setAside,
+    /// warning, notice }` for JavaScript. `before`/`after` use the block's
+    /// span schema (or `null`); `edit` is `{ start, deletedLength,
+    /// deletedText, insertedText }` (UTF-16) or `null`.
+    pub fn to_json(&self) -> Value {
+        let mut value = self.outcome.to_json();
+        let edit = self.edit.as_ref().map(|e| {
+            json!({
+                "start": e.start,
+                "deletedLength": utf16_len(&e.deleted_text),
+                "deletedText": e.deleted_text,
+                "insertedText": e.inserted_text,
+            })
+        });
+        if let Value::Object(map) = &mut value {
+            map.insert("span".into(), json!(self.span));
+            map.insert("index".into(), json!(self.index));
+            map.insert("before".into(), json!(self.before));
+            map.insert("after".into(), json!(self.after));
+            map.insert("edit".into(), json!(edit));
+        }
+        value
+    }
+}
+
+/// `"word"`, `"sentence"` or `"paragraph"`.
+pub fn parse_span_kind(kind: &str) -> Result<SpanKind, String> {
+    match kind {
+        "word" => Ok(SpanKind::Word),
+        "sentence" => Ok(SpanKind::Sentence),
+        "paragraph" => Ok(SpanKind::Paragraph),
+        other => Err(format!("unknown span kind {other:?}")),
+    }
+}
+
+/// `"human"` or `"ai"`; the original is never added through the panel.
+pub fn parse_alt_source(source: &str) -> Result<Source, String> {
+    match source {
+        "human" => Ok(Source::Human),
+        "ai" => Ok(Source::Ai),
+        other => Err(format!("unknown alternative source {other:?}")),
+    }
+}
+
+/// The single edit turning `old` into `new`: the longest common prefix and
+/// then the longest common suffix not overlapping it, on character
+/// boundaries. `None` when the two are equal.
+pub fn body_edit(old: &str, new: &str) -> Option<AltEdit> {
+    if old == new {
+        return None;
+    }
+    let mut prefix = old
+        .bytes()
+        .zip(new.bytes())
+        .take_while(|(a, b)| a == b)
+        .count();
+    while !old.is_char_boundary(prefix) || !new.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    let max_suffix = old.len().min(new.len()) - prefix;
+    let mut suffix = old
+        .bytes()
+        .rev()
+        .zip(new.bytes().rev())
+        .take(max_suffix)
+        .take_while(|(a, b)| a == b)
+        .count();
+    while !old.is_char_boundary(old.len() - suffix) || !new.is_char_boundary(new.len() - suffix) {
+        suffix -= 1;
+    }
+    Some(AltEdit {
+        start: utf16_len(&old[..prefix]),
+        deleted_text: old[prefix..old.len() - suffix].to_string(),
+        inserted_text: new[prefix..new.len() - suffix].to_string(),
+    })
+}
+
+impl DocumentSession {
+    fn live_span(&self, id: &str) -> Option<&Span> {
+        self.doc.annotations.spans.iter().find(|s| s.id == id)
+    }
+
+    fn live_span_mut(&mut self, id: &str) -> Result<&mut Span, String> {
+        self.doc
+            .annotations
+            .spans
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or_else(|| EditError::UnknownSpan(id.to_string()).to_string())
+    }
+
+    /// Runs `op` atomically and describes what it did. `op` returns the id of
+    /// the span it worked on and the alternative index to report. On error
+    /// the session is restored and the error returned.
+    fn alt_change(
+        &mut self,
+        known: Option<&str>,
+        op: impl FnOnce(&mut Self) -> Result<(String, Option<usize>), String>,
+    ) -> Result<AltChange, String> {
+        let saved = self.clone();
+        let before = known.and_then(|id| self.live_span(id).cloned());
+        let old_body = self.doc.body.clone();
+        let (span, index) = match op(self) {
+            Ok(done) => done,
+            Err(error) => {
+                *self = saved;
+                return Err(error);
+            }
+        };
+        let edit = body_edit(&old_body, &self.doc.body);
+        let mut outcome = EditOutcome::default();
+        if let Some(edit) = &edit {
+            let start = edit.start;
+            let end = start + utf16_len(&edit.deleted_text);
+            let inserted = utf16_len(&edit.inserted_text);
+            self.set_aside.shift_hints(start, end, &edit.inserted_text);
+            outcome.reattached = self.reattach(Some((start, start + inserted)));
+        }
+        outcome.set_aside = self.set_aside.len();
+        outcome.notice = self.set_aside_notice();
+        Ok(AltChange {
+            after: self.live_span(&span).cloned(),
+            span,
+            index,
+            before,
+            edit,
+            outcome,
+        })
+    }
+
+    /// Creates a span of `kind` over `start..end` together with its first
+    /// alternative, as one operation (the panel never leaves an inert span
+    /// behind, R-2.7). The new alternative is not made active.
+    pub fn alt_create_span(
+        &mut self,
+        kind: SpanKind,
+        start: usize,
+        end: usize,
+        text: &str,
+        source: Source,
+    ) -> Result<AltChange, String> {
+        self.alt_change(None, |s| {
+            let id = s
+                .doc
+                .add_span(kind, start, end)
+                .map_err(|e| e.to_string())?;
+            if s.live_span(&id).is_some_and(|sp| sp.alts[0].text == text) {
+                return Err("the alternative is the same as the original".into());
+            }
+            let index = s
+                .doc
+                .add_alternative(&id, text, source, None)
+                .map_err(|e| e.to_string())?;
+            Ok((id, Some(index)))
+        })
+    }
+
+    /// Appends an alternative to span `id`. `Ok(None)` when an alternative
+    /// with that text already exists (nothing changes).
+    pub fn alt_add(
+        &mut self,
+        id: &str,
+        text: &str,
+        source: Source,
+    ) -> Result<Option<AltChange>, String> {
+        let span = self
+            .live_span(id)
+            .ok_or_else(|| EditError::UnknownSpan(id.to_string()).to_string())?;
+        if span.alts.iter().any(|a| a.text == text) {
+            return Ok(None);
+        }
+        self.alt_change(Some(id), |s| {
+            let index = s
+                .doc
+                .add_alternative(id, text, source, None)
+                .map_err(|e| e.to_string())?;
+            Ok((id.to_string(), Some(index)))
+        })
+        .map(Some)
+    }
+
+    /// Replaces the text of alternative `index` (not the original). Editing
+    /// the active alternative rewrites the body through
+    /// [`Document::set_active`], so the a/an fix-up applies. `Ok(None)` when
+    /// the text is unchanged. Empty text, or text another alternative of the
+    /// span already has, is refused.
+    pub fn alt_edit(
+        &mut self,
+        id: &str,
+        index: usize,
+        text: &str,
+    ) -> Result<Option<AltChange>, String> {
+        let span = self
+            .live_span(id)
+            .ok_or_else(|| EditError::UnknownSpan(id.to_string()).to_string())?;
+        if index == 0 {
+            return Err(EditError::OriginalImmutable.to_string());
+        }
+        if index >= span.alts.len() {
+            return Err(EditError::InvalidIndex {
+                id: id.to_string(),
+                index,
+            }
+            .to_string());
+        }
+        if text.is_empty() {
+            return Err(EditError::EmptyText.to_string());
+        }
+        if span.alts[index].text == text {
+            return Ok(None);
+        }
+        if span.alts.iter().any(|a| a.text == text) {
+            return Err(format!("span {id:?} already has the alternative {text:?}"));
+        }
+        let active = span.active == index;
+        self.alt_change(Some(id), |s| {
+            s.live_span_mut(id)?.alts[index].text = text.to_string();
+            if active {
+                s.doc.set_active(id, index).map_err(|e| e.to_string())?;
+            }
+            Ok((id.to_string(), Some(index)))
+        })
+        .map(Some)
+    }
+
+    /// Removes alternative `index` (not the original). Removing the active
+    /// one shows the original again; removing the last non-original one
+    /// removes the span (R-2.7), so `after` is `None`.
+    pub fn alt_remove(&mut self, id: &str, index: usize) -> Result<AltChange, String> {
+        self.alt_change(Some(id), |s| {
+            s.doc
+                .remove_alternative(id, index)
+                .map_err(|e| e.to_string())?;
+            Ok((id.to_string(), None))
+        })
+    }
+
+    /// Moves alternative `from` to position `to` (both past the original,
+    /// which stays at index 0). The active alternative stays active, so the
+    /// body is unchanged. `Ok(None)` when `from == to`.
+    pub fn alt_move(
+        &mut self,
+        id: &str,
+        from: usize,
+        to: usize,
+    ) -> Result<Option<AltChange>, String> {
+        let span = self
+            .live_span(id)
+            .ok_or_else(|| EditError::UnknownSpan(id.to_string()).to_string())?;
+        let len = span.alts.len();
+        for index in [from, to] {
+            if index == 0 {
+                return Err(EditError::OriginalImmutable.to_string());
+            }
+            if index >= len {
+                return Err(EditError::InvalidIndex {
+                    id: id.to_string(),
+                    index,
+                }
+                .to_string());
+            }
+        }
+        if from == to {
+            return Ok(None);
+        }
+        self.alt_change(Some(id), |s| {
+            let span = s.live_span_mut(id)?;
+            let active_text = span.alts[span.active].text.clone();
+            let alt = span.alts.remove(from);
+            span.alts.insert(to, alt);
+            span.active = span
+                .alts
+                .iter()
+                .position(|a| a.text == active_text)
+                .expect("alternative texts are unique within a span");
+            Ok((id.to_string(), Some(to)))
+        })
+        .map(Some)
+    }
+
+    /// Replays a recorded panel operation (undo or redo): takes span `id` out
+    /// of the model (if live), applies the body edit `start`, `deleted_len`,
+    /// `inserted` (skipped when empty) as an ordinary edit, so other anchors,
+    /// ghosts and set-aside hints follow it, then puts `target` back verbatim
+    /// (when `Some`) and refreshes every anchor's context.
+    ///
+    /// Atomic: if the edit does not fit the body, or `target`'s text is not
+    /// at its anchor afterwards or overlaps a live span, nothing changes and
+    /// the error is returned (the editor then re-syncs from the surface).
+    pub fn alt_restore(
+        &mut self,
+        id: &str,
+        target: Option<Span>,
+        start: usize,
+        deleted_len: usize,
+        inserted: &str,
+    ) -> Result<EditOutcome, String> {
+        let saved = self.clone();
+        let result = self.alt_restore_inner(id, target, start, deleted_len, inserted);
+        if result.is_err() {
+            *self = saved;
+        }
+        result
+    }
+
+    fn alt_restore_inner(
+        &mut self,
+        id: &str,
+        target: Option<Span>,
+        start: usize,
+        deleted_len: usize,
+        inserted: &str,
+    ) -> Result<EditOutcome, String> {
+        let spans = &mut self.doc.annotations.spans;
+        let position = spans.iter().position(|s| s.id == id);
+        if let Some(i) = position {
+            spans.remove(i);
+        }
+        let mut outcome = if deleted_len > 0 || !inserted.is_empty() {
+            self.apply_edit(start, deleted_len, inserted)
+                .map_err(|e| e.to_string())?
+        } else {
+            EditOutcome::default()
+        };
+        if let Some(span) = target {
+            let a = &span.anchor;
+            if span.id != id {
+                return Err(format!("snapshot is of span {:?}, not {id:?}", span.id));
+            }
+            if !text_at(&self.doc.body, a) {
+                return Err(EditError::StaleAnchor(id.to_string()).to_string());
+            }
+            let spans = &mut self.doc.annotations.spans;
+            if let Some(other) = spans
+                .iter()
+                .find(|s| s.id == id || overlaps(&s.anchor, a.start, a.end))
+            {
+                return Err(EditError::Overlap(other.id.clone()).to_string());
+            }
+            let at = position.unwrap_or(spans.len()).min(spans.len());
+            spans.insert(at, span);
+        }
+        self.doc.refresh_context();
+        outcome.set_aside = self.set_aside.len();
+        outcome.notice = self.set_aside_notice();
+        Ok(outcome)
+    }
+}
+
+/// Maps a panel result to JavaScript: the change as JSON, `null` when
+/// nothing changed, or a thrown error string.
+fn alt_js(result: Result<Option<AltChange>, String>) -> Result<JsValue, JsValue> {
+    match result {
+        Ok(Some(change)) => Ok(to_js(&change.to_json())),
+        Ok(None) => Ok(JsValue::NULL),
+        Err(error) => Err(JsValue::from_str(&error)),
+    }
+}
+
+/// Creates a span of `kind` (`"word"`, `"sentence"`, `"paragraph"`) over
+/// `start..end` (UTF-16) with its first alternative `text` from `source`
+/// (`"human"` or `"ai"`). Returns the change (see [`AltChange::to_json`]);
+/// throws, changing nothing, for an invalid or overlapping range, empty text
+/// or text equal to the original.
+#[wasm_bindgen]
+pub fn alt_create_span(
+    kind: &str,
+    start: u32,
+    end: u32,
+    text: &str,
+    source: &str,
+) -> Result<JsValue, JsValue> {
+    alt_js(parse_span_kind(kind).and_then(|kind| {
+        let source = parse_alt_source(source)?;
+        with_session(|s| s.alt_create_span(kind, start as usize, end as usize, text, source))
+            .map(Some)
+    }))
+}
+
+/// Appends alternative `text` from `source` to span `span_id`. Returns the
+/// change, or `null` if the span already has that text; throws on error.
+#[wasm_bindgen]
+pub fn alt_add(span_id: &str, text: &str, source: &str) -> Result<JsValue, JsValue> {
+    alt_js(
+        parse_alt_source(source)
+            .and_then(|source| with_session(|s| s.alt_add(span_id, text, source))),
+    )
+}
+
+/// Replaces the text of alternative `index` of span `span_id`. Returns the
+/// change (with the body edit when it was the active one), or `null` when the
+/// text is unchanged; throws on error.
+#[wasm_bindgen]
+pub fn alt_edit(span_id: &str, index: u32, text: &str) -> Result<JsValue, JsValue> {
+    alt_js(with_session(|s| s.alt_edit(span_id, index as usize, text)))
+}
+
+/// Removes alternative `index` of span `span_id`. Returns the change (its
+/// `after` is `null` when the span was removed); throws on error.
+#[wasm_bindgen]
+pub fn alt_remove(span_id: &str, index: u32) -> Result<JsValue, JsValue> {
+    alt_js(with_session(|s| s.alt_remove(span_id, index as usize)).map(Some))
+}
+
+/// Moves alternative `from` of span `span_id` to position `to`. Returns the
+/// change, or `null` when `from == to`; throws on error.
+#[wasm_bindgen]
+pub fn alt_move(span_id: &str, from: u32, to: u32) -> Result<JsValue, JsValue> {
+    alt_js(with_session(|s| {
+        s.alt_move(span_id, from as usize, to as usize)
+    }))
+}
+
+/// Replays a recorded panel operation (see [`DocumentSession::alt_restore`]):
+/// `target_json` is the span snapshot to put back, or `"null"` to leave the
+/// span out. Returns `{ detached, reattached, setAside, warning, notice, ... }`;
+/// throws, changing nothing, when the replay does not fit.
+#[wasm_bindgen]
+pub fn alt_restore(
+    span_id: &str,
+    target_json: &str,
+    start: u32,
+    deleted_len: u32,
+    inserted: &str,
+) -> Result<JsValue, JsValue> {
+    let target: Option<Span> =
+        serde_json::from_str(target_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    with_session(|s| {
+        s.alt_restore(
+            span_id,
+            target,
+            start as usize,
+            deleted_len as usize,
+            inserted,
+        )
+    })
+    .map(|outcome| to_js(&outcome.to_json()))
+    .map_err(|e| JsValue::from_str(&e))
+}
+
+// ---------------------------------------------------------------------------
+// End of #10 (alternatives side panel).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // Moving text (issue #44). Kept in one block, apart from the other exports,
 // so parallel additions to this file merge cleanly.
 // ---------------------------------------------------------------------------
@@ -1106,17 +1598,22 @@ pub fn set_active_alternative(span_id: &str, index: u32) -> Result<JsValue, JsVa
 // Appending alternatives from a provider (issue #13, R-8.6). Kept in one
 // block, apart from the other exports, so parallel additions to this file
 // merge cleanly.
+//
+// It reuses the #10 panel's [`AltChange`] (span before and after), so the
+// editor records an append as ONE undo step and replays it with
+// [`DocumentSession::alt_restore`] like any panel operation.
 // ---------------------------------------------------------------------------
 
 impl DocumentSession {
     /// Appends `texts` as alternatives (with `source` and `model`) to the
-    /// live span exactly over `start..end` (UTF-16), creating a `kind` span
-    /// there when there is none. Texts the span already offers (its original
-    /// included) are skipped, so repeating the call adds nothing. Returns the
-    /// span id and the number of alternatives added.
+    /// live span exactly over `start..end` (UTF-16), after the alternatives
+    /// it already has, creating a `kind` span there when there is none.
+    /// Texts the span already offers (its original included) are skipped,
+    /// so repeating the call adds nothing: `Ok(None)`. The active
+    /// alternative is unchanged, so the body is never edited.
     ///
-    /// Atomic: a range that partly overlaps another span, an invalid range,
-    /// or nothing to add to a new span is refused and changes nothing.
+    /// Atomic: a range that partly overlaps another span or is invalid is
+    /// refused and changes nothing.
     pub fn append_alternatives(
         &mut self,
         kind: SpanKind,
@@ -1125,49 +1622,376 @@ impl DocumentSession {
         texts: &[String],
         source: Source,
         model: Option<&str>,
-    ) -> Result<(String, usize), EditError> {
+    ) -> Result<Option<AltChange>, String> {
         let existing = self
             .doc
             .annotations
             .spans
             .iter()
             .find(|s| s.anchor.start == start && s.anchor.end == end);
-        let mut offered: HashSet<String> = existing
-            .map(|s| s.alts.iter().map(|a| a.text.clone()).collect())
-            .unwrap_or_default();
-        if existing.is_none() {
-            let body_text = utf16_to_byte(&self.doc.body, start)
+        let known = existing.map(|s| s.id.clone());
+        let mut offered: HashSet<String> = match existing {
+            Some(span) => span.alts.iter().map(|a| a.text.clone()).collect(),
+            None => utf16_to_byte(&self.doc.body, start)
                 .zip(utf16_to_byte(&self.doc.body, end))
-                .map(|(a, b)| self.doc.body[a..b].to_string());
-            offered.extend(body_text);
-        }
-        let fresh: Vec<&String> = texts
+                .map(|(a, b)| self.doc.body[a..b].to_string())
+                .into_iter()
+                .collect(),
+        };
+        let fresh: Vec<String> = texts
             .iter()
             .filter(|t| !t.is_empty() && offered.insert((*t).clone()))
+            .cloned()
             .collect();
-        let before = self.doc.clone();
-        let id = match existing {
-            Some(span) => span.id.clone(),
-            None if fresh.is_empty() => {
-                return Err(EditError::InvalidRange { start, end });
-            }
-            None => self.doc.add_span(kind, start, end)?,
-        };
-        for text in &fresh {
-            if let Err(error) =
-                self.doc
-                    .add_alternative(&id, text.as_str(), source, model.map(str::to_owned))
-            {
-                self.doc = before;
-                return Err(error);
-            }
+        if fresh.is_empty() {
+            return Ok(None);
         }
-        Ok((id, fresh.len()))
+        let model = model.map(str::to_owned);
+        self.alt_change(known.as_deref(), |s| {
+            let id = match known.clone() {
+                Some(id) => id,
+                None => s
+                    .doc
+                    .add_span(kind, start, end)
+                    .map_err(|e| e.to_string())?,
+            };
+            let mut first = None;
+            for text in fresh {
+                let index = s
+                    .doc
+                    .add_alternative(&id, text, source, model.clone())
+                    .map_err(|e| e.to_string())?;
+                first.get_or_insert(index);
+            }
+            Ok((id, first))
+        })
+        .map(Some)
     }
 }
 
 // ---------------------------------------------------------------------------
 // End of appending alternatives (issue #13).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Overflow panel: stash, pull back, panel text (issue #12). Kept in one
+// block, apart from the other exports, so parallel additions to this file
+// merge cleanly.
+//
+// The overflow text lives in `Annotations::overflow` and is written into the
+// annotation block on save (omitted when empty); export never includes it.
+// The panel (`public/js/overflow.js`) writes what the author types with
+// `set_document_overflow`. A stash removes a body range through the normal
+// edit path (`apply_edit`) and appends the removed text to the overflow in
+// one call; the editor records both in one undo step and replays the
+// overflow half with `replay_document_overflow`.
+// ---------------------------------------------------------------------------
+
+/// Why an overflow change was refused. Nothing changes on any error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OverflowError {
+    /// A malformed annotation block is being preserved verbatim, so the
+    /// overflow could not be saved (save writes the raw block back, not the
+    /// model's overflow). Stashing would lose the stashed text.
+    PreservedBlock,
+    /// A stash needs a non-empty range.
+    EmptyRange,
+    /// The range does not fit the body (see [`EditError`]).
+    Edit(EditError),
+}
+
+impl std::fmt::Display for OverflowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PreservedBlock => f.write_str(
+                "the annotation block could not be read and is preserved unchanged, so \
+                 Overflow cannot be saved until it is repaired",
+            ),
+            Self::EmptyRange => f.write_str("nothing selected to stash"),
+            Self::Edit(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl OverflowError {
+    /// `"preserved-block"`, `"empty"`, `"invalid-range"`, `"stale"` or
+    /// `"other"`, for JavaScript.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::PreservedBlock => "preserved-block",
+            Self::EmptyRange => "empty",
+            Self::Edit(EditError::InvalidRange { .. }) => "invalid-range",
+            Self::Edit(EditError::StaleAnchor(_)) => "stale",
+            Self::Edit(_) => "other",
+        }
+    }
+}
+
+/// Outcome of [`DocumentSession::stash`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StashOutcome {
+    /// Start of the removed body text (UTF-16).
+    pub start: usize,
+    /// The body text removed (and appended to the overflow).
+    pub text: String,
+    /// The overflow before the stash.
+    pub overflow_before: String,
+    /// The overflow after the stash.
+    pub overflow_after: String,
+    /// The bookkeeping of the removal, as for
+    /// [`apply_edit`](DocumentSession::apply_edit).
+    pub outcome: EditOutcome,
+}
+
+impl StashOutcome {
+    /// `{ edit: { start, deletedLength, deletedText, insertedText },
+    /// overflow: { before, after }, detached, detachedGhosts, reattached,
+    /// setAside, warning, notice }` for JavaScript.
+    pub fn to_json(&self) -> Value {
+        let mut value = self.outcome.to_json();
+        if let Value::Object(map) = &mut value {
+            map.insert(
+                "edit".into(),
+                json!({
+                    "start": self.start,
+                    "deletedLength": utf16_len(&self.text),
+                    "deletedText": self.text,
+                    "insertedText": "",
+                }),
+            );
+            map.insert(
+                "overflow".into(),
+                json!({ "before": self.overflow_before, "after": self.overflow_after }),
+            );
+        }
+        value
+    }
+}
+
+/// `current` with `text` appended as a new entry: directly when `current`
+/// is empty, otherwise after a blank line (completing a trailing newline).
+pub fn append_overflow(current: &str, text: &str) -> String {
+    format!("{current}{}{text}", overflow_separator(current))
+}
+
+/// The separator [`append_overflow`] puts between `current` and a new entry:
+/// nothing at the start or after a blank line, otherwise enough newlines to
+/// leave one blank line.
+fn overflow_separator(current: &str) -> &'static str {
+    if current.is_empty() || current.ends_with("\n\n") {
+        ""
+    } else if current.ends_with('\n') {
+        "\n"
+    } else {
+        "\n\n"
+    }
+}
+
+/// Outcome of [`rebase_overflow`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rebased {
+    /// The overflow after the replay.
+    pub text: String,
+    /// Whether the recorded change was applied. `false` means it could not be
+    /// placed safely and `text` is `current` unchanged.
+    pub applied: bool,
+}
+
+/// Replays a recorded overflow change `from` -> `to` (an undo or redo of a
+/// stash) onto `current`, which may hold text typed in the panel since.
+///
+/// A stash only ever appends, so one of the two texts is the other plus a
+/// chunk (separator and stashed text), and the step itself records the
+/// chunk's position: it starts at the length of the shorter text (the
+/// pre-stash overflow). The chunk is identified by that position, never by
+/// searching for its text, so an identical copy typed by the author is never
+/// mistaken for it.
+///
+/// * `current == from`: exactly `to`.
+/// * Undo (`to` is `from` minus the chunk): the chunk is removed only when
+///   everything before its recorded position is unchanged (`current` starts
+///   with `to`) and the chunk is still there, intact, right after it. Text
+///   typed after the chunk is kept. Otherwise (text changed before the
+///   chunk, or the chunk itself edited or deleted) nothing is removed:
+///   `current` is kept and `applied` is `false`, so the editor can say so.
+/// * Redo (`to` is `from` plus the chunk): the chunk is inserted at its
+///   recorded position when everything before it is unchanged (`current`
+///   starts with `from`), otherwise appended at the end. Always applied.
+/// * Anything else: `current` is kept, not applied.
+pub fn rebase_overflow(current: &str, from: &str, to: &str) -> Rebased {
+    let kept = || Rebased {
+        text: current.to_string(),
+        applied: false,
+    };
+    if current == from {
+        return Rebased {
+            text: to.to_string(),
+            applied: true,
+        };
+    }
+    if let Some(chunk) = from.strip_prefix(to).filter(|c| !c.is_empty()) {
+        return match current
+            .strip_prefix(to)
+            .and_then(|rest| rest.strip_prefix(chunk))
+        {
+            Some(after_chunk) => Rebased {
+                text: format!("{to}{after_chunk}"),
+                applied: true,
+            },
+            None => kept(),
+        };
+    }
+    if let Some(chunk) = to.strip_prefix(from).filter(|c| !c.is_empty()) {
+        let text = match current.strip_prefix(from) {
+            Some(rest) => format!("{from}{chunk}{rest}"),
+            // The chunk carries the separator chosen for `from`; re-append
+            // the entry itself so the separator suits `current`.
+            None => append_overflow(
+                current,
+                chunk
+                    .strip_prefix(overflow_separator(from))
+                    .unwrap_or(chunk),
+            ),
+        };
+        return Rebased {
+            text,
+            applied: true,
+        };
+    }
+    kept()
+}
+
+impl DocumentSession {
+    /// The overflow (stash) text.
+    pub fn overflow(&self) -> &str {
+        &self.doc.annotations.overflow
+    }
+
+    /// Replaces the overflow text (the panel's content). Refused, changing
+    /// nothing, while a malformed block is preserved.
+    pub fn set_overflow(&mut self, text: &str) -> Result<(), OverflowError> {
+        if self.raw_block.is_some() {
+            return Err(OverflowError::PreservedBlock);
+        }
+        self.doc.annotations.overflow = text.to_string();
+        Ok(())
+    }
+
+    /// Stash (R-6.3): removes the body text `start..end` (UTF-16) through
+    /// [`apply_edit`](Self::apply_edit), so spans whose text it touches are
+    /// detached and set aside, and ghosts wholly inside it are set aside
+    /// (both re-attach when the text comes back, for example on undo), then
+    /// appends the removed text to the overflow with [`append_overflow`].
+    ///
+    /// Atomic: an empty, reversed or out-of-bounds range, a range splitting a
+    /// character, a refused edit, or a preserved malformed block (whose save
+    /// would drop the overflow) changes neither the body nor the overflow.
+    pub fn stash(&mut self, start: usize, end: usize) -> Result<StashOutcome, OverflowError> {
+        if self.raw_block.is_some() {
+            return Err(OverflowError::PreservedBlock);
+        }
+        if start >= end {
+            return Err(if start == end {
+                OverflowError::EmptyRange
+            } else {
+                OverflowError::Edit(EditError::InvalidRange { start, end })
+            });
+        }
+        let body = &self.doc.body;
+        let (Some(a), Some(b)) = (utf16_to_byte(body, start), utf16_to_byte(body, end)) else {
+            return Err(OverflowError::Edit(EditError::InvalidRange { start, end }));
+        };
+        let text = body[a..b].to_string();
+        let outcome = self
+            .apply_edit(start, end - start, "")
+            .map_err(OverflowError::Edit)?;
+        let before = std::mem::take(&mut self.doc.annotations.overflow);
+        let after = append_overflow(&before, &text);
+        self.doc.annotations.overflow = after.clone();
+        Ok(StashOutcome {
+            start,
+            text,
+            overflow_before: before,
+            overflow_after: after,
+            outcome,
+        })
+    }
+
+    /// Replays a recorded overflow change (see [`rebase_overflow`]) and
+    /// returns the outcome. Refused while a malformed block is
+    /// preserved.
+    pub fn replay_overflow(&mut self, from: &str, to: &str) -> Result<Rebased, OverflowError> {
+        let next = rebase_overflow(self.overflow(), from, to);
+        self.set_overflow(&next.text)?;
+        Ok(next)
+    }
+}
+
+fn overflow_error_json(error: &OverflowError) -> Value {
+    json!({ "ok": false, "error": error.to_string(), "kind": error.kind() })
+}
+
+/// The overflow (stash) text of the current document.
+#[wasm_bindgen]
+pub fn document_overflow() -> String {
+    with_session(|s| s.overflow().to_string())
+}
+
+/// [`DocumentSession::set_overflow`] as JSON: `{ ok: true, overflow }` or
+/// `{ ok: false, error, kind }`.
+pub fn set_overflow_json(session: &mut DocumentSession, text: &str) -> Value {
+    match session.set_overflow(text) {
+        Ok(()) => json!({ "ok": true, "overflow": session.overflow() }),
+        Err(error) => overflow_error_json(&error),
+    }
+}
+
+/// Replaces the overflow text (what the Overflow panel holds). Returns
+/// `{ ok: true, overflow }`, or `{ ok: false, error, kind }` (kind
+/// `"preserved-block"`) with nothing changed. Never throws.
+#[wasm_bindgen]
+pub fn set_document_overflow(text: &str) -> JsValue {
+    to_js(&with_session(|s| set_overflow_json(s, text)))
+}
+
+/// Stashes the body text `start..end` (UTF-16) in the overflow: removed
+/// from the body through the normal edit path and appended to the overflow
+/// (R-6.3). Returns `{ edit, overflow: { before, after }, detached,
+/// detachedGhosts, reattached, setAside, warning, notice }`; throws,
+/// changing nothing, for an empty or invalid range or while a malformed
+/// block is preserved.
+///
+/// `MarkdownEditor.stashRange` calls this and then applies `edit` to the
+/// editing surface without mirroring it through [`apply_edit`].
+#[wasm_bindgen]
+pub fn stash_document_range(start: u32, end: u32) -> Result<JsValue, JsValue> {
+    with_session(|s| s.stash(start as usize, end as usize))
+        .map(|outcome| to_js(&outcome.to_json()))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// [`DocumentSession::replay_overflow`] as JSON: `{ ok: true, overflow,
+/// applied }` or `{ ok: false, error, kind }`.
+pub fn replay_overflow_json(session: &mut DocumentSession, from: &str, to: &str) -> Value {
+    match session.replay_overflow(from, to) {
+        Ok(next) => json!({ "ok": true, "overflow": next.text, "applied": next.applied }),
+        Err(error) => overflow_error_json(&error),
+    }
+}
+
+/// Replays a recorded overflow change `from` -> `to` (undo or redo of a
+/// stash) onto the current overflow, keeping text typed in the panel since
+/// (see [`rebase_overflow`]). Returns `{ ok: true, overflow, applied }`
+/// (`applied: false` when an undo could not find the stashed text intact at
+/// its recorded position and left the overflow unchanged) or
+/// `{ ok: false, error, kind }`. Never throws.
+#[wasm_bindgen]
+pub fn replay_document_overflow(from: &str, to: &str) -> JsValue {
+    to_js(&with_session(|s| replay_overflow_json(s, from, to)))
+}
+
+// ---------------------------------------------------------------------------
+// End of overflow panel (issue #12).
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
@@ -2004,5 +2828,468 @@ mod tests {
         assert_eq!(ghosts(&session).len(), 1);
         let g = &ghosts(&session)[0];
         assert_eq!((g.1, g.2, g.3.as_str()), (15, 24, "Four five"));
+    }
+
+    // ----- #10 alternatives side panel --------------------------------------
+
+    const PANEL: &str = "Pass me a paperclip. Drop this.";
+
+    /// Applies a panel edit to `text`, checking the deleted text matches.
+    fn apply_alt_edit(text: &str, edit: &AltEdit) -> String {
+        let start = utf16_to_byte(text, edit.start).unwrap();
+        let end = start + edit.deleted_text.len();
+        assert_eq!(&text[start..end], edit.deleted_text);
+        format!("{}{}{}", &text[..start], edit.inserted_text, &text[end..])
+    }
+
+    /// Undoes `change` the way the editor does: restore `before` with the
+    /// inverse edit.
+    fn undo_alt(session: &mut DocumentSession, change: &AltChange) {
+        let (start, deleted, inserted) = match &change.edit {
+            Some(e) => (
+                e.start,
+                utf16_len(&e.inserted_text),
+                e.deleted_text.as_str(),
+            ),
+            None => (0, 0, ""),
+        };
+        session
+            .alt_restore(
+                &change.span,
+                change.before.clone(),
+                start,
+                deleted,
+                inserted,
+            )
+            .unwrap();
+    }
+
+    /// Redoes `change`: restore `after` with the forward edit.
+    fn redo_alt(session: &mut DocumentSession, change: &AltChange) {
+        let (start, deleted, inserted) = match &change.edit {
+            Some(e) => (
+                e.start,
+                utf16_len(&e.deleted_text),
+                e.inserted_text.as_str(),
+            ),
+            None => (0, 0, ""),
+        };
+        session
+            .alt_restore(&change.span, change.after.clone(), start, deleted, inserted)
+            .unwrap();
+    }
+
+    /// Checks undo then redo of `change` lands exactly on the states around it.
+    fn round_trip(session: &mut DocumentSession, change: &AltChange, before: &DocumentSession) {
+        let after = session.clone();
+        undo_alt(session, change);
+        assert_eq!(session.document(), before.document(), "undo");
+        redo_alt(session, change);
+        assert_eq!(session.document(), after.document(), "redo");
+    }
+
+    #[test]
+    fn body_edit_is_minimal_and_char_safe() {
+        assert_eq!(body_edit("abc", "abc"), None);
+        let e = body_edit("Pass me a paperclip.", "Pass me an eraser.").unwrap();
+        assert_eq!(
+            (e.start, e.deleted_text.as_str(), e.inserted_text.as_str()),
+            (9, " paperclip", "n eraser")
+        );
+        // Non-BMP text before the edit: the start is in UTF-16 units.
+        let e = body_edit("\u{1F600} a b", "\u{1F600} a c").unwrap();
+        assert_eq!(
+            (e.start, e.deleted_text.as_str(), e.inserted_text.as_str()),
+            (5, "b", "c")
+        );
+        // A shared byte inside different characters is not split.
+        let e = body_edit("\u{e9}", "\u{e8}").unwrap();
+        assert_eq!(
+            (e.deleted_text.as_str(), e.inserted_text.as_str()),
+            ("\u{e9}", "\u{e8}")
+        );
+    }
+
+    #[test]
+    fn create_adds_span_and_first_alternative_as_one_operation() {
+        let mut session = DocumentSession::new();
+        session.open(PANEL);
+        let before = session.clone();
+        let change = session
+            .alt_create_span(SpanKind::Word, 10, 19, "eraser", Source::Human)
+            .unwrap();
+        assert_eq!((change.span.as_str(), change.index), ("s1", Some(1)));
+        assert_eq!(change.before, None);
+        assert_eq!(change.edit, None, "the new alternative is not made active");
+        let after = change.after.clone().unwrap();
+        assert_eq!(after.alts.len(), 2);
+        assert_eq!(after.alts[1].source, Source::Human);
+        assert_eq!(session.body(), PANEL);
+        round_trip(&mut session, &change, &before);
+
+        // Refusals change nothing and never leave an inert span.
+        let snapshot = session.clone();
+        assert!(session
+            .alt_create_span(SpanKind::Word, 0, 4, "Pass", Source::Human)
+            .is_err());
+        assert!(session
+            .alt_create_span(SpanKind::Word, 0, 4, "", Source::Human)
+            .is_err());
+        assert!(session
+            .alt_create_span(SpanKind::Word, 12, 14, "x", Source::Human)
+            .is_err());
+        assert_eq!(session, snapshot);
+        assert!(parse_span_kind("clause").is_err());
+        assert!(parse_alt_source("original").is_err());
+    }
+
+    #[test]
+    fn add_edit_move_and_remove_round_trip_through_restore() {
+        let mut session = DocumentSession::new();
+        session.open(PANEL);
+        session
+            .alt_create_span(SpanKind::Word, 10, 19, "eraser", Source::Human)
+            .unwrap();
+
+        // Add (AI provenance kept), and a duplicate is a no-op.
+        let before = session.clone();
+        let add = session
+            .alt_add("s1", "thumbtack", Source::Ai)
+            .unwrap()
+            .unwrap();
+        assert_eq!(add.index, Some(2));
+        assert_eq!(add.after.as_ref().unwrap().alts[2].source, Source::Ai);
+        round_trip(&mut session, &add, &before);
+        assert_eq!(
+            session.alt_add("s1", "eraser", Source::Human).unwrap(),
+            None
+        );
+
+        // Edit an inactive line: annotations only.
+        let before = session.clone();
+        let edit = session.alt_edit("s1", 1, "pencil").unwrap().unwrap();
+        assert_eq!(edit.edit, None);
+        assert_eq!(
+            session.document().annotations.spans[0].alts[1].text,
+            "pencil"
+        );
+        round_trip(&mut session, &edit, &before);
+        assert_eq!(session.alt_edit("s1", 1, "pencil").unwrap(), None);
+        assert!(session.alt_edit("s1", 1, "thumbtack").is_err(), "duplicate");
+        assert!(session.alt_edit("s1", 0, "x").is_err(), "original");
+        assert!(session.alt_edit("s1", 1, "").is_err(), "empty");
+
+        // Make "pencil" active, then edit the active line: the body and the
+        // article follow (a pencil -> an eraser).
+        // (Making a line active is issue #9's swap, `DocumentSession::set_active`.)
+        session.set_active("s1", 1).unwrap();
+        assert_eq!(session.body(), "Pass me a pencil. Drop this.");
+        let before = session.clone();
+        let text = session.body().to_string();
+        let edit = session.alt_edit("s1", 1, "eraser").unwrap().unwrap();
+        assert_eq!(session.body(), "Pass me an eraser. Drop this.");
+        assert_eq!(
+            apply_alt_edit(&text, edit.edit.as_ref().unwrap()),
+            session.body()
+        );
+        round_trip(&mut session, &edit, &before);
+
+        // Move: the active alternative stays active by text.
+        let before = session.clone();
+        let moved = session.alt_move("s1", 1, 2).unwrap().unwrap();
+        let span = moved.after.as_ref().unwrap();
+        assert_eq!(span.alts[2].text, "eraser");
+        assert_eq!(span.active, 2);
+        assert_eq!(moved.edit, None);
+        round_trip(&mut session, &moved, &before);
+        assert_eq!(session.alt_move("s1", 2, 2).unwrap(), None);
+        assert!(session.alt_move("s1", 0, 1).is_err());
+        assert!(session.alt_move("s1", 1, 9).is_err());
+
+        // Remove the active line: the original comes back with its article.
+        let before = session.clone();
+        let index = session.document().annotations.spans[0].active;
+        let removed = session.alt_remove("s1", index).unwrap();
+        assert_eq!(session.body(), PANEL);
+        assert!(removed.after.is_some());
+        round_trip(&mut session, &removed, &before);
+    }
+
+    #[test]
+    fn removing_the_last_alternative_removes_the_span_and_undo_brings_it_back() {
+        let mut session = DocumentSession::new();
+        session.open(PANEL);
+        session
+            .alt_create_span(SpanKind::Word, 10, 19, "eraser", Source::Ai)
+            .unwrap();
+        session.ghost(20, 31).unwrap();
+        let before = session.clone();
+        let removed = session.alt_remove("s1", 1).unwrap();
+        assert_eq!(removed.after, None, "R-2.7: nothing left to keep");
+        assert!(session.document().annotations.spans.is_empty());
+        assert_eq!(session.document().annotations.ghosts.len(), 1);
+        round_trip(&mut session, &removed, &before);
+        // Saved and reopened, the restored span is intact.
+        let mut reopened = DocumentSession::new();
+        assert_eq!(reopened.open(&session.save()).unresolved, 0);
+        assert_eq!(reopened.document(), session.document());
+    }
+
+    #[test]
+    fn restore_moves_other_anchors_and_refuses_what_does_not_fit() {
+        let mut session = DocumentSession::new();
+        session.open("Pass me a paperclip and a pen. Drop this.");
+        session
+            .alt_create_span(SpanKind::Word, 10, 19, "eraser", Source::Human)
+            .unwrap();
+        session
+            .alt_create_span(SpanKind::Word, 26, 29, "quill", Source::Human)
+            .unwrap();
+        session.ghost(31, 41).unwrap();
+        session.set_active("s1", 1).unwrap();
+        assert_eq!(session.body(), "Pass me an eraser and a pen. Drop this.");
+        // Editing the active line rewrites the body (an eraser -> a pencil);
+        // the later span and ghost move with it, and back on undo.
+        let before = session.clone();
+        let swap = session.alt_edit("s1", 1, "pencil").unwrap().unwrap();
+        assert_eq!(session.body(), "Pass me a pencil and a pen. Drop this.");
+        let s2 = session.document().span("s2").unwrap().anchor.clone();
+        assert_eq!((s2.start, s2.end), (23, 26));
+        let g1 = session.document().annotations.ghosts[0].anchor.clone();
+        assert_eq!((g1.start, g1.end), (28, 38));
+        round_trip(&mut session, &swap, &before);
+
+        // Replays that do not fit change nothing.
+        let snapshot = session.clone();
+        assert!(
+            session
+                .alt_restore("s1", swap.before.clone(), 0, 0, "")
+                .is_err(),
+            "stale: the snapshot's text is not in the body"
+        );
+        assert_eq!(session, snapshot);
+        assert!(
+            session
+                .alt_restore("s2", before.document().span("s1").cloned(), 0, 0, "")
+                .is_err(),
+            "snapshot of another span"
+        );
+        assert_eq!(session, snapshot);
+        assert!(session.alt_restore("s1", None, 999, 1, "").is_err());
+        assert_eq!(session, snapshot);
+    }
+
+    // ----- overflow panel (issue #12) ---------------------------------------
+
+    #[test]
+    fn redo_fallback_appends_a_separate_entry() {
+        // Stash onto an overflow ending with a blank line: the recorded chunk
+        // has no separator of its own.
+        let from = "old\n\n";
+        let to = append_overflow(from, "chunk");
+        assert_eq!(to, "old\n\nchunk");
+        // After undo the author rewrote the panel, so redo falls back to
+        // appending: it must still be a separate entry.
+        let redo = rebase_overflow("edited", from, &to);
+        assert!(redo.applied);
+        assert_eq!(redo.text, "edited\n\nchunk");
+        let redo = rebase_overflow("edited\n", from, &to);
+        assert_eq!(redo.text, "edited\n\nchunk");
+        // A separator recorded with the chunk is replaced, not doubled.
+        let to = append_overflow("note", "chunk");
+        assert_eq!(rebase_overflow("other", "note", &to).text, "other\n\nchunk");
+        assert_eq!(rebase_overflow("", "note", &to).text, "chunk");
+        // A stashed entry that itself starts with a newline keeps it.
+        let to = append_overflow("note", "\nchunk");
+        assert_eq!(
+            rebase_overflow("other", "note", &to).text,
+            "other\n\n\nchunk"
+        );
+    }
+
+    #[test]
+    fn append_overflow_separates_entries_with_a_blank_line() {
+        assert_eq!(append_overflow("", "a"), "a");
+        assert_eq!(append_overflow("x", "a"), "x\n\na");
+        assert_eq!(append_overflow("x\n", "a"), "x\n\na");
+        assert_eq!(append_overflow("x\n\n", "a"), "x\n\na");
+    }
+
+    #[test]
+    fn stash_moves_the_text_into_overflow_atomically() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        session.set_overflow("Earlier note").unwrap();
+        let stash = session.stash(15, 30).unwrap(); // "Four five six. "
+        assert_eq!(stash.text, "Four five six. ");
+        assert_eq!(stash.start, 15);
+        assert_eq!(stash.overflow_before, "Earlier note");
+        assert_eq!(stash.overflow_after, "Earlier note\n\nFour five six. ");
+        assert_eq!(session.body(), "One two three. Seven eight.");
+        assert_eq!(session.overflow(), "Earlier note\n\nFour five six. ");
+        let json = stash.to_json();
+        assert_eq!(json["edit"]["start"], 15);
+        assert_eq!(json["edit"]["deletedLength"], 15);
+        assert_eq!(json["edit"]["deletedText"], "Four five six. ");
+        assert_eq!(json["edit"]["insertedText"], "");
+        assert_eq!(json["overflow"]["before"], "Earlier note");
+        assert_eq!(json["overflow"]["after"], "Earlier note\n\nFour five six. ");
+
+        // Refusals change neither the body nor the overflow.
+        let before = session.clone();
+        assert_eq!(session.stash(3, 3).unwrap_err().kind(), "empty");
+        assert_eq!(session.stash(5, 3).unwrap_err().kind(), "invalid-range");
+        assert_eq!(session.stash(0, 999).unwrap_err().kind(), "invalid-range");
+        assert_eq!(session, before);
+    }
+
+    #[test]
+    fn stash_offsets_are_utf16_and_never_split_a_character() {
+        let mut session = DocumentSession::new();
+        session.open("a\u{1F600}b c");
+        let before = session.clone();
+        // Offset 2 is inside the surrogate pair.
+        assert_eq!(session.stash(0, 2).unwrap_err().kind(), "invalid-range");
+        assert_eq!(session, before);
+        let stash = session.stash(1, 3).unwrap();
+        assert_eq!(stash.text, "\u{1F600}");
+        assert_eq!(session.body(), "ab c");
+    }
+
+    #[test]
+    fn stash_sets_annotations_aside_and_undo_brings_them_back() {
+        let mut session = DocumentSession::new();
+        session.open(&cycling_source());
+        // "Pass me a paperclip. Drop this." with s1 over "paperclip" (10..19)
+        // and a ghost over " Drop this." (20..31). Stash "a paperclip. Drop
+        // this.": the span is detached, the ghost set aside.
+        let stash = session.stash(8, 31).unwrap();
+        assert_eq!(stash.outcome.detached, vec!["s1".to_string()]);
+        assert_eq!(stash.outcome.detached_ghosts.len(), 1);
+        assert!(stash.outcome.warning.is_some());
+        assert!(session.document().annotations.spans.is_empty());
+        assert!(session.document().annotations.ghosts.is_empty());
+        assert_eq!(session.overflow(), "a paperclip. Drop this.");
+        // Saved meanwhile: the set-aside annotations are kept.
+        assert!(session.save().contains("thumbtack"));
+
+        // Undo, as the editor replays it: the text comes back through the
+        // normal edit path, then the overflow change is replayed backwards.
+        session.apply_edit(8, 0, &stash.text).unwrap();
+        let undone = session
+            .replay_overflow(&stash.overflow_after, &stash.overflow_before)
+            .unwrap();
+        assert_eq!((undone.text.as_str(), undone.applied), ("", true));
+        assert_eq!(session.body(), "Pass me a paperclip. Drop this.");
+        assert!(session.set_aside().is_empty());
+        assert_eq!(session.document().annotations.spans.len(), 1);
+        assert_eq!(session.document().annotations.ghosts.len(), 1);
+        assert_eq!(session.save(), cycling_source());
+
+        // Redo.
+        session.apply_edit(8, 23, "").unwrap();
+        session
+            .replay_overflow(&stash.overflow_before, &stash.overflow_after)
+            .unwrap();
+        assert_eq!(session.overflow(), "a paperclip. Drop this.");
+        assert_eq!(session.body(), "Pass me ");
+    }
+
+    #[test]
+    fn replaying_a_stash_keeps_text_typed_in_the_panel() {
+        let (before, after) = ("note", "note\n\nchunk");
+        let undo = |current: &str| rebase_overflow(current, after, before);
+        let redo = |current: &str| rebase_overflow(current, before, after);
+        let applied = |text: &str| Rebased {
+            text: text.into(),
+            applied: true,
+        };
+        let kept = |text: &str| Rebased {
+            text: text.into(),
+            applied: false,
+        };
+        // Unchanged since the stash: exact.
+        assert_eq!(undo(after), applied("note"));
+        assert_eq!(redo(before), applied(after));
+        // Typed after the chunk: the chunk is removed at its position.
+        assert_eq!(undo("note\n\nchunk more"), applied("note more"));
+        // The same chunk typed again after it: the stashed copy (at the
+        // recorded position) goes, the author's copy stays.
+        assert_eq!(undo("note\n\nchunk\n\nchunk"), applied("note\n\nchunk"));
+        // Text typed before the chunk moves it off its recorded position:
+        // nothing is removed, and the caller is told.
+        assert_eq!(undo("edited note\n\nchunk"), kept("edited note\n\nchunk"));
+        // The chunk edited or deleted by hand: nothing is removed.
+        assert_eq!(undo("note\n\nchUnk"), kept("note\n\nchUnk"));
+        assert_eq!(undo("note"), kept("note"));
+        // A copy elsewhere is never taken for the stashed one.
+        assert_eq!(undo("x\n\nchunk"), kept("x\n\nchunk"));
+        // Redo: at the recorded position when the text before it is intact,
+        // otherwise at the end.
+        assert_eq!(redo("note, more"), applied("note\n\nchunk, more"));
+        assert_eq!(redo("edited"), applied("edited\n\nchunk"));
+        // An unrelated change is never forced over the current text.
+        assert_eq!(rebase_overflow("mine", "x", "y"), kept("mine"));
+    }
+
+    #[test]
+    fn overflow_round_trips_through_save_and_is_omitted_from_export() {
+        let mut session = DocumentSession::new();
+        session.open("Body text.\n");
+        session.set_overflow("Idea one\n```\ncode\n```\n").unwrap();
+        let saved = session.save();
+        assert!(saved.starts_with("Body text.\n"));
+        assert!(!session.export().contains("Idea one"));
+        assert_eq!(session.export(), "Body text.\n");
+
+        let mut reopened = DocumentSession::new();
+        let opened = reopened.open(&saved);
+        assert_eq!(opened.body, "Body text.\n");
+        assert_eq!(reopened.overflow(), "Idea one\n```\ncode\n```\n");
+        assert_eq!(
+            reopened.annotations_json()["overflow"],
+            "Idea one\n```\ncode\n```\n"
+        );
+
+        // Emptying the overflow saves plain Markdown again.
+        reopened.set_overflow("").unwrap();
+        assert_eq!(reopened.save(), "Body text.\n");
+    }
+
+    #[test]
+    fn a_preserved_malformed_block_refuses_overflow_changes() {
+        let source =
+            "Body text.\n\n```terraphim-alternatives\n{ \"version\": 1, \"spans\": [,] }\n```\n";
+        let mut session = DocumentSession::new();
+        session.open(source);
+        assert!(session.has_preserved_block());
+        let before = session.clone();
+        assert_eq!(
+            session.stash(0, 4).unwrap_err(),
+            OverflowError::PreservedBlock
+        );
+        assert_eq!(
+            session.set_overflow("x").unwrap_err().kind(),
+            "preserved-block"
+        );
+        assert!(session.replay_overflow("", "x").is_err());
+        assert_eq!(session, before);
+        assert_eq!(session.save(), source);
+        let json = set_overflow_json(&mut session, "x");
+        assert_eq!(json["ok"], false);
+        assert_eq!(json["kind"], "preserved-block");
+    }
+
+    #[test]
+    fn overflow_json_helpers_report_the_new_text() {
+        let mut session = DocumentSession::new();
+        session.open("Text");
+        let json = set_overflow_json(&mut session, "a");
+        assert_eq!(json, json!({ "ok": true, "overflow": "a" }));
+        let json = replay_overflow_json(&mut session, "a", "a\n\nb");
+        assert_eq!(
+            json,
+            json!({ "ok": true, "overflow": "a\n\nb", "applied": true })
+        );
     }
 }

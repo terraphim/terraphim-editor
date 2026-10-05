@@ -370,7 +370,7 @@ async fn test_destroy_reports_drafts_and_never_edits() {
             { value: 'kept draft', originalText: 'para one', anchor: 5, index: 1, isNew: false },
             { value: 'open draft', originalText: 'para two', anchor: 15, index: 2, isNew: false },
           ];
-          if (JSON.stringify(ret) !== JSON.stringify(want)) out.push('returned ' + JSON.stringify(ret));
+          if (JSON.stringify(ret) !== JSON.stringify(want.map((d) => ({ kind: 'block', ...d })))) out.push('returned ' + JSON.stringify(ret));
           if (events.length && JSON.stringify(events[0]) !== JSON.stringify(want)) out.push('event detail ' + JSON.stringify(events[0]));
           if (s.getText() !== text || window.wasmBindings.document_body() !== model) out.push('teardown changed the document');
           if (document.querySelector('.te-blocks, .te-blocks-drafts, textarea.te-block-editor')) out.push('DOM left behind');

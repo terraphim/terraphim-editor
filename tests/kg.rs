@@ -236,11 +236,12 @@ fn ai_alternatives_for_selection_append_after_the_writers_own() {
     let lookup = kg_lookup(&s, eraser, eraser + 6);
     assert_eq!(lookup["span"], "s1");
     assert_eq!(lookup["alternatives"][0]["text"], "rubber");
-    assert_eq!(
-        kg_append(&mut s, eraser, eraser + 6).unwrap(),
-        ("s1".into(), 1)
-    );
+    let change = kg_append(&mut s, eraser, eraser + 6).unwrap().unwrap();
+    assert_eq!((change.span.as_str(), change.index), ("s1", Some(2)));
+    assert_eq!(change.edit, None, "an append never edits the body");
+    assert_eq!(change.before.as_ref().unwrap().alts.len(), 2);
     let span = &s.document().annotations.spans[0];
+    assert_eq!(change.after.as_ref(), Some(span));
     let alts: Vec<(&str, Source, Option<&str>)> = span
         .alts
         .iter()
@@ -255,29 +256,37 @@ fn ai_alternatives_for_selection_append_after_the_writers_own() {
         ]
     );
     // Asking again adds nothing.
-    assert_eq!(
-        kg_append(&mut s, eraser, eraser + 6).unwrap(),
-        ("s1".into(), 0)
-    );
+    assert_eq!(kg_append(&mut s, eraser, eraser + 6).unwrap(), None);
 
     // A caret in "choice" (no span yet): a word span is created and the KG
     // span gives way to it.
     let choice = at(&body, "choice", 0) + 2;
-    let (id, added) = kg_append(&mut s, choice, choice).unwrap();
-    assert_eq!(added, 3);
-    let span = s
-        .document()
-        .annotations
-        .spans
-        .iter()
-        .find(|sp| sp.id == id)
-        .unwrap();
+    let change = kg_append(&mut s, choice, choice).unwrap().unwrap();
+    assert_eq!(change.before, None);
+    let span = change.after.clone().unwrap();
     assert_eq!(span.anchor.text, "choice");
     let texts: Vec<&str> = span.alts.iter().map(|a| a.text.as_str()).collect();
     assert_eq!(texts, ["choice", "decision", "judgment", "option"]);
     assert!(!summary(&s).iter().any(|x| x.starts_with("kg-1-0")));
     // They are persisted, as AI lines from the KG.
-    assert!(s.save().contains("\"model\": \"kg\"") || s.save().contains("\"model\":\"kg\""));
+    let mut reopened = DocumentSession::new();
+    reopened.open(&s.save());
+    let saved = reopened
+        .document()
+        .annotations
+        .spans
+        .iter()
+        .find(|sp| sp.anchor.text == "choice")
+        .unwrap();
+    assert!(saved.alts[1..]
+        .iter()
+        .all(|a| a.source == Source::Ai && a.model.as_deref() == Some(KG_MODEL)));
+
+    // Undo is the panel's restore: the created span goes away and the KG
+    // span is derived again.
+    s.alt_restore(&change.span, None, span.anchor.start, 0, "")
+        .unwrap();
+    assert!(summary(&s).iter().any(|x| x.starts_with("kg-1-0")));
 
     // No KG term: refused, nothing changes.
     let before = s.clone();
