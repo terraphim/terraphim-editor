@@ -58,15 +58,33 @@ const WRITE_ON_SELECTION_SHORTCUTS = [
 ];
 
 /**
- * Word and character counts for an editor. Prefers editor.counts() (issue #6,
- * which includes ghosted text) and falls back to counting the surface text.
+ * Whether the editor's Rust document model (issue #6) is usable. Without
+ * `window.wasmBindings` the editor still works as a plain Markdown editor
+ * (see MarkdownEditor.documentApi()), and the chrome degrades with it.
+ */
+function documentModelAvailable(editor) {
+  try {
+    return !!(editor && typeof editor.documentApi === 'function' && editor.documentApi());
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Word and character counts for an editor. Uses editor.counts() (issue #6,
+ * which includes ghosted text) when the document model is available and
+ * falls back to counting the surface text otherwise, or if counts() fails.
  * Words are runs of non-whitespace; chars are Unicode code points.
  */
 function countsFor(editor) {
-  if (editor && typeof editor.counts === 'function') {
-    const c = editor.counts();
-    if (c && Number.isFinite(c.words) && Number.isFinite(c.chars)) {
-      return { words: c.words, chars: c.chars };
+  if (documentModelAvailable(editor) && typeof editor.counts === 'function') {
+    try {
+      const c = editor.counts();
+      if (c && Number.isFinite(c.words) && Number.isFinite(c.chars)) {
+        return { words: c.words, chars: c.chars };
+      }
+    } catch (e) {
+      // Fall through to the surface text.
     }
   }
   const text = editor && editor.surface ? editor.surface.getText() : '';
@@ -295,15 +313,22 @@ class WriteOnChrome {
 
   /**
    * Dispatch te:save; unless it is cancelled, call editor.saveDocument() and
-   * return the saved text (null when cancelled or unavailable). The editor
-   * also dispatches te:saved with the text.
+   * return the saved text. Returns null, without throwing, when te:save was
+   * cancelled or the document model is unavailable (no `window.wasmBindings`:
+   * there is nothing to serialise the annotations with, so te:save is still
+   * dispatched for listeners but no save happens and no te:saved follows).
+   * The editor dispatches te:saved with the text after a real save.
    */
   save() {
-    const ev = this.emit('te:save', {}, true);
-    if (!ev.defaultPrevented && typeof this.editor.saveDocument === 'function') {
+    const ev = this.emit('te:save', { available: documentModelAvailable(this.editor) }, true);
+    if (ev.defaultPrevented || !documentModelAvailable(this.editor)) return null;
+    if (typeof this.editor.saveDocument !== 'function') return null;
+    try {
       return this.editor.saveDocument();
+    } catch (err) {
+      console.error('saveDocument failed', err);
+      return null;
     }
-    return null;
   }
 
   openShortcuts() {
@@ -404,4 +429,5 @@ class WriteOnChrome {
 
 window.WriteOnChrome = WriteOnChrome;
 window.countsFor = countsFor;
+window.documentModelAvailable = documentModelAvailable;
 window.WRITE_ON_STORAGE_PREFIX = WRITE_ON_STORAGE_PREFIX;

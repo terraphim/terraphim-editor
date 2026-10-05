@@ -329,3 +329,73 @@ fn test_destroy_removes_chrome_dom_and_listeners() {
     );
     assert_eq!(result, "");
 }
+
+#[wasm_bindgen_test]
+fn test_chrome_degrades_to_surface_counts_without_the_document_api() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          teTest.resetWriteOn();
+          const out = [];
+          const saved = window.wasmBindings;
+          const errors = [];
+          let ed = null;
+          try {
+            // A real editor created while the WASM document API is absent.
+            window.__teEditor.destroy();
+            delete window.wasmBindings;
+            try {
+              ed = new MarkdownEditor(window.EditorConfig);
+              ed.initialize();
+            } catch (e) {
+              errors.push('initialise threw: ' + e);
+            }
+            if (!ed || !ed.surface) return 'editor did not initialise: ' + errors.join('; ');
+            if (!ed.chrome) out.push('no chrome');
+            if (ed.documentApi() !== null) out.push('documentApi not null');
+            if (documentModelAvailable(ed)) out.push('model reported available');
+            const counter = () => document.querySelector('.te-chrome-counter-text').textContent.trim();
+            const s = ed.surface;
+            s.setText('two words');
+            if (counter() !== '2 words 9 chars') out.push('counter ' + counter());
+            // Native typing still works and the counter follows the surface.
+            s.focus();
+            s.setSelectionOffsets(s.getText().length);
+            document.execCommand('insertText', false, ' more');
+            if (s.getText() !== 'two words more') out.push('typed ' + JSON.stringify(s.getText()));
+            if (counter() !== '3 words 14 chars') out.push('counter after typing ' + counter());
+            // Write_On toggles; save dispatches te:save but no-ops cleanly.
+            document.querySelector('.te-chrome-counter').click();
+            if (!ed.chrome.isWriteOn()) out.push('write-on did not toggle');
+            const events = [];
+            const onSave = (e) => events.push(['save', e.detail.available]);
+            const onSaved = () => events.push(['saved']);
+            document.addEventListener('te:save', onSave);
+            document.addEventListener('te:saved', onSaved);
+            let result;
+            try {
+              document.querySelector('.te-chrome [data-control="save"]').click();
+              result = ed.chrome.save();
+            } catch (e) {
+              errors.push('save threw: ' + e);
+            }
+            document.removeEventListener('te:save', onSave);
+            document.removeEventListener('te:saved', onSaved);
+            if (result !== null) out.push('save returned ' + JSON.stringify(result));
+            if (JSON.stringify(events) !== '[["save",false],["save",false]]') out.push('events ' + JSON.stringify(events));
+            // documentChanged re-keys without throwing.
+            try { ed.chrome.documentChanged(); } catch (e) { errors.push('documentChanged threw: ' + e); }
+          } finally {
+            window.wasmBindings = saved;
+            if (ed) ed.destroy();
+            teTest.resetWriteOn();
+            // Leave a normal editor behind for the next test.
+            const fresh = new MarkdownEditor(window.EditorConfig);
+            fresh.initialize();
+            window.__teEditor = fresh;
+          }
+          return out.concat(errors).join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
