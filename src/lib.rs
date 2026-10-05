@@ -10,6 +10,8 @@ pub use document::{
     move_document_range, open_document, save_document, sync_document_body, sync_json, with_session,
     DocumentSession, Opened, SetAside, Synced,
 };
+// In-place cycling of alternatives (issue #9).
+pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
 
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!
 

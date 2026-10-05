@@ -63,10 +63,18 @@
  *   the active dot uses the full accent and every indicated span carries
  *   `aria-describedby` pointing at a visually hidden description such as
  *   "Word: 7 alternatives, 5 of 7 active".
- * - Dot clicks (R-3.6, where jumping to an alternative is only inferred) do
- *   not change the document: they dispatch a bubbling, cancelable
- *   `te:dot` CustomEvent with detail { editor, spanId, index, kind, active }
- *   for the alternatives work (issue #9) to act on.
+ * - Dot clicks (R-3.6, where jumping to an alternative is only inferred)
+ *   dispatch a bubbling, cancelable `te:dot` CustomEvent with detail
+ *   { editor, spanId, index, kind, active }. Unless a listener calls
+ *   preventDefault(), the default action jumps to that alternative through
+ *   `editor.swapAlternative` (issue #9).
+ * - In-place cycling (issue #9, R-2.4, R-3.6): while the pointer is over an
+ *   indicated span's text, ArrowUp/ArrowDown (no modifiers) make the
+ *   previous/next alternative active, wrapping at either end. With the caret
+ *   (or the whole selection) inside or at the edge of an indicated span,
+ *   Alt+ArrowUp/Alt+ArrowDown do the same for keyboard users. Any other
+ *   arrow key, or an arrow with nothing hovered, is left to the browser.
+ *   Each swap is one undo step; see docs/design/cycling.md.
  *
  * Load order: after chrome.js and before editor.js, which instantiates both
  * classes in MarkdownEditor.initialize() when they exist. Full design notes:
@@ -244,6 +252,14 @@ class TeIndicatorLayer {
       else options.signal.addEventListener('abort', () => this.destroy(), { signal });
     }
 
+    // Span id under the pointer (issue #9). Kept by id, not element: a swap
+    // re-renders the surface and no new mouseover fires until the pointer
+    // moves, but the span keeps its id.
+    this.hoverSpan = null;
+    this.surface.root.addEventListener('mouseover', (e) => this.onHover(e), { signal });
+    this.surface.root.addEventListener('mouseleave', () => { this.hoverSpan = null; }, { signal });
+    this.surface.root.addEventListener('keydown', (e) => this.onCycleKey(e), { signal });
+
     this.offChange = this.surface.onChange(() => this.onSurfaceChange());
     this.offApply = this.registry.onApply(() => this.scheduleLayout());
     document.addEventListener('te:mode-change', (e) => {
@@ -291,6 +307,7 @@ class TeIndicatorLayer {
       this.flush();
     } else {
       this.cancelPending();
+      this.hoverSpan = null;
       this.registry.clear(TeIndicatorLayer.LAYER);
       this.removeAllSpans();
       this.unmountOverlay();
@@ -562,7 +579,8 @@ class TeIndicatorLayer {
     const entry = holder && this.spans.get(holder.dataset.spanId);
     if (!entry) return;
     const index = Number(dot.dataset.index);
-    this.overlay.dispatchEvent(new CustomEvent('te:dot', {
+    const active = index === entry.activeIndex;
+    const event = new CustomEvent('te:dot', {
       bubbles: true,
       cancelable: true,
       detail: {
@@ -570,9 +588,83 @@ class TeIndicatorLayer {
         spanId: entry.id,
         index,
         kind: entry.headline ? 'headline' : entry.kind,
-        active: index === entry.activeIndex,
+        active,
       },
-    }));
+    });
+    this.overlay.dispatchEvent(event);
+    // Default action (issue #9): jump to that alternative.
+    if (!event.defaultPrevented && !active) this.jump(entry.id, index);
+  }
+
+  // ---------------------------------------------------------------------
+  // In-place cycling (issue #9)
+  // ---------------------------------------------------------------------
+
+  /** Track the indicated span under the pointer (its text, not its dots). */
+  onHover(e) {
+    if (!this.active) return;
+    const el = e.target && e.target.closest ? e.target.closest('[data-te-decoration]') : null;
+    const prefix = `${TeIndicatorLayer.LAYER}:`;
+    const token = el && el.getAttribute('data-te-decoration').split(' ').find((t) => t.startsWith(prefix));
+    this.hoverSpan = token ? token.slice(prefix.length) : null;
+  }
+
+  /** The hovered span id, if it is still indicated. */
+  hoveredSpan() {
+    return this.hoverSpan !== null && this.spans.has(this.hoverSpan) ? this.hoverSpan : null;
+  }
+
+  /**
+   * The indicated span holding the whole selection (a caret at either edge
+   * of the span counts as inside), or null.
+   */
+  spanAtSelection() {
+    const sel = this.surface.getSelectionOffsets();
+    const live = this.registry.current(TeIndicatorLayer.LAYER);
+    const hit = live.find((d) => d.start <= sel.start && sel.end <= d.end);
+    return hit && this.spans.has(hit.id) ? hit.id : null;
+  }
+
+  commandMenuOpen() {
+    const menu = this.editor.commandMenu;
+    return !!menu && menu.isConnected && menu.style.display !== 'none';
+  }
+
+  onCycleKey(e) {
+    if (!this.active || this.destroyed || e.isComposing) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey || this.commandMenuOpen()) return;
+    // Bring the span list up to date before choosing (a refresh may still
+    // be waiting after typing, undo or redo).
+    if (this.pending()) this.flush();
+    const id = e.altKey ? this.spanAtSelection() : this.hoveredSpan();
+    if (id === null) return;
+    e.preventDefault();
+    this.cycle(id, e.key === 'ArrowDown' ? 1 : -1);
+  }
+
+  /**
+   * Make the alternative `step` places from the active one active, wrapping
+   * at either end (ArrowDown from the last returns to the original).
+   * Returns the model outcome, or null if nothing changed.
+   */
+  cycle(spanId, step) {
+    if (this.pending()) this.flush();
+    const entry = this.spans.get(String(spanId));
+    if (!entry || entry.count < 2) return null;
+    const next = (((entry.activeIndex + step) % entry.count) + entry.count) % entry.count;
+    return this.jump(entry.id, next);
+  }
+
+  /** Make alternative `index` of `spanId` active. A refused swap changes nothing. */
+  jump(spanId, index) {
+    if (typeof this.editor.swapAlternative !== 'function') return null;
+    try {
+      return this.editor.swapAlternative(spanId, index);
+    } catch (err) {
+      console.warn('Could not swap the alternative', err);
+      return null;
+    }
   }
 }
 
