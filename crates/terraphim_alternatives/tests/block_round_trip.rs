@@ -4,7 +4,7 @@
 //! access and can also run under wasm-bindgen-test later.
 
 use terraphim_alternatives::{
-    Alternative, BlockErrorKind, Document, Source, SpanKind, parse, write,
+    Alternative, Anchor, BlockErrorKind, Document, Source, SpanKind, parse, write,
 };
 
 const FULL: &str = include_str!("fixtures/full.md");
@@ -240,4 +240,83 @@ fn hand_edited_body_is_not_a_parse_error() {
     let doc = parse(&edited).unwrap();
     assert_eq!(doc.annotations.spans.len(), 3);
     assert_eq!(doc.annotations.ghosts.len(), 2);
+}
+
+// ----- context (decision 2026-10-05: context re-anchoring) -----------------
+
+/// `full.md` and `ghost_only.md` as written before anchors stored context.
+const LEGACY_FULL: &str = include_str!("fixtures/legacy_no_context.md");
+const LEGACY_GHOST_ONLY: &str = include_str!("fixtures/legacy_ghost_only.md");
+const CONTEXT_WRONG_TYPE: &str = include_str!("fixtures/malformed/context_wrong_type.md");
+
+fn anchors(doc: &Document) -> Vec<&Anchor> {
+    doc.annotations
+        .spans
+        .iter()
+        .map(|s| &s.anchor)
+        .chain(doc.annotations.ghosts.iter().map(|g| &g.anchor))
+        .collect()
+}
+
+#[test]
+fn fixtures_with_context_store_it_on_every_anchor() {
+    for (name, source) in [("full", FULL), ("ghost_only", GHOST_ONLY)] {
+        let doc = parse(source).unwrap();
+        for anchor in anchors(&doc) {
+            assert!(anchor.before.is_some() && anchor.after.is_some(), "{name}");
+        }
+    }
+    let doc = parse(FULL).unwrap();
+    let s1 = &doc.annotations.spans[0].anchor;
+    assert_eq!(
+        s1.before.as_deref(),
+        Some("# "),
+        "cut by the document start"
+    );
+    let g2 = &doc.annotations.ghosts[1].anchor;
+    assert_eq!(g2.after.as_deref(), Some("\n"), "cut by the document end");
+    let s3 = &doc.annotations.spans[2].anchor;
+    assert_eq!(
+        s3.before.as_deref(),
+        Some(" in a café draft 𝄞 is an "),
+        "multi-byte and astral text, trimmed to a word boundary"
+    );
+}
+
+#[test]
+fn legacy_files_load_without_context_and_gain_it_on_save() {
+    for (name, legacy, current) in [
+        ("full", LEGACY_FULL, FULL),
+        ("ghost_only", LEGACY_GHOST_ONLY, GHOST_ONLY),
+    ] {
+        let doc = parse(legacy).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(anchors(&doc).iter().all(|a| !a.has_context()), "{name}");
+        assert!(!legacy.contains("\"before\""), "{name}: legacy bytes");
+        let saved = write(&doc);
+        assert_eq!(saved, current, "{name}: saving stores context");
+        assert_eq!(write(&parse(&saved).unwrap()), saved, "{name}: then stable");
+    }
+}
+
+#[test]
+fn legacy_file_reanchors_as_before_after_a_hand_edit() {
+    let edited = LEGACY_FULL.replacen("# Why", "Preface.\n\n# Why", 1);
+    let mut legacy = parse(&edited).unwrap();
+    let report = legacy.reanchor();
+    assert!(report.is_clean(), "{report:?}");
+    assert_eq!(report.moved.len(), 5, "every anchor shifted by the edit");
+    // The same edit on the file with context gives the same placements, and
+    // the placed legacy anchors gain the same context.
+    let mut current = parse(&FULL.replacen("# Why", "Preface.\n\n# Why", 1)).unwrap();
+    assert!(current.reanchor().is_clean());
+    assert_eq!(legacy, current);
+}
+
+#[test]
+fn context_of_the_wrong_type_is_recoverable() {
+    let kind = assert_recoverable(CONTEXT_WRONG_TYPE, "The tension and the eraser.");
+    assert!(
+        matches!(kind, BlockErrorKind::InvalidSchema { ref message } if message.contains("string")),
+        "{kind:?}"
+    );
 }
