@@ -14,6 +14,23 @@
 //! (about 20 s) to print its result; a binary that overruns it on a loaded
 //! host fails with "Failed to detect test as having been run". Keep each
 //! binary's harness `finished in` well inside it.
+//!
+//! How the budget counts (measured for issue #53): the runner waits for the
+//! page to load, then polls it through webdriver for at most 20 s.
+//! wasm-bindgen-test runs synchronous tests back to back without yielding,
+//! so a run of synchronous tests either finishes before the page counts as
+//! loaded (free: a single 25 s synchronous test passed) or starts after it
+//! and blocks every poll until it ends (`execute/sync timed out after N s`
+//! when it outlasts what is left). Time spent waiting in async tests always
+//! counts (a 30 s test sleeping in 1 s steps failed). Which way a run of
+//! synchronous tests falls is a race, so the same binary can pass at a
+//! `finished in` of 30 s and fail the next time. Do not rely on it: size each
+//! binary to finish in about 10 s at a load of 20, and split a binary rather
+//! than add yields inside its tests (a yield never shortens the run, and it
+//! lets deferred work such as debounced preview renders, indicator frames and
+//! paints run and count; splitting the persistence tests into short yielding
+//! steps doubled that binary's run time). Run the browser binaries one at a
+//! time, away from heavy builds, with `scripts/browser-tests.sh`.
 #![cfg(target_arch = "wasm32")]
 
 mod support;
@@ -158,11 +175,43 @@ fn test_flush_renders_immediately() {
     assert_eq!(preview_render_count(), 1);
 }
 
+/// Record when each preview render actually happens: a `MutationObserver`
+/// on the preview pushes `performance.now()` into `window.__teFires` for
+/// every render (one callback per render, run as a microtask straight after
+/// the timer task, so each entry is at or just after the real firing time).
+/// The debounce tests assert on these observed firings instead of on
+/// wall-clock windows measured from Rust, which raced the timer on a loaded
+/// host (issue #53).
+fn observe_preview_renders() {
+    js_eval(
+        r#"(() => {
+          if (window.__teFireObserver) window.__teFireObserver.disconnect();
+          window.__teFires = [];
+          window.__teFireObserver = new MutationObserver(() => window.__teFires.push(performance.now()));
+          window.__teFireObserver.observe(document.querySelector('.markdown-preview'), { childList: true, subtree: true, characterData: true });
+        })()"#,
+    );
+}
+
+/// Observed render times since `observe_preview_renders`, oldest first.
+fn observed_renders() -> Vec<f64> {
+    let list = js_string("window.__teFires.join(',')");
+    list.split(',')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse().unwrap())
+        .collect()
+}
+
+/// Browser timers are not early, but `performance.now()` and the timer clock
+/// are coarsened independently; allow one millisecond of rounding.
+const TIMER_ROUNDING_MS: f64 = 1.0;
+
 #[wasm_bindgen_test]
 async fn test_rapid_input_renders_once_after_window() {
     let document = fresh_rust_editor();
     let surface = surface_element(&document);
     let delay = preview_delay();
+    observe_preview_renders();
 
     let mut text = String::new();
     for i in 0..25 {
@@ -172,26 +221,25 @@ async fn test_rapid_input_renders_once_after_window() {
     }
     text.push_str("\n\n# Final heading");
     surface.set_text_content(Some(&text));
+    // Taken before the last dispatch: the render timer is armed inside it,
+    // so this is a lower bound on when the debounce window opened.
+    let before_last_input = now();
     dispatch_input(&surface);
-    let last_input = now();
 
     assert_eq!(preview_render_count(), 0, "rapid input must not render");
     assert!(preview_pending());
     assert!(!preview_html(&document).contains("Final heading"));
 
-    // Still inside the window: nothing rendered yet. Timers never fire early,
-    // so this only asserts while the elapsed time really is below the delay.
-    sleep(delay / 3).await;
-    if now() - last_input < f64::from(delay) {
-        assert_eq!(
-            preview_render_count(),
-            0,
-            "rendered before the window closed"
-        );
-    }
-
     sleep(delay + 100).await;
+    let fires = observed_renders();
+    assert_eq!(fires.len(), 1, "exactly one trailing render: {fires:?}");
     assert_eq!(preview_render_count(), 1, "exactly one trailing render");
+    // The one render came from the last input's timer, a full window after it.
+    let waited = fires[0] - before_last_input;
+    assert!(
+        waited >= f64::from(delay) - TIMER_ROUNDING_MS,
+        "rendered {waited:.1} ms after the last input, before the {delay} ms window closed"
+    );
     assert!(!preview_pending());
     let html = preview_html(&document);
     assert!(
@@ -205,27 +253,48 @@ async fn test_rapid_input_renders_once_after_window() {
 async fn test_each_input_restarts_the_window() {
     let document = fresh_rust_editor();
     let surface = surface_element(&document);
-    set_preview_delay(80);
+    const DELAY: u32 = 80;
+    set_preview_delay(DELAY);
+    observe_preview_renders();
 
-    // Inputs spaced closer than the delay keep pushing the render back.
-    // Timers never fire early, but a loaded runner can oversleep, so the
-    // "not yet rendered" checks only apply while the gap really was short.
-    let mut within_window = true;
+    // Inputs spaced closer than the delay keep pushing the render back. A
+    // loaded runner can oversleep a gap past the delay, which legitimately
+    // lets that input's render fire; what must never happen is a render
+    // less than one window after the input before it.
+    let mut inputs = Vec::new();
     for i in 0..4 {
         surface.set_text_content(Some(&format!("step {i}")));
+        inputs.push(now());
         dispatch_input(&surface);
-        let last_input = now();
         sleep(30).await;
-        if now() - last_input < 80.0 {
-            assert_eq!(preview_render_count(), 0, "rendered mid-burst at step {i}");
-        } else {
-            within_window = false;
-        }
     }
-    sleep(80 + 100).await;
-    if within_window {
-        assert_eq!(preview_render_count(), 1, "one render for the whole burst");
+    sleep(DELAY + 100).await;
+    let fires = observed_renders();
+    assert!(!fires.is_empty(), "the burst must render");
+    for fire in &fires {
+        let last_input = inputs
+            .iter()
+            .rev()
+            .find(|t| *t <= fire)
+            .expect("a render before any input");
+        assert!(
+            fire - last_input >= f64::from(DELAY) - TIMER_ROUNDING_MS,
+            "rendered {:.1} ms after an input, inside the {DELAY} ms window (inputs {inputs:?}, renders {fires:?})",
+            fire - last_input
+        );
     }
+    // One render per gap that really outlasted the window, plus the trailing
+    // one; with no oversleep that is exactly one render for the whole burst.
+    let long_gaps = inputs
+        .windows(2)
+        .filter(|w| w[1] - w[0] >= f64::from(DELAY) - TIMER_ROUNDING_MS)
+        .count();
+    assert!(
+        fires.len() <= long_gaps + 1,
+        "{} renders for {long_gaps} gaps over the window (inputs {inputs:?}, renders {fires:?})",
+        fires.len()
+    );
+    assert_eq!(preview_render_count() as usize, fires.len());
     assert!(!preview_pending());
     assert!(preview_html(&document).contains("<p>step 3</p>"));
 }

@@ -92,5 +92,5 @@ The layer registers every listener with its own `AbortController`, which is abor
   - indicators follow re-anchored spans while typing with `execCommand`, both within a frame (before the debounce) and after the model refresh, with no surface re-render;
   - nothing renders in plain mode, including the toggle cycle, unowned decorations surviving it, and `destroy()`;
   - spans with only their original get no indicator;
-  - registry: merging, overlap, skipped identical renders, `batch`, `current`, `clear` and name validation.
+- `tests/web_indicators_registry.rs` (same set-up, helpers shared through `tests/support/indicators.rs`): registry merging, overlap, skipped identical renders, `batch`, `current`, `clear`, name validation and the attribute allow-list.
 - `tests/fixtures/visual/`: reference screenshots of the word, headline and paragraph cases from a release Trunk build (see the README there). They are reference images for review. The geometry tests are the assertions of record, because headless fonts differ between hosts.

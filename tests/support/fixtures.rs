@@ -1,5 +1,5 @@
 //! Persistence fixtures (issue #6) and their golden preview/export, shared
-//! by `tests/web_persistence.rs` and `tests/web_persistence_chrome.rs`.
+//! by the `tests/web_persistence*.rs` binaries.
 
 use super::*;
 
