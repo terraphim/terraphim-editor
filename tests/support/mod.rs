@@ -18,9 +18,9 @@ pub use fixtures::*;
 
 pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
-    flush_preview, ghost_range, move_document_range, open_document, preview_delay, preview_pending,
-    preview_render_count, revive_range, save_document, set_preview_delay, sync_document_body,
-    DEFAULT_PREVIEW_DELAY_MS,
+    flush_preview, ghost_range, lab_actions, lab_mark, move_document_range, open_document,
+    preview_delay, preview_pending, preview_render_count, revive_range, save_document,
+    set_preview_delay, sync_document_body, DEFAULT_PREVIEW_DELAY_MS,
 };
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
@@ -31,6 +31,8 @@ pub const SELECTION_MENU_JS: &str = include_str!("../../public/js/selection-menu
 pub const TOKENS_CSS: &str = include_str!("../../public/css/tokens.css");
 pub const WRITE_ON_CSS: &str = include_str!("../../public/css/write-on.css");
 pub const SELECTION_MENU_CSS: &str = include_str!("../../public/css/selection-menu.css");
+pub const LAB_JS: &str = include_str!("../../public/js/lab.js");
+pub const LAB_CSS: &str = include_str!("../../public/css/lab.css");
 
 /// Small helpers shared by the JavaScript snippets below.
 pub const TEST_HELPERS_JS: &str = r##"
@@ -190,7 +192,7 @@ pub fn load_editor_scripts(document: &Document) {
     let style = document.create_element("style").unwrap();
     style.set_attribute("data-te-test", "").unwrap();
     style.set_text_content(Some(&format!(
-        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}"
+        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}"
     )));
     document
         .document_element()
@@ -202,6 +204,7 @@ pub fn load_editor_scripts(document: &Document) {
         CHROME_JS,
         INDICATORS_JS,
         SELECTION_MENU_JS,
+        LAB_JS,
         EDITOR_JS,
         TEST_HELPERS_JS,
     ] {
@@ -260,6 +263,15 @@ pub fn install_document_bindings() {
     install(
         "revive_range",
         Closure::<dyn FnMut(u32, u32) -> JsValue>::new(revive_range).into_js_value(),
+    );
+    install(
+        "lab_actions",
+        Closure::<dyn FnMut() -> JsValue>::new(lab_actions).into_js_value(),
+    );
+    install(
+        "lab_mark",
+        Closure::<dyn FnMut(String) -> Result<JsValue, JsValue>>::new(|a: String| lab_mark(&a))
+            .into_js_value(),
     );
     install(
         "apply_edit",
