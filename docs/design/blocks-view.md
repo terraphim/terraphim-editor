@@ -9,8 +9,10 @@ changes how Write_On behaves.
 
 Implementation: `public/js/blocks.js` (`window.BlocksView`),
 `public/css/blocks.css`, two small hooks in `public/js/editor.js`
-(`MarkdownEditor.initialize()` and `destroy()`). Tests: `tests/web_blocks.rs`
-with fixtures in `tests/fixtures/blocks/`.
+(`MarkdownEditor.initialize()` and `destroy()`) and
+`EditorSurface.squashHistory` (one undo step for a block move). Tests:
+`tests/web_blocks.rs`, `tests/web_blocks_edit.rs` and
+`tests/web_blocks_move.rs`, with fixtures in `tests/fixtures/blocks/`.
 
 ## Single source of truth
 
@@ -82,12 +84,95 @@ blocks sensibly:
 `view`, `isActive()`, `setView(view, { persist, focus })`, `toggle()`,
 `model` (the last parse), `cards()`, `editBlock(index)` (returns the
 textarea), `commitEdit()`, `cancelEdit()`, `insertBlockAfter(index)`
-(index -1 inserts at the top), `deleteBlock(index)`, `undo()`, `redo()`,
+(index -1 inserts at the top), `deleteBlock(index)`,
+`moveBlock(index, 'up' | 'down', { focusAction })` (returns whether it
+moved), `undo()`, `redo()`,
 `keptDrafts()`, `pendingDrafts()`, `draftTarget(draft)`, `applyDraft(id)`
 (returns `'replace'` or `'insert'`), `discardDraft(id)`, `destroy()`
 (returns the unapplied drafts), and the
-static helpers `BlocksView.parse`, `BlocksView.serialise` and
-`BlocksView.indexIn`.
+static helpers `BlocksView.parse`, `BlocksView.serialise`,
+`BlocksView.indexIn` and `BlocksView.planMove`.
+
+## Moving blocks (#58)
+
+Move up and Move down swap a block with its neighbour. They use
+`MarkdownEditor.moveRange`, the model-level move from #44, so every span and
+ghost inside the block travels with it, keeping its id, alternatives and
+active index. There is never a fallback to a deletion plus an insertion,
+which would set the ghosts aside.
+
+- **Range.** Block `i` moves as its text plus its trailing separator,
+  `[start, next block start)`, or up to the end of the text for the last
+  block. Down moves it to the start of block `i + 2` (the end of the text
+  when block `i + 1` is the last); up moves it to the start of block `i - 1`.
+- **Separators.** A pure move carries each block's trailing separator with
+  it, giving `Q.text Q.sep P.text P.sep` for the pair `P, Q`. When the two
+  separators differ, whitespace-only edits put them back in place: the gap
+  that was between the pair stays between the pair, and the gap after the
+  pair stays after it, so the document keeps its trailing text (no trailing
+  newline stays no trailing newline). A gap that would separate two blocks
+  without a blank line (for example a heading followed by a single newline)
+  becomes one blank line. These edits sit at block edges, where an insertion
+  is outside every span and ghost. They are ordinary edits, though, so an
+  item that covers a separator being repaired (for example a ghost over a
+  paragraph and its trailing blank line, which the move carries) would be
+  trimmed or grown by them. Before anything changes, `fixUpBlocker` maps
+  every span and ghost through the planned move (`mapThroughMove`, the
+  model's move rules) and checks each fix-up against it: an insertion
+  strictly inside an item, or a deletion overlapping one, refuses the whole
+  move with a message naming the item, in the same notice region. When no
+  fix-up is needed (equal separators) such an item is simply carried.
+- **Checked first.** `BlocksView.planMove` builds the predicted text and
+  parses it. It must give the same blocks in the new order (and the same
+  leading blank lines); otherwise the move is refused with "it would merge
+  with the block next to it" (for example an unclosed code fence moved above
+  a paragraph would swallow it).
+- **One undo step.** The move and its fix-ups are recorded as separate
+  history entries and then folded into one with
+  `EditorSurface.squashHistory(count, 'move')`. The merged entry keeps
+  every step in order, so undo replays the fix-ups backwards and then the
+  inverse move as a move in the model, and redo replays them forwards. Text
+  and annotations both return.
+- **Refused moves.** The model refuses a move that would split a span or a
+  ghost, typically a ghost running across a block boundary. Nothing changes
+  (no text, no model change, no history entry) and the model's message,
+  which names the item (`moving the text would split "g1"; move whole spans
+  and ghosts only`), is shown after "Block not moved:" in the Blocks notice
+  region at the top of the view, with a dismiss button. The live region
+  (`.te-blocks-notice-region`, `role="status"`, `aria-live="polite"`) is
+  always rendered and only the message box inside it (`.te-blocks-notice`)
+  is hidden when empty, because a region that appears together with its
+  text is not reliably announced. The next successful move clears
+  it. Focus stays on the card.
+- **Boundaries.** The first block has no Move up button and the last no
+  Move down button (the buttons are `hidden` and out of the tab order).
+  Alt+ArrowUp on the first block and Alt+ArrowDown on the last are consumed
+  and do nothing; `moveBlock` returns false and records nothing.
+- **Focus.** Focus follows the moved card. A move from a button keeps focus
+  on the same button of the moved card, so it can be pressed again, unless
+  that button is now hidden, in which case the card gets focus. After undo
+  the focus goes to the block the surface caret lands in, as for every
+  other undo.
+- **Drafts.** Moving while a block editor is open commits the editor first,
+  as every structural action does: the draft is applied, or kept in the
+  drafts notice if its block changed, and is never lost. The index of the
+  block to move is mapped through the commit when it added or removed
+  blocks before it. A press on a move button does not blur the textarea
+  first (its `mousedown` is cancelled while editing), so the click is not
+  lost to the re-render. Kept drafts follow their block through a move and
+  through its undo and redo: a surface change that carries a move is mapped
+  with the model's move rules (inside the moved text it travels with it,
+  between the text and the destination it shifts by the moved length,
+  elsewhere it stays), never as one big replacement, so "Replace block" and
+  "Insert as new paragraph" still target the right block. A move edit is
+  never treated as a whole-document replacement, even when it rewrites the
+  whole text, and an open editor whose block lies wholly in one zone of the
+  move stays open.
+- **Alt+Arrow.** The keys are handled on a focused card only. Inside a block
+  editor they are left alone (Option+Arrow moves the caret on macOS). The
+  text surface's own Alt+ArrowUp / Alt+ArrowDown (cycling alternatives, #9)
+  listen on the surface root, which is hidden while the Blocks view shows
+  and is not an ancestor of the list, so the two never meet.
 
 ## Drafts are never lost
 
@@ -187,14 +272,17 @@ second `destroy()` returns `[]`. A host can call `editor.blocks.pendingDrafts()`
   to remove, Tab for actions."), and `aria-keyshortcuts` lists them too.
 - Keyboard: ArrowUp and ArrowDown move between blocks, Home and End jump to
   the first and last, Enter or F2 edits, Shift+Enter adds a paragraph below,
-  Ctrl+Enter commits, Escape closes the editor, and Delete removes the block
-  (which can be undone).
-- Every action is reachable by Tab. The per-card action buttons (edit, add
-  below, delete) follow the roving tabindex: only the focused card's buttons
-  are in the tab order, so the order is card, edit, add below, delete, then
-  "Add paragraph". Escape on an action button returns to its card. Each
-  button carries `aria-keyshortcuts` (`Enter F2`, `Shift+Enter`, `Delete`)
-  and shows its key in its label. The buttons become visible when the card
+  Alt+ArrowUp and Alt+ArrowDown move the block up and down, Ctrl+Enter
+  commits, Escape closes the editor, and Delete removes the block (which can
+  be undone).
+- Every action is reachable by Tab. The per-card action buttons (edit, move
+  up, move down, add below, delete) follow the roving tabindex: only the
+  focused card's visible buttons are in the tab order, so the order is card,
+  edit, move up, move down, add below, delete, then "Add paragraph" (no move
+  up on the first block, no move down on the last). Escape on an action
+  button returns to its card. Each button carries `aria-keyshortcuts`
+  (`Enter F2`, `Alt+ArrowUp`, `Alt+ArrowDown`, `Shift+Enter`, `Delete`) and
+  shows its key in its label. The buttons become visible when the card
   is hovered or has focus inside it.
 - Focus is always visible: a focused card gets a 2px `--te-color-accent`
   outline, and so do the action buttons and the draft notice buttons when
@@ -240,13 +328,12 @@ Dropped:
   a second `MarkdownEditor`).** The editor already has its own command
   palette, and the chrome already defines the `te:*` CustomEvent
   convention.
-- **Move up and down.** On the old branch this reordered pipeline steps in
-  the store. On the body, moving text means deleting it and inserting it
-  elsewhere. The span model releases ghosts inside deleted text (it does the
-  same for cut and paste), so moving a ghosted paragraph would lose its
-  ghost. A test showed exactly this: after a swap, `g1` was missing from the
-  saved document. Moving is therefore left out until the model can do it
-  (see Follow-ups).
+- **Move up and down as delete plus insert.** On the old branch this
+  reordered pipeline steps in the store. On the body, deleting text and
+  inserting it elsewhere releases the ghosts inside it (as cut and paste
+  does): a test showed `g1` missing from the saved document after a swap.
+  Moving came back in #58 on top of the model-level move (#44); see "Moving
+  blocks".
 - **The LLM pipeline builder itself** (generation, critic, parallel and
   validator steps) is a separate feature, tracked as issue #43.
 - **The `criterion` change** on that branch is obsolete; issue #20 handled
@@ -254,9 +341,8 @@ Dropped:
 
 ## Follow-ups
 
-- **Moving blocks (#44).** This needs a model operation that moves a range
-  together with its anchors (for example `move_range(from, to, at)` in
-  `src/document.rs`), and a surface history step that replays as a move, so
-  that undo does not run the deletion through `apply_edit`.
+- **Moving blocks.** Done: #44 added the model move and #58 the Blocks
+  controls (see "Moving blocks"). Moving a block more than one place at a
+  time (drag and drop) is not implemented.
 - **Inline indicators (#8).** When the decoration registry lands, cards
   could show the alternatives and ghosts inside each block.
