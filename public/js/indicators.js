@@ -406,7 +406,8 @@ class TeIndicatorLayer {
     if (!this.active) return;
     // Only a swap of the hovered span itself keeps the hover held; after any
     // other change the next plain arrow re-checks the pointer (issue #9).
-    const swap = change && change.edit && change.edit.swap;
+    // A knowledge-graph swap (issue #13) is tagged `kg` rather than `swap`.
+    const swap = change && change.edit && (change.edit.swap || change.edit.kg);
     this.hoverHeld = !!swap && this.hoverSpan !== null && String(swap.span) === this.hoverSpan;
     // Geometry follows the mapped decorations at once (next frame); the model
     // read waits for a pause in typing.
@@ -442,13 +443,20 @@ class TeIndicatorLayer {
   // Model
   // ---------------------------------------------------------------------
 
-  /** Live spans with at least one alternative besides the original. */
+  /**
+   * Live spans with at least one alternative besides the original, then the
+   * derived knowledge-graph spans (`ann.kg`, issue #13: one dot per synonym
+   * of the concept, the text's own form lit). The model already drops a KG
+   * term that overlaps a block span, so the two lists never overlap.
+   */
   readSpans() {
     const editor = this.editor;
     if (typeof editor.documentApi !== 'function' || !editor.documentApi()) return [];
     try {
       const ann = editor.annotations();
-      return (ann && Array.isArray(ann.spans) ? ann.spans : [])
+      const spans = ann && Array.isArray(ann.spans) ? ann.spans : [];
+      const kg = ann && Array.isArray(ann.kg) ? ann.kg : [];
+      return spans.concat(kg)
         .filter((s) => s && s.anchor && Array.isArray(s.alts) && s.alts.length > 1);
     } catch (err) {
       return [];
@@ -480,11 +488,18 @@ class TeIndicatorLayer {
       const id = String(span.id);
       seen.add(id);
       const descId = `te-ind-desc-${this.instance}-${id}`;
-      const key = `${kind}|${headline}|${count}|${activeIndex}`;
+      const fromKg = span.source === 'kg';
+      const key = `${kind}|${headline}|${count}|${activeIndex}|${fromKg}`;
       let entry = this.spans.get(id);
       if (!entry || entry.key !== key) {
         if (entry) this.removeSpanElements(entry);
         entry = this.buildSpan(id, kind, headline, count, activeIndex, descId, key);
+        if (fromKg) {
+          // Derived from the knowledge graph (issue #13): the dots are the
+          // concept's synonyms.
+          entry.el.dataset.source = 'kg';
+          entry.desc.textContent += ' (knowledge graph synonyms)';
+        }
         this.spans.set(id, entry);
       }
       const classes = ['te-ind', `te-ind-${kind}`];

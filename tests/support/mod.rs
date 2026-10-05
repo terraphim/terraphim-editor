@@ -17,6 +17,7 @@ mod alt_panel;
 mod bench;
 mod fixtures;
 pub mod indicators;
+pub mod kg;
 pub mod trim;
 pub use alt_panel::*;
 pub use bench::*;
@@ -54,6 +55,14 @@ pub const ALT_PANEL_JS: &str = include_str!("../../public/js/alternatives-panel.
 pub const ALT_PANEL_CSS: &str = include_str!("../../public/css/alternatives-panel.css");
 // The alternatives side panel (issue #10).
 pub use terraphim_editor::{alt_add, alt_create_span, alt_edit, alt_move, alt_remove, alt_restore};
+// Knowledge-graph alternatives (issue #13).
+pub use terraphim_editor::{
+    alt_kg_append, kg_clear_thesaurus, kg_document_spans, kg_load_thesaurus, kg_lookup_selection,
+    kg_swap_alternative,
+};
+/// The committed fixture thesaurus and document for the KG tests.
+pub const KG_THESAURUS: &str = include_str!("../fixtures/kg/thesaurus.json");
+pub const KG_DOC: &str = include_str!("../fixtures/kg/doc.md");
 pub const OVERFLOW_JS: &str = include_str!("../../public/js/overflow.js");
 pub const OVERFLOW_CSS: &str = include_str!("../../public/css/overflow.css");
 
@@ -360,6 +369,38 @@ pub fn install_document_bindings() {
             },
         )
         .into_js_value(),
+    );
+    // Knowledge-graph alternatives (issue #13).
+    install(
+        "kg_load_thesaurus",
+        Closure::<dyn FnMut(String) -> Result<JsValue, JsValue>>::new(|json: String| {
+            kg_load_thesaurus(&json)
+        })
+        .into_js_value(),
+    );
+    install(
+        "kg_clear_thesaurus",
+        Closure::<dyn FnMut()>::new(kg_clear_thesaurus).into_js_value(),
+    );
+    install(
+        "kg_document_spans",
+        Closure::<dyn FnMut() -> JsValue>::new(kg_document_spans).into_js_value(),
+    );
+    install(
+        "kg_swap_alternative",
+        Closure::<dyn FnMut(String, u32) -> Result<JsValue, JsValue>>::new(
+            |span: String, index: u32| kg_swap_alternative(&span, index),
+        )
+        .into_js_value(),
+    );
+    install(
+        "kg_lookup_selection",
+        Closure::<dyn FnMut(u32, u32) -> JsValue>::new(kg_lookup_selection).into_js_value(),
+    );
+    install(
+        "alt_kg_append",
+        Closure::<dyn FnMut(u32, u32) -> Result<JsValue, JsValue>>::new(alt_kg_append)
+            .into_js_value(),
     );
     install(
         "trim_plan_json",

@@ -69,6 +69,7 @@ cargo clippy --workspace
 ### Rust layer
 - `src/lib.rs`: `run()` (`#[wasm_bindgen(start)]`), Rinja template render, `render_markdown`, and the debounced preview (`flush_preview`, `set_preview_delay`, `preview_delay`, `preview_pending`, `preview_render_count`; default 120 ms trailing).
 - `src/document.rs`: persistence bridge. `DocumentSession` (native, unit-testable) holds one open document; thin `#[wasm_bindgen]` wrappers (`open_document`, `save_document`, `export_document`, `apply_edit`, `sync_document_body`, `document_counts`, `document_body`, `document_annotations`) reach JavaScript as `window.wasmBindings.<name>`. Offsets are UTF-16 code units. Malformed blocks are preserved verbatim; detached or unresolved annotations are set aside and saved, never dropped.
+- `src/kg.rs`: knowledge-graph alternatives (#13) over `terraphim_lsp_core` (exact registry version; `terraphim_alternatives` is patched to the workspace member so there is one copy). Derived KG spans (`document_annotations().kg`, never saved), `kg_swap_alternative`, `kg_lookup_selection`, `alt_kg_append` (Ctrl+Shift+G, R-8.6). No matching or synonym logic here. See `docs/design/kg-alternatives.md`.
 - `templates/editor.html`: Rinja template (`{{ initial_content }}`, `{{ initial_preview|safe }}`).
 
 ### JavaScript layer (`public/js/`)
