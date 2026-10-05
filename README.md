@@ -216,23 +216,27 @@ Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, r
 
 ## Embed it in a page
 
-`trunk build --release` also writes an embeddable bundle (`terraphim-editor.min.js`, `terraphim-editor.min.css`, `example.html`) to `target/trunk-dist`. A host page needs only a container:
+The supported way to host the editor today is the page Trunk builds (`index.html` plus the generated assets in `target/trunk-dist`): serve it as is, or adapt it into your own page. It creates the editor on load and exposes it as `window.terraphimEditor`, so a host script can drive it:
 
 ```html
-<link rel="stylesheet" href="terraphim-editor.min.css">
-<div id="editor"></div>
-<script src="terraphim-editor.min.js"></script>
 <script>
-  document.addEventListener('DOMContentLoaded', async () => {
-    const editor = new TeraphimEditor(document.getElementById('editor'));
-    await editor.initialize();
-    editor.setValue('# Hello\n\nStart writing.');
-    // editor.getValue() returns the Markdown; editor.destroy() tears it down.
+  document.addEventListener('te:saved', (event) => {
+    // event.detail.text is the Markdown plus its annotation block; store it where you like.
+    fetch('/documents/draft.md', { method: 'PUT', body: event.detail.text });
+  });
+
+  document.addEventListener('te:open', (event) => {
+    event.preventDefault(); // handle "open" yourself instead of the default
+    fetch('/documents/draft.md')
+      .then((response) => response.text())
+      .then((text) => window.terraphimEditor.openDocument(text, 'draft.md'));
   });
 </script>
 ```
 
-The editor emits DOM events a host can listen for. `te:saved` carries the serialised document (Markdown plus annotation block) for the host to store; `te:open` asks the host for a document to load with `editor.openDocument(text)`; `te:markdown` is the `M↓` control; `te:mode-change` and `te:blocks-drafts` report the mode and unsaved Blocks drafts.
+`window.terraphimEditor.saveDocument()` returns the serialised document and `exportDocument()` the clean Markdown (annotations and ghosted text removed). The editor emits DOM events a host can listen for, such as `te:save`, `te:saved`, `te:open`, `te:markdown` (the `M↓` control), `te:mode-change` and `te:blocks-drafts`.
+
+A self-contained embed (a single script that renders the editor into any element) is not ready yet: `trunk build --release` also writes `terraphim-editor.min.js` with a `TeraphimEditor` wrapper, but it still expects the full page's markup. That work is tracked in issue #77.
 
 ## How it is built
 
