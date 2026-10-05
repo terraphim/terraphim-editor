@@ -45,8 +45,8 @@
  * There is deliberately no "move block" command: moving text through the
  * edit path is a deletion plus an insertion, and the span model releases
  * ghosts inside deleted text (as it does for cut and paste), so a move would
- * lose them. Reordering needs a move operation in the model first (see
- * docs/design/blocks-view.md, follow-ups).
+ * lose them. Reordering needs a move operation in the model first (#44;
+ * see docs/design/blocks-view.md, follow-ups).
  *
  * Events: every view change dispatches a bubbling `te:view-change`
  * { view: 'text' | 'blocks', editor } from the blocks container.

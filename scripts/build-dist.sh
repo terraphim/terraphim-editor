@@ -1,20 +1,31 @@
 #!/bin/bash
 
-# Create dist directory
-mkdir -p dist
+# Writes the embeddable bundle (min.js, min.css, example.html).
+#
+# Output directory, in order of precedence:
+#   1. first argument:       scripts/build-dist.sh some/dir
+#   2. $TRUNK_STAGING_DIR:   set by Trunk for build hooks, so the files ship
+#                            with whichever dist Trunk is producing
+#   3. target/trunk-dist:    manual runs; never the committed ./dist
+# The committed release copy is regenerated only by scripts/release-dist.sh.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+OUT="${1:-${TRUNK_STAGING_DIR:-target/trunk-dist}}"
+mkdir -p "$OUT"
 
 # Copy and minify JS files
 # Order matters: config, then the Write_On chrome and the Blocks view, then
 # the editor that instantiates them, then the embeddable wrapper.
-terser public/js/config.js public/js/chrome.js public/js/blocks.js public/js/editor.js public/js/terraphim-editor.js -o dist/terraphim-editor.min.js
+terser public/js/config.js public/js/chrome.js public/js/blocks.js public/js/editor.js public/js/terraphim-editor.js -o "$OUT/terraphim-editor.min.js"
 
 # Copy and minify CSS
 # Design tokens before the Write_On layout, chrome and Blocks view that
 # consume them.
-cleancss public/styles.css public/css/tokens.css public/css/write-on.css public/css/blocks.css -o dist/terraphim-editor.min.css
+cleancss public/styles.css public/css/tokens.css public/css/write-on.css public/css/blocks.css -o "$OUT/terraphim-editor.min.css"
 
 # Create example usage file
-cat > dist/example.html << EOL
+cat > "$OUT/example.html" << EOL
 <!DOCTYPE html>
 <html>
 <head>

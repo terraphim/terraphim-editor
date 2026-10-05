@@ -162,12 +162,14 @@ Dropped:
   ghost. A test showed exactly this: after a swap, `g1` was missing from the
   saved document. Moving is therefore left out until the model can do it
   (see Follow-ups).
+- **The LLM pipeline builder itself** (generation, critic, parallel and
+  validator steps) is a separate feature, tracked as issue #43.
 - **The `criterion` change** on that branch is obsolete; issue #20 handled
   it.
 
 ## Follow-ups
 
-- **Moving blocks.** This needs a model operation that moves a range
+- **Moving blocks (#44).** This needs a model operation that moves a range
   together with its anchors (for example `move_range(from, to, at)` in
   `src/document.rs`), and a surface history step that replays as a move, so
   that undo does not run the deletion through `apply_edit`.
