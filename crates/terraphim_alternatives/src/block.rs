@@ -15,11 +15,46 @@
 //!   `"\n"`. Backticks inside JSON strings are written as ``` so the JSON
 //!   can never contain a fence, whatever the overflow or alternatives hold.
 //! * When there is nothing to persist, no block is written at all and a plain
-//!   `.md` file stays plain.
+//!   `.md` file stays plain, unless the body would then be misread (see
+//!   below), in which case an empty *guard block* is written.
 //! * The JSON fields are written in the order `version`, `spans`, `ghosts`,
 //!   `overflow`. `spans` and `ghosts` are always written, even when empty;
 //!   `overflow` is omitted when empty. A block without `ghosts` reads as no
 //!   ghosts.
+//!
+//! # Empty blocks and fenced examples
+//!
+//! Markdown may legitimately contain a ```` ```terraphim-alternatives ````
+//! fence of its own, for instance documentation showing the format. The
+//! reader always looks at the *last* opening fence, so such an example at the
+//! end of a document would otherwise be taken for the annotations and lost
+//! on the next save. Two rules, which keep schema v1 unchanged, prevent that:
+//!
+//! * **Reader.** A block that decodes to empty annotations (no spans, no
+//!   ghosts, empty overflow) is the annotation block only if it is a guard
+//!   block the writer produced: the text before it contains an opening-fence
+//!   line, and its JSON is, after `\r\n` is normalised to `\n` and outer
+//!   whitespace trimmed, exactly the writer's canonical empty JSON (or the
+//!   pre-ghost form without `ghosts`). Any other empty block is body text,
+//!   wherever it sits: the whole source is returned as the body. An empty
+//!   block carries no data, so this can never discard annotations. Non-empty
+//!   and malformed blocks are handled as before.
+//! * **Writer.** For empty annotations the writer emits the body alone
+//!   whenever the reader would return it unchanged, and a guard block
+//!   otherwise (the body ends in something that reads as an annotation block,
+//!   or as a malformed one). Since a guard block always follows a body with an
+//!   opening fence, the reader recognises it, so `parse(write(doc))` is the
+//!   identity, and a hand-written document ending in an empty example is
+//!   byte-stable through `write(parse(source))`.
+//!
+//! The rule is an approximation of intent with one inherent limit: a source
+//! whose last block is byte-identical to a guard block, after an earlier
+//! opening fence, is read as a guard block. Without a format change no reader
+//! can tell such a source apart from the writer's own output. A sentinel line
+//! before the fence (the alternative considered in issue #26) would remove
+//! the ambiguity but change the format; it was not needed because the
+//! remaining case only arises from text written to look exactly like the
+//! writer's output.
 //!
 //! # Validation
 //!
@@ -146,7 +181,8 @@ pub struct BlockError {
 /// Splits `source` into body and annotations.
 ///
 /// A source with no block yields the whole text as body and empty
-/// annotations. Anchors are returned as stored; call
+/// annotations, as does one whose last block is empty and not the writer's
+/// guard block (a fenced example of the format; see the module docs). Anchors are returned as stored; call
 /// [`Document::reanchor`] if the body may have been edited outside the editor.
 pub fn parse(source: &str) -> Result<Document, BlockError> {
     let Some(open_start) = find_opening_fence(source) else {
@@ -177,12 +213,20 @@ pub fn parse(source: &str) -> Result<Document, BlockError> {
     let Some((close_start, close_end)) = close else {
         return Err(fail(BlockErrorKind::Truncated));
     };
+    let json = &source[content_start..close_start];
+    let decoded = decode(json);
+    // An empty block the writer did not produce is ordinary body text: a
+    // fenced example of the format, say. Nothing is persisted in it, so
+    // keeping it in the body can never lose annotations.
+    if matches!(&decoded, Ok(annotations) if annotations.is_empty())
+        && !is_writer_guard_block(&source[..body_end], json)
+    {
+        return Ok(Document::new(source));
+    }
     if !source[close_end..].trim().is_empty() {
         return Err(fail(BlockErrorKind::NotTrailing));
     }
-
-    let json = &source[content_start..close_start];
-    let annotations = decode(json).map_err(fail)?;
+    let annotations = decoded.map_err(fail)?;
     Ok(Document {
         body: source[..body_end].to_string(),
         annotations,
@@ -196,21 +240,14 @@ pub fn parse(source: &str) -> Result<Document, BlockError> {
 /// structural validation.
 pub fn write(doc: &Document) -> String {
     let body = doc.body.as_str();
-    // An empty annotation set normally writes no block. If the body itself
-    // contains an opening-fence line, an empty block is still written so the
-    // reader does not mistake that line for the annotations.
-    if doc.annotations.is_empty() && find_opening_fence(body).is_none() {
+    // An empty annotation set normally writes no block. If the reader would
+    // not return the body unchanged on its own (it ends in something that
+    // reads as an annotation block, or as a malformed one), a guard block is
+    // written so the reader stops there instead.
+    if doc.annotations.is_empty() && !needs_guard_block(body) {
         return body.to_string();
     }
-    let wire = WireV1 {
-        version: SCHEMA_VERSION,
-        spans: doc.annotations.spans.clone(),
-        ghosts: doc.annotations.ghosts.clone(),
-        overflow: doc.annotations.overflow.clone(),
-    };
-    let json = serde_json::to_string_pretty(&wire)
-        .expect("annotation types always serialise")
-        .replace('`', "\\u0060");
+    let json = encode(&doc.annotations);
 
     let mut out = String::with_capacity(body.len() + json.len() + 64);
     out.push_str(body);
@@ -225,6 +262,44 @@ pub fn write(doc: &Document) -> String {
     out.push_str(FENCE);
     out.push('\n');
     out
+}
+
+/// The block's JSON exactly as the writer emits it, backticks escaped.
+fn encode(annotations: &Annotations) -> String {
+    let wire = WireV1 {
+        version: SCHEMA_VERSION,
+        spans: annotations.spans.clone(),
+        ghosts: annotations.ghosts.clone(),
+        overflow: annotations.overflow.clone(),
+    };
+    serde_json::to_string_pretty(&wire)
+        .expect("annotation types always serialise")
+        .replace('`', "\\u0060")
+}
+
+/// The guard block's JSON as written before the ghost layer existed
+/// (no `ghosts` field). Still recognised so files saved by that writer keep
+/// their guard block out of the body.
+const LEGACY_GUARD_JSON: &str = "{\n  \"version\": 1,\n  \"spans\": []\n}";
+
+/// Whether the writer must add a guard block after `body` for an empty
+/// annotation set: true unless parsing `body` on its own returns it intact.
+fn needs_guard_block(body: &str) -> bool {
+    find_opening_fence(body).is_some() && !matches!(parse(body), Ok(ref doc) if doc.body == body)
+}
+
+/// Whether an empty block with content `json`, preceded by `body`, is a guard
+/// block the writer produced. The writer only writes one after a body that
+/// contains an opening-fence line, and always in its canonical layout, so
+/// both must hold. Line endings are normalised so a file converted to CRLF
+/// as a whole (by Git or another editor) is still recognised.
+fn is_writer_guard_block(body: &str, json: &str) -> bool {
+    if find_opening_fence(body).is_none() {
+        return false;
+    }
+    let normalised = json.replace("\r\n", "\n");
+    let normalised = normalised.trim();
+    normalised == encode(&Annotations::default()) || normalised == LEGACY_GUARD_JSON
 }
 
 fn decode(json: &str) -> Result<Annotations, BlockErrorKind> {
@@ -412,11 +487,10 @@ mod tests {
 
     #[test]
     fn lenient_reader_accepts_single_newline_and_crlf() {
-        let src =
-            "Body\r\n```terraphim-alternatives  \r\n{\"version\":1,\"spans\":[]}\r\n```\r\n\r\n";
+        let src = "Body\r\n```terraphim-alternatives  \r\n{\"version\":1,\"spans\":[],\"overflow\":\"o\"}\r\n```\r\n\r\n";
         let d = parse(src).unwrap();
         assert_eq!(d.body, "Body");
-        assert!(d.annotations.is_empty());
+        assert_eq!(d.annotations.overflow, "o");
     }
 
     #[test]
@@ -436,7 +510,7 @@ mod tests {
 
     #[test]
     fn text_after_the_block_is_not_trailing() {
-        let src = "B\n\n```terraphim-alternatives\n{\"version\":1,\"spans\":[]}\n```\nMore text\n";
+        let src = "B\n\n```terraphim-alternatives\n{\"version\":1,\"spans\":[],\"overflow\":\"o\"}\n```\nMore text\n";
         let err = parse(src).unwrap_err();
         assert_eq!(err.kind, BlockErrorKind::NotTrailing);
         assert_eq!(err.body, "B");
@@ -507,5 +581,130 @@ mod tests {
         });
         let err = parse(&write(&d)).unwrap_err();
         assert_eq!(err.kind, BlockErrorKind::DuplicateId { id: "s1".into() });
+    }
+
+    // Issue #26: fenced examples of the format must survive parse and write.
+
+    /// The canonical empty block, as the writer emits it.
+    const GUARD: &str = "```terraphim-alternatives\n{\n  \"version\": 1,\n  \"spans\": [],\n  \"ghosts\": []\n}\n```\n";
+
+    /// Asserts `source` is read entirely as body and saved back unchanged.
+    fn assert_kept_as_body(source: &str) {
+        let parsed = parse(source).unwrap();
+        assert_eq!(parsed.body, source, "whole source is body");
+        assert!(parsed.annotations.is_empty());
+        assert_eq!(write(&parsed), source, "saved unchanged");
+    }
+
+    #[test]
+    fn trailing_empty_example_without_earlier_fence_is_body() {
+        assert_kept_as_body(&format!("Write this to start:\n\n{GUARD}"));
+        assert_kept_as_body(
+            "Compact:\n```terraphim-alternatives\n{\"version\":1,\"spans\":[]}\n```",
+        );
+        assert_kept_as_body(&format!("Only the example:\n\n{GUARD}\n\n  \n"));
+        assert_kept_as_body(GUARD);
+    }
+
+    #[test]
+    fn trailing_empty_example_with_crlf_is_body() {
+        assert_kept_as_body(&format!("Example:\r\n\r\n{}", GUARD.replace('\n', "\r\n")));
+        assert_kept_as_body(
+            "Example:\r\n```terraphim-alternatives\r\n{\"version\":1,\"spans\":[],\"ghosts\":[]}\r\n```\r\n",
+        );
+    }
+
+    #[test]
+    fn two_empty_examples_are_both_body() {
+        let source = "First:\n\n```terraphim-alternatives\n{\"version\":1,\"spans\":[]}\n```\n\n\
+                      Second:\n\n```terraphim-alternatives\n{ \"version\": 1, \"spans\": [], \"ghosts\": [] }\n```\n";
+        assert_kept_as_body(source);
+    }
+
+    #[test]
+    fn two_canonical_examples_round_trip_once_saved() {
+        // A body whose last block is byte-identical to a guard block after an
+        // earlier fence is the documented limit: read raw, that block is taken
+        // for a guard. Once the editor has saved such a body, its own guard
+        // follows and the body survives every later round trip.
+        let body = format!("First:\n\n{GUARD}\nSecond:\n\n{GUARD}");
+        assert_eq!(
+            parse(&body).unwrap().body,
+            format!("First:\n\n{GUARD}\nSecond:")
+        );
+        let d = Document::new(body.as_str());
+        let written = write(&d);
+        assert_eq!(written, format!("{body}\n\n{GUARD}"));
+        assert_eq!(parse(&written).unwrap(), d);
+        assert_eq!(write(&parse(&written).unwrap()), written);
+    }
+
+    #[test]
+    fn empty_example_not_at_the_end_is_body() {
+        assert_kept_as_body(&format!(
+            "Intro.\n\n{GUARD}\nMore prose after the example.\n"
+        ));
+        // With real annotations after it, the example stays in the body.
+        let d = doc(&format!("The tension rises.\n\n{GUARD}\nAfter.\n"));
+        assert_eq!(parse(&write(&d)).unwrap(), d);
+    }
+
+    #[test]
+    fn writer_adds_no_guard_when_the_body_reads_back_intact() {
+        let body = format!("Example:\n\n{GUARD}");
+        assert_eq!(write(&Document::new(body.as_str())), body);
+    }
+
+    #[test]
+    fn guard_follows_a_body_ending_in_a_non_empty_block_and_is_stripped() {
+        // The body itself ends in a valid, non-empty annotation block (an
+        // example document pasted in). The reader would take it, so the
+        // writer adds a guard block, and the reader strips only that.
+        let body = write(&doc("The tension rises."));
+        let d = Document::new(body.as_str());
+        let written = write(&d);
+        assert_eq!(written, format!("{body}\n\n{GUARD}"));
+        assert_eq!(parse(&written).unwrap(), d);
+    }
+
+    #[test]
+    fn guard_survives_whole_file_crlf_conversion() {
+        let body = "Example:\n\n```terraphim-alternatives\n{}\n```";
+        let written = write(&Document::new(body));
+        assert!(written.ends_with(GUARD));
+        let converted = written.replace('\n', "\r\n");
+        let parsed = parse(&converted).unwrap();
+        assert_eq!(parsed.body, body.replace('\n', "\r\n"));
+        assert!(parsed.annotations.is_empty());
+    }
+
+    #[test]
+    fn legacy_guard_without_ghosts_is_still_stripped() {
+        let body = "Example:\n\n```terraphim-alternatives\n{}\n```";
+        let legacy = format!("{body}\n\n```terraphim-alternatives\n{LEGACY_GUARD_JSON}\n```\n");
+        let parsed = parse(&legacy).unwrap();
+        assert_eq!(parsed.body, body);
+        assert!(parsed.annotations.is_empty());
+        // Saving rewrites the guard in the current canonical form.
+        assert_eq!(write(&parsed), format!("{body}\n\n{GUARD}"));
+    }
+
+    #[test]
+    fn guard_followed_by_text_is_not_trailing() {
+        let body = "Example:\n\n```terraphim-alternatives\n{}\n```";
+        let src = format!("{}Appended elsewhere.\n", write(&Document::new(body)));
+        let err = parse(&src).unwrap_err();
+        assert_eq!(err.kind, BlockErrorKind::NotTrailing);
+        assert_eq!(err.body, body);
+        assert_eq!(format!("{}{}", err.body, err.raw_block), src);
+    }
+
+    #[test]
+    fn guard_constant_matches_the_writer() {
+        let expected = format!(
+            "{FENCE}{FENCE_INFO}\n{}\n{FENCE}\n",
+            encode(&Annotations::default())
+        );
+        assert_eq!(GUARD, expected);
     }
 }
