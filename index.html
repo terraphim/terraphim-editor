@@ -26,11 +26,14 @@
     <!-- Decoration registry and inline indicators (issue #8): after the
          chrome, before editor.js, which instantiates them. -->
     <link data-trunk rel="inline" href="public/js/indicators.js" />
+    <!-- The Lab popover (issue #14): after indicators.js, before editor.js. -->
+    <link data-trunk rel="inline" href="public/js/lab.js" />
     <link data-trunk rel="inline" href="public/js/blocks.js" />
     <link data-trunk rel="inline" href="public/js/editor.js" />
     <script>console.log("editor.js loaded");</script>
     <link data-trunk rel="css" href="public/css/tokens.css" />
     <link data-trunk rel="css" href="public/css/write-on.css" />
+    <link data-trunk rel="css" href="public/css/lab.css" />
     <link data-trunk rel="css" href="public/css/blocks.css" />
     <!-- <script data-trunk src="public/js/alert.js"></script> -->
     <style>
