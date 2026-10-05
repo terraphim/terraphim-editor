@@ -14,7 +14,7 @@ use crate::context;
 use crate::model::{
     Alternative, Anchor, Annotations, CONTEXT_UNITS, Ghost, Source, Span, SpanKind,
 };
-use crate::offset::{utf16_len, utf16_to_byte};
+use crate::offset::{utf16_len, utf16_to_byte, utf16_to_byte_from, utf16_to_bytes_sorted};
 
 /// A Markdown body with its annotations.
 ///
@@ -59,6 +59,33 @@ use crate::offset::{utf16_len, utf16_to_byte};
 /// [`Document::reanchor`] refreshes every placed anchor, so the context of an
 /// anchor that matches the body is always current. Detached spans returned by
 /// [`Document::apply_edit`] and unresolved items keep their old context.
+///
+/// # Moves
+///
+/// [`Document::move_range`] relocates text without the loss a deletion plus
+/// an insertion would cause (issue #44). For a move of `s..e` to `t` (offsets
+/// in the pre-move body), each span and ghost is:
+///
+/// * **carried** when it lies wholly inside `s..e`: it moves with the text,
+///   keeping its id, alternatives and active index;
+/// * **shifted** by the moved length when it lies wholly between the range
+///   and `t`;
+/// * **unchanged** when it lies wholly before or after everything the move
+///   touches, including an item ending at `t` or starting at `t` (an
+///   insertion at a boundary is outside, as for edits);
+/// * a **container** when it is a ghost holding both `s..e` and `t`: the
+///   text is reshuffled inside it, so it keeps its extent and its text is
+///   re-read (ghosted text stays ghosted);
+/// * otherwise **refused** with [`EditError::Straddles`] naming it: an item
+///   partly overlapping `s..e`, one with `t` strictly inside it, a span
+///   containing `s..e` (its text would change), and a ghost containing
+///   `s..e` but not `t` (part of it would leave). Nothing is trimmed or
+///   detached; the caller moves whole items, or revives or widens first.
+///
+/// Carried items never overlap the items they land next to, because no item
+/// has `t` strictly inside it. A carried ghost may come to touch another;
+/// as with edits, touching ghosts are valid state and are not merged. The
+/// context of every anchor in or near the affected region is refreshed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Document {
     /// Markdown text without the annotation block. Holds the active
@@ -105,6 +132,22 @@ pub enum EditError {
     /// Alternative text must not be empty.
     #[error("alternative text is empty")]
     EmptyText,
+    /// The destination of [`Document::move_range`] lies strictly inside the
+    /// moved range, is out of bounds, or splits a character.
+    #[error("invalid move destination {to} for range {start}..{end}")]
+    InvalidDestination {
+        /// Start of the moved range.
+        start: usize,
+        /// End of the moved range.
+        end: usize,
+        /// Requested insertion point.
+        to: usize,
+    },
+    /// [`Document::move_range`] would split this span or ghost: it partly
+    /// overlaps the moved range, the destination lies inside it, or (a span)
+    /// it contains the moved range. Move whole items only.
+    #[error("moving the text would split {0:?}; move whole spans and ghosts only")]
+    Straddles(String),
 }
 
 /// Whether an operation left the span in place or removed it (R-2.7).
@@ -502,6 +545,217 @@ impl Document {
         }
     }
 
+    // ----- moving text (issue #44) -----------------------------------------
+
+    /// Moves the text `start..end` so that it is inserted at `to`, an offset
+    /// in the **pre-move** body, carrying its spans and ghosts with it.
+    ///
+    /// Moving through [`Document::apply_edit`] is a deletion plus an insertion,
+    /// which detaches the spans and removes the ghosts inside the deleted
+    /// text. A move keeps them: see [`Document`], "Moves", for the rules.
+    ///
+    /// `to` may be `start` or `end` (or anything outside the range); both of
+    /// those are no-ops that change nothing and report `moved: false`, after
+    /// the same checks as a real move. Errors, with the document unchanged:
+    ///
+    /// * [`EditError::InvalidRange`]: `start..end` is empty, reversed, out of
+    ///   bounds or splits a character;
+    /// * [`EditError::InvalidDestination`]: `start < to < end`, or `to` is
+    ///   out of bounds or splits a character;
+    /// * [`EditError::Straddles`]: a span or ghost would be split (named);
+    /// * [`EditError::StaleAnchor`]: an item the move would carry, shift or
+    ///   resize no longer matches the body.
+    ///
+    /// ```
+    /// use terraphim_alternatives::{Document, Source, SpanKind};
+    ///
+    /// let mut doc = Document::new("One clip.\n\nTwo.\n\n");
+    /// let span = doc.add_span(SpanKind::Word, 4, 8).unwrap();
+    /// doc.add_alternative(&span, "pin", Source::Human, None).unwrap();
+    /// let ghost = doc.ghost(0, 3).unwrap();
+    ///
+    /// // Move the first paragraph (with its blank line) to the end.
+    /// let outcome = doc.move_range(0, 11, 17).unwrap();
+    /// assert_eq!(doc.body, "Two.\n\nOne clip.\n\n");
+    /// assert_eq!((outcome.start, outcome.end), (6, 17));
+    /// assert_eq!(outcome.carried, vec![span.clone(), ghost.clone()]);
+    /// assert_eq!(doc.span(&span).unwrap().anchor.start, 10);
+    /// assert_eq!(doc.ghost_at(6).unwrap().id, ghost);
+    /// ```
+    pub fn move_range(
+        &mut self,
+        start: usize,
+        end: usize,
+        to: usize,
+    ) -> Result<MoveOutcome, EditError> {
+        let (byte_start, byte_end) = self.byte_range(start, end)?;
+        if byte_start == byte_end {
+            return Err(EditError::InvalidRange { start, end });
+        }
+        let invalid_to = EditError::InvalidDestination { start, end, to };
+        if start < to && to < end {
+            return Err(invalid_to);
+        }
+        let byte_to = utf16_to_byte(&self.body, to).ok_or(invalid_to)?;
+
+        // Classify every item before changing anything, so a refusal leaves
+        // the document exactly as it was.
+        let items: Vec<(&str, &Anchor, Result<MoveFate, ()>)> = self
+            .annotations
+            .spans
+            .iter()
+            .map(|s| (s.id.as_str(), &s.anchor, false))
+            .chain(
+                self.annotations
+                    .ghosts
+                    .iter()
+                    .map(|g| (g.id.as_str(), &g.anchor, true)),
+            )
+            .map(|(id, a, is_ghost)| (id, a, move_fate(a.start, a.end, start, end, to, is_ghost)))
+            .collect();
+        // Every item the move would carry, shift, resize or split must still
+        // match the body; their offsets are converted in one walk.
+        let mut offsets: Vec<usize> = items
+            .iter()
+            .filter(|(_, _, fate)| *fate != Ok(MoveFate::Unchanged))
+            .flat_map(|(_, a, _)| [a.start, a.end])
+            .collect();
+        offsets.sort_unstable();
+        offsets.dedup();
+        let bytes = utf16_to_bytes_sorted(&self.body, &offsets);
+        let byte_of = |unit: usize| {
+            offsets
+                .binary_search(&unit)
+                .ok()
+                .and_then(|index| bytes[index])
+        };
+        let mut fates = Vec::with_capacity(items.len());
+        for (id, anchor, fate) in &items {
+            if *fate != Ok(MoveFate::Unchanged) {
+                let located = byte_of(anchor.start)
+                    .zip(byte_of(anchor.end))
+                    .is_some_and(|(bs, be)| self.body.get(bs..be) == Some(anchor.text.as_str()));
+                if !located {
+                    return Err(EditError::StaleAnchor(id.to_string()));
+                }
+            }
+            fates.push(fate.map_err(|()| EditError::Straddles(id.to_string()))?);
+        }
+        let ghost_fates = fates.split_off(self.annotations.spans.len());
+        let span_fates = fates;
+
+        let span_ids = self
+            .annotations
+            .spans
+            .iter()
+            .map(|s| &s.id)
+            .zip(&span_fates);
+        let ghost_ids = self
+            .annotations
+            .ghosts
+            .iter()
+            .map(|g| &g.id)
+            .zip(&ghost_fates);
+        let carried: Vec<String> = span_ids
+            .chain(ghost_ids)
+            .filter(|(_, fate)| **fate == MoveFate::Carried)
+            .map(|(id, _)| id.clone())
+            .collect();
+        if to == start || to == end {
+            return Ok(MoveOutcome {
+                start,
+                end,
+                carried,
+                moved: false,
+            });
+        }
+
+        let len = end - start;
+        let forward = to > end;
+        let mut body = String::with_capacity(self.body.len());
+        if forward {
+            body.push_str(&self.body[..byte_start]);
+            body.push_str(&self.body[byte_end..byte_to]);
+            body.push_str(&self.body[byte_start..byte_end]);
+            body.push_str(&self.body[byte_to..]);
+        } else {
+            body.push_str(&self.body[..byte_to]);
+            body.push_str(&self.body[byte_start..byte_end]);
+            body.push_str(&self.body[byte_to..byte_start]);
+            body.push_str(&self.body[byte_end..]);
+        }
+        self.body = body;
+
+        // Forward: the moved text lands at `to - len` and the text between
+        // shifts back by `len`. Backward: it lands at `to` and the text
+        // between shifts on by `len`.
+        let remap = |anchor: &mut Anchor, fate: MoveFate| match (fate, forward) {
+            (MoveFate::Carried, true) => shift_anchor(anchor, to - end, true),
+            (MoveFate::Carried, false) => shift_anchor(anchor, start - to, false),
+            (MoveFate::Between, true) => shift_anchor(anchor, len, false),
+            (MoveFate::Between, false) => shift_anchor(anchor, len, true),
+            (MoveFate::Unchanged | MoveFate::Container, _) => {}
+        };
+        for (span, fate) in self.annotations.spans.iter_mut().zip(&span_fates) {
+            remap(&mut span.anchor, *fate);
+        }
+        let body = self.body.as_str();
+        for (ghost, fate) in self.annotations.ghosts.iter_mut().zip(&ghost_fates) {
+            remap(&mut ghost.anchor, *fate);
+            if *fate == MoveFate::Container {
+                // Same extent, reshuffled text: re-read it from the body.
+                let gs = utf16_to_byte(body, ghost.anchor.start);
+                let ge = utf16_to_byte(body, ghost.anchor.end);
+                let (gs, ge) = gs
+                    .zip(ge)
+                    .expect("a container ghost keeps its character boundaries");
+                ghost.anchor.text = body[gs..ge].to_string();
+            }
+        }
+        self.sort_ghosts();
+
+        // Everything before `lo` is untouched, so `(lo, byte_lo)` is still a
+        // character boundary of the new body.
+        let lo = start.min(to);
+        let hi = end.max(to);
+        self.refresh_context_sorted(lo, hi, (lo, byte_start.min(byte_to)));
+
+        let new_start = if forward { to - len } else { to };
+        Ok(MoveOutcome {
+            start: new_start,
+            end: new_start + len,
+            carried,
+            moved: true,
+        })
+    }
+
+    /// Like [`Document::refresh_context_near`], but converts offsets in one
+    /// walk over the anchors sorted by start, so the cost of refreshing a
+    /// long moved region grows with its length rather than with its length
+    /// times the number of anchors in it.
+    fn refresh_context_sorted(&mut self, start: usize, end: usize, reference: (usize, usize)) {
+        let reach = CONTEXT_UNITS + 2;
+        let body = self.body.as_str();
+        let mut anchors: Vec<&mut Anchor> = self
+            .annotations
+            .spans
+            .iter_mut()
+            .map(|s| &mut s.anchor)
+            .chain(self.annotations.ghosts.iter_mut().map(|g| &mut g.anchor))
+            .filter(|a| a.start <= end + reach && start <= a.end + reach)
+            .collect();
+        anchors.sort_by_key(|a| a.start);
+        let mut reference = reference;
+        for anchor in anchors {
+            if let Some(byte) = utf16_to_byte_from(body, reference, anchor.start) {
+                reference = (anchor.start, byte);
+            }
+            context::refresh_anchor_near(body, anchor, reference);
+        }
+    }
+
+    // ----- end of moving text (issue #44) ----------------------------------
+
     // ----- internals -------------------------------------------------------
 
     /// All ids in use; spans and ghosts share one namespace.
@@ -793,6 +1047,85 @@ fn ghost_after_edit(gs: usize, ge: usize, s: usize, e: usize, added: usize) -> G
         GhostAfterEdit::Resized(gs, s)
     }
 }
+
+// ----- moving text (issue #44) ---------------------------------------------
+
+/// Outcome of [`Document::move_range`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MoveOutcome {
+    /// Start of the moved text in the new body (UTF-16).
+    pub start: usize,
+    /// End of the moved text in the new body (UTF-16).
+    pub end: usize,
+    /// Ids of the spans, then the ghosts, that lay wholly inside the moved
+    /// range and moved with it.
+    pub carried: Vec<String>,
+    /// Whether the body changed (`false` for a move to `start` or `end`).
+    pub moved: bool,
+}
+
+/// What [`Document::move_range`] does to one span or ghost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MoveFate {
+    /// Wholly inside the moved range: travels with the text.
+    Carried,
+    /// Wholly between the moved range and the destination: shifts by the
+    /// moved length.
+    Between,
+    /// A ghost containing both the moved range and the destination: keeps its
+    /// extent, its text is reshuffled.
+    Container,
+    /// Before or after everything the move touches.
+    Unchanged,
+}
+
+/// Classifies item `a_start..a_end` for moving `start..end` to `to` (pre-move
+/// offsets). `Err(())` means the move would split the item.
+fn move_fate(
+    a_start: usize,
+    a_end: usize,
+    start: usize,
+    end: usize,
+    to: usize,
+    is_ghost: bool,
+) -> Result<MoveFate, ()> {
+    if start <= a_start && a_end <= end {
+        return Ok(MoveFate::Carried);
+    }
+    if a_end <= start || a_start >= end {
+        if a_start < to && to < a_end {
+            // The moved text would land inside the item.
+            return Err(());
+        }
+        let between = if to > end {
+            a_start >= end && a_end <= to
+        } else {
+            a_start >= to && a_end <= start
+        };
+        return Ok(if between {
+            MoveFate::Between
+        } else {
+            MoveFate::Unchanged
+        });
+    }
+    if is_ghost && a_start <= start && end <= a_end && a_start <= to && to <= a_end {
+        return Ok(MoveFate::Container);
+    }
+    Err(())
+}
+
+/// Shifts an anchor by `by` code units, forwards or backwards.
+fn shift_anchor(anchor: &mut Anchor, by: usize, forwards: bool) {
+    if forwards {
+        anchor.start += by;
+        anchor.end += by;
+    } else {
+        anchor.start -= by;
+        anchor.end -= by;
+    }
+}
+
+// ----- end of moving text (issue #44) --------------------------------------
 
 #[cfg(test)]
 mod tests {
