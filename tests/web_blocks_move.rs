@@ -260,3 +260,120 @@ async fn test_refused_move_and_moving_while_editing() {
     .await;
     assert_eq!(result, "");
 }
+
+/// A body with one annotation over `range`: a ghost, or a span with
+/// alternative "2." when `span` is set.
+fn separator_case(body: &str, range: (usize, usize), span: bool) -> String {
+    let mut doc = Document::new(body);
+    if span {
+        let id = doc.add_span(SpanKind::Word, range.0, range.1).unwrap();
+        doc.add_alternative(&id, "2.", Source::Human, None).unwrap();
+    } else {
+        doc.ghost(range.0, range.1).unwrap();
+    }
+    write(&doc)
+}
+
+#[wasm_bindgen_test]
+async fn test_fix_ups_respect_annotations_and_kept_drafts_follow_moves() {
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    let setup = format!(
+        "{HELPERS}
+          T.ghostSep = {ghost_sep};
+          T.spanSep = {span_sep};
+          T.ghostText = {ghost_text};
+          T.ghostClean = {ghost_clean};
+          bv.setView('blocks');",
+        ghost_sep = js_string_literal(&separator_case("One.\n\nTwo.\n\nLast", (6, 12), false)),
+        span_sep = js_string_literal(&separator_case("One.\n\nTwo.\n\nLast", (6, 12), true)),
+        ghost_text = js_string_literal(&separator_case("One.\n\nTwo.\n\nLast", (6, 10), false)),
+        ghost_clean = js_string_literal(&separator_case(
+            "One.\n\nTwo.\n\nThree.\n\nLast",
+            (6, 12),
+            false
+        )),
+    );
+    let result = run_steps(&[
+        &setup,
+        // A ghost or a span holding the block's trailing separator, where the
+        // move past the last block needs a separator fix-up: refused by
+        // name, nothing changed.
+        r##"
+          for (const [label, src, id, at] of [['ghost', T.ghostSep, 'g1', 'g1@6:Two.\n\n aside=0'], ['span', T.spanSep, 's1', 's1@6:2 aside=0']]) {
+            ed.openDocument(src);
+            const depth = s.historyIndex;
+            if (bv.moveBlock(1, 'down')) out.push(label + ': move not refused');
+            out.push(...T.check(label + ' refused', 'One.\n\nTwo.\n\nLast', at));
+            if (s.historyIndex !== depth) out.push(label + ': refused move recorded');
+            const n = bv.noticeElement;
+            if (n.hidden || !n.textContent.includes('"' + id + '"')) out.push(label + ': notice ' + n.textContent);
+          }
+        "##,
+        // A ghost on the block text only: the fix-ups sit at its edges, so
+        // the move goes through with the ghost intact.
+        r##"
+          ed.openDocument(T.ghostText);
+          if (!bv.moveBlock(1, 'down')) out.push('text-only ghost move refused: ' + bv.noticeElement.textContent);
+          out.push(...T.check('text-only ghost', 'One.\n\nLast\n\nTwo.', 'g1@12:Two. aside=0'));
+        "##,
+        // A ghost holding its separator where no fix-up is needed: a clean
+        // move, the ghost carried unchanged.
+        r##"
+          ed.openDocument(T.ghostClean);
+          if (!bv.moveBlock(1, 'down')) out.push('clean move refused: ' + bv.noticeElement.textContent);
+          out.push(...T.check('clean', 'One.\n\nThree.\n\nTwo.\n\nLast', 'g1@14:Two.\n\n aside=0'));
+          bv.undo();
+          out.push(...T.check('clean undo', 'One.\n\nTwo.\n\nThree.\n\nLast', 'g1@6:Two.\n\n aside=0'));
+        "##,
+        // A kept draft in the moved block follows it down, up and through
+        // undo; Apply replaces the right block.
+        r##"
+          s.setText('A\n\nX\n\nC\n');
+          const ta = bv.editBlock(1);
+          ta.value = 'X draft';
+          bv.cancelEdit();
+          const d = () => bv.keptDrafts()[0];
+          if (!d() || d().anchor !== 3) return 'draft not kept at the block: ' + JSON.stringify(bv.keptDrafts());
+          bv.moveBlock(1, 'down');
+          if (s.getText() !== 'A\n\nC\n\nX\n' || d().anchor !== 6) out.push('down: anchor ' + d().anchor + ' ' + JSON.stringify(s.getText()));
+          bv.moveBlock(2, 'up');
+          if (d().anchor !== 3) out.push('up: anchor ' + d().anchor);
+          bv.undo();
+          if (s.getText() !== 'A\n\nC\n\nX\n' || d().anchor !== 6) out.push('undo: anchor ' + d().anchor);
+          const t = bv.draftTarget(d());
+          if (t.mode !== 'replace' || t.block.text !== 'X') out.push('target ' + JSON.stringify(t));
+          if (bv.applyDraft(d().id) !== 'replace') out.push('apply mode');
+          if (s.getText() !== 'A\n\nC\n\nX draft\n') out.push('applied ' + JSON.stringify(s.getText()));
+        "##,
+        // A kept draft in a block the move passes over follows that block.
+        r##"
+          s.setText('A\n\nX\n\nC\n');
+          const ta = bv.editBlock(2);
+          ta.value = 'C draft';
+          bv.cancelEdit();
+          bv.moveBlock(1, 'down');
+          const d = bv.keptDrafts()[0];
+          const t = bv.draftTarget(d);
+          if (d.anchor !== 3 || t.mode !== 'replace' || t.block.text !== 'C') out.push('passed over ' + JSON.stringify([d.anchor, t]));
+          bv.discardDraft(d.id);
+        "##,
+        // A draft whose block changed is inserted after the right block once
+        // that block has moved.
+        r##"
+          s.setText('A\n\nX\n\nC\n');
+          const ta = bv.editBlock(1);
+          ta.value = 'X draft';
+          s.replaceRange(3, 4, 'Y');
+          bv.moveBlock(1, 'down');
+          const d = bv.keptDrafts()[0];
+          if (!d) return 'draft lost';
+          const t = bv.draftTarget(d);
+          if (t.mode !== 'insert' || t.at !== 7) out.push('changed target ' + JSON.stringify(t));
+          if (bv.applyDraft(d.id) !== 'insert') out.push('changed apply mode');
+          if (s.getText() !== 'A\n\nC\n\nY\n\nX draft\n') out.push('inserted ' + JSON.stringify(s.getText()));
+        "##,
+    ])
+    .await;
+    assert_eq!(result, "");
+}

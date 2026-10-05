@@ -49,7 +49,10 @@
  *     "Discard" drops the draft.
  * A commit also checks that the block's original text is still at the mapped
  * range; if not, the draft goes to the notice instead of being applied.
- * Kept drafts follow later edits and stay available in both views.
+ * Kept drafts follow later edits and stay available in both views; through
+ * a text move (or its undo/redo) they follow their block, mapped with the
+ * model's move rules (mapThroughMove), and an open editor stays open when
+ * its block lies wholly inside the moved text or wholly beside it.
  * Escape never discards typed text: closing an editor whose draft differs
  * from the block puts the draft in the same notice; only "Discard" there
  * drops it.
@@ -105,7 +108,9 @@
  * and the document keeps its trailing text. A gap that would separate two
  * blocks without a blank line becomes one blank line. The result is
  * simulated first and must parse into the same blocks in the new order, or
- * the move is refused. The move and its fix-ups are folded into ONE undo
+ * the move is refused. A fix-up that would edit inside a span or ghost
+ * (mapped through the move) refuses the move too, naming it, before
+ * anything changes (fixUpBlocker). The move and its fix-ups are folded into ONE undo
  * step (EditorSurface.squashHistory), whose undo replays the move in the
  * model as a move. A move the model refuses (it would split a span or ghost,
  * typically a ghost across a block boundary) changes nothing and its message
@@ -738,7 +743,34 @@ class BlocksView {
   static replacesWhole(change) {
     const e = change.edit;
     const oldLength = change.text.length - e.insertedText.length + e.deletedLength;
-    return change.source === 'open' || (e.start === 0 && e.deletedLength === oldLength && oldLength > 0);
+    if (change.source === 'open') return true;
+    // A text move rewrites a region (possibly all of it) but keeps every
+    // character: it is mapped as a move, never as a replacement.
+    if (e.move) return false;
+    return e.start === 0 && e.deletedLength === oldLength && oldLength > 0;
+  }
+
+  /**
+   * Map the range [a, b) through a text move { start, end, to } (pre-move
+   * offsets) with the model's rules (crates/terraphim_alternatives
+   * document.rs, "Moves"): inside the moved range it travels with the text,
+   * between the range and the destination it shifts by the moved length,
+   * elsewhere it is unchanged. Returns [a', b'], or null when the range
+   * spans more than one of those zones. A point is the range [x, x].
+   */
+  static mapThroughMove(move, a, b) {
+    const { start, end, to } = move;
+    const len = end - start;
+    const down = to > end;
+    const lo = down ? end : to;
+    const hi = down ? to : start;
+    const inside = down ? to - end : to - start;
+    const between = down ? -len : len;
+    const inZone = (zs, ze) => a >= zs && (a === b ? a < ze : b <= ze);
+    if (inZone(start, end)) return [a + inside, b + inside];
+    if (inZone(lo, hi)) return [a + between, b + between];
+    if (b <= Math.min(start, to) || a >= Math.max(end, to)) return [a, b];
+    return null;
   }
 
   /**
@@ -749,6 +781,14 @@ class BlocksView {
   mapEditing(edit, whole) {
     if (whole) return false;
     const ed = this.editing;
+    if (edit.move) {
+      // A move (or its undo/redo) keeps the block when it lies wholly in
+      // one zone of the move; otherwise the draft is kept in the notice.
+      const mapped = BlocksView.mapThroughMove(edit.move, ed.start, ed.start + ed.original.length);
+      if (!mapped) return false;
+      ed.start = mapped[0];
+      return true;
+    }
     const a = edit.start;
     const b = a + edit.deletedLength;
     const s = ed.start;
@@ -767,6 +807,9 @@ class BlocksView {
     for (const d of this.drafts) {
       if (d.anchor === null) continue;
       if (whole) d.anchor = null;
+      // A text move (Blocks move, or its undo/redo): the anchor follows its
+      // block, as the model's annotations do.
+      else if (edit.move) d.anchor = BlocksView.mapThroughMove(edit.move, d.anchor, d.anchor)[0];
       else if (b <= d.anchor) d.anchor += delta;
       else if (a < d.anchor) d.anchor = a;
     }
@@ -1192,7 +1235,7 @@ class BlocksView {
       }
       return false;
     }
-    let refused = plan.error || null;
+    let refused = plan.error || this.fixUpBlocker(plan);
     if (!refused) {
       let steps = 0;
       this.applying = true;
@@ -1232,6 +1275,50 @@ class BlocksView {
       if (button && !button.hidden) button.focus();
     }
     return !refused;
+  }
+
+  /**
+   * The separator fix-ups of `plan` are ordinary edits, which the model
+   * would apply to any span or ghost they touch (trimming or growing it)
+   * instead of refusing. So before anything changes, every annotation is
+   * mapped through the planned move and each fix-up is checked against it:
+   * an insertion strictly inside an item, or a deletion overlapping one,
+   * refuses the whole move. Returns the refusal message naming the item, or
+   * null. Items the move itself would split are left to moveRange, which
+   * refuses them by name.
+   */
+  fixUpBlocker(plan) {
+    if (!plan.fixes.length || typeof this.editor.annotations !== 'function') return null;
+    let annotations;
+    try {
+      annotations = this.editor.annotations();
+    } catch (err) {
+      return null;
+    }
+    const [start, end, to] = plan.range;
+    const move = { start, end, to };
+    const items = [...(annotations.spans || []), ...(annotations.ghosts || [])];
+    for (const item of items) {
+      const a = item.anchor.start;
+      const b = item.anchor.end;
+      let mapped = BlocksView.mapThroughMove(move, a, b);
+      if (!mapped) {
+        // A ghost holding both the range and the destination keeps its
+        // extent; anything else straddles and moveRange refuses it.
+        if (a <= Math.min(start, to) && b >= Math.max(end, to)) mapped = [a, b];
+        else continue;
+      }
+      const [gs, ge] = mapped;
+      for (const fix of plan.fixes) {
+        const d = window.EditorSurface.diff(fix.from, fix.to);
+        const at = fix.at + d.start;
+        const touches = d.deletedLength === 0 ? gs < at && at < ge : at < ge && at + d.deletedLength > gs;
+        if (touches) {
+          return `Block not moved: restoring the blank line between the blocks would change the text of "${item.id}"; move whole spans and ghosts only.`;
+        }
+      }
+    }
+    return null;
   }
 
   /** Show `message` in the notice region, or hide it (null). */

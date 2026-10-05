@@ -113,7 +113,15 @@ which would set the ghosts aside.
   newline stays no trailing newline). A gap that would separate two blocks
   without a blank line (for example a heading followed by a single newline)
   becomes one blank line. These edits sit at block edges, where an insertion
-  is outside every span and ghost, so they never change an annotation.
+  is outside every span and ghost. They are ordinary edits, though, so an
+  item that covers a separator being repaired (for example a ghost over a
+  paragraph and its trailing blank line, which the move carries) would be
+  trimmed or grown by them. Before anything changes, `fixUpBlocker` maps
+  every span and ghost through the planned move (`mapThroughMove`, the
+  model's move rules) and checks each fix-up against it: an insertion
+  strictly inside an item, or a deletion overlapping one, refuses the whole
+  move with a message naming the item, in the same notice region. When no
+  fix-up is needed (equal separators) such an item is simply carried.
 - **Checked first.** `BlocksView.planMove` builds the predicted text and
   parses it. It must give the same blocks in the new order (and the same
   leading blank lines); otherwise the move is refused with "it would merge
@@ -151,7 +159,15 @@ which would set the ghosts aside.
   block to move is mapped through the commit when it added or removed
   blocks before it. A press on a move button does not blur the textarea
   first (its `mousedown` is cancelled while editing), so the click is not
-  lost to the re-render. Kept drafts follow the move like any other edit.
+  lost to the re-render. Kept drafts follow their block through a move and
+  through its undo and redo: a surface change that carries a move is mapped
+  with the model's move rules (inside the moved text it travels with it,
+  between the text and the destination it shifts by the moved length,
+  elsewhere it stays), never as one big replacement, so "Replace block" and
+  "Insert as new paragraph" still target the right block. A move edit is
+  never treated as a whole-document replacement, even when it rewrites the
+  whole text, and an open editor whose block lies wholly in one zone of the
+  move stays open.
 - **Alt+Arrow.** The keys are handled on a focused card only. Inside a block
   editor they are left alone (Option+Arrow moves the caret on macOS). The
   text surface's own Alt+ArrowUp / Alt+ArrowDown (cycling alternatives, #9)
