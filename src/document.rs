@@ -1010,7 +1010,7 @@ impl DocumentSession {
             let start = edit.start;
             let end = start + utf16_len(&edit.deleted_text);
             let inserted = utf16_len(&edit.inserted_text);
-            self.set_aside.shift_hints(start, end, inserted);
+            self.set_aside.shift_hints(start, end, &edit.inserted_text);
             swap.outcome.reattached = self.reattach(Some((start, start + inserted)));
             swap.edit = Some(edit);
             // The span's new text ends where the edit's inserted text ends.
