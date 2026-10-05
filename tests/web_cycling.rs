@@ -394,6 +394,21 @@ fn test_stale_hover_never_swallows_plain_arrows() {
           window.dispatchEvent(new Event('resize'));
           if (teCyc.key('ArrowDown')) out.push('relayout: held hover took the arrow');
           expect('after relayout', {ERASER:?});
+
+          // 7. Another decoration layer re-rendering also ends the hold
+          // (e.g. Lab marks), while this layer's own refresh does not.
+          ed.swapAlternative('s1', 0);
+          ed.indicators.flush();
+          expect('back to paperclip', {PAPERCLIP:?});
+          const el3 = root.querySelector('[data-te-decoration~="indicators:s1"]');
+          const r3 = el3.getClientRects()[0];
+          teCyc.pointAt(el3, r3.right - 2, r3.top + r3.height / 2);
+          if (!teCyc.key('ArrowDown')) out.push('layer: first swap not prevented');
+          expect('layer swap', {ERASER:?});
+          ed.decorations.set('te-test', [{{ id: 'probe', start: 0, end: 4, className: 'te-test-probe' }}]);
+          if (teCyc.key('ArrowDown')) out.push('layer: held hover took the arrow');
+          expect('after other layer', {ERASER:?});
+          ed.decorations.clear('te-test');
         "##
     );
     assert_eq!(run(&body), "");

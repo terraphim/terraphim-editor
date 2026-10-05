@@ -258,8 +258,8 @@ class TeIndicatorLayer {
     // stale by typing, caret moves, scrolling or re-layout never swallows
     // caret movement. `hoverHeld` keeps the hover across the re-render of a
     // swap of that same span (the new text may no longer be under the
-    // pointer), until the pointer moves, the layout changes or any other
-    // change happens.
+    // pointer), until the pointer moves, the layout changes, another
+    // decoration layer re-renders, or any other change happens.
     this.hoverSpan = null;
     this.pointer = null;
     this.hoverHeld = false;
@@ -270,7 +270,14 @@ class TeIndicatorLayer {
     this.surface.root.addEventListener('keydown', (e) => this.onCycleKey(e), { signal });
 
     this.offChange = this.surface.onChange((change) => this.onSurfaceChange(change));
-    this.offApply = this.registry.onApply(() => this.scheduleLayout());
+    // Any re-render the registry applies for another layer (Lab marks,
+    // ghosts, ...) can move text under a still pointer, so it ends a
+    // post-swap hold. Only this layer's own refresh keeps it (`ownApply`).
+    this.ownApply = false;
+    this.offApply = this.registry.onApply(() => {
+      if (!this.ownApply) this.hoverHeld = false;
+      this.scheduleLayout();
+    });
     document.addEventListener('te:mode-change', (e) => {
       if (!e.detail || !e.detail.editor || e.detail.editor === this.editor) {
         this.setActive(e.detail && e.detail.mode === 'write-on');
@@ -496,7 +503,12 @@ class TeIndicatorLayer {
         this.spans.delete(id);
       }
     }
-    this.registry.set(TeIndicatorLayer.LAYER, items);
+    this.ownApply = true;
+    try {
+      this.registry.set(TeIndicatorLayer.LAYER, items);
+    } finally {
+      this.ownApply = false;
+    }
     // New or rebuilt indicators start hidden; place them now even when the
     // decorations were unchanged and the surface did not re-render.
     this.layout();
