@@ -2,7 +2,7 @@
 //! an edit, and swapping the active alternative.
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use terraphim_alternatives::{Document, Source, SpanKind, parse, write};
+use terraphim_alternatives::{Document, Source, SpanKind, parse, utf16_len, write};
 
 /// A ~3,000-word document with one span every 20 words.
 fn large_document() -> Document {
@@ -121,6 +121,37 @@ fn benches(c: &mut Criterion) {
             || doc.clone(),
             |mut d| {
                 d.apply_edit(at, at, "x").unwrap();
+                d
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+
+    // Block reordering (issue #44): move the first 1,000 code units (about 13
+    // sentences, each with a span) to the end of the ~17,000-unit document,
+    // shifting every other anchor and refreshing context over the whole body.
+    c.bench_function("move_range_block_to_end", |b| {
+        let end = doc.span("s14").unwrap().anchor.start - 4;
+        let to = utf16_len(&doc.body);
+        b.iter_batched(
+            || doc.clone(),
+            |mut d| {
+                d.move_range(0, end, to).unwrap();
+                d
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+
+    // Moving one sentence past its neighbour: the common Blocks view case.
+    c.bench_function("move_range_sentence_down", |b| {
+        let start = doc.span("s110").unwrap().anchor.start - 4;
+        let end = doc.span("s111").unwrap().anchor.start - 4;
+        let to = doc.span("s112").unwrap().anchor.start - 4;
+        b.iter_batched(
+            || doc.clone(),
+            |mut d| {
+                d.move_range(start, end, to).unwrap();
                 d
             },
             criterion::BatchSize::SmallInput,

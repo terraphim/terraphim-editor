@@ -686,10 +686,210 @@ pub fn document_annotations() -> JsValue {
     to_js(&with_session(|s| s.annotations_json()))
 }
 
+// ---------------------------------------------------------------------------
+// Moving text (issue #44). Kept in one block, apart from the other exports,
+// so parallel additions to this file merge cleanly.
+// ---------------------------------------------------------------------------
+
+impl SetAside {
+    /// Moves every anchor hint through a move of `start..end` to `to` (pre-move
+    /// offsets), mirroring [`Document::move_range`]: a hint wholly inside the
+    /// range travels with it, one wholly between the range and `to` shifts by
+    /// the moved length, and any other hint keeps its position.
+    fn move_hints(&mut self, start: usize, end: usize, to: usize) {
+        if to == start || to == end {
+            return;
+        }
+        let len = end - start;
+        let forward = to > end;
+        let anchors = self
+            .spans
+            .iter_mut()
+            .map(|s| &mut s.anchor)
+            .chain(self.ghosts.iter_mut().map(|g| &mut g.anchor));
+        for anchor in anchors {
+            let (a, b) = (anchor.start, anchor.end);
+            let new_start = if start <= a && b <= end {
+                if forward {
+                    a + (to - end)
+                } else {
+                    a - (start - to)
+                }
+            } else if forward && end <= a && b <= to {
+                a - len
+            } else if !forward && to <= a && b <= start {
+                a + len
+            } else {
+                continue;
+            };
+            anchor.start = new_start;
+            anchor.end = new_start + (b - a);
+        }
+    }
+}
+
+impl DocumentSession {
+    /// Moves the body text `start..end` to `to` (UTF-16, an insertion point
+    /// in the pre-move body outside the range), carrying the spans and ghosts
+    /// inside it. See [`Document::move_range`] for the rules; a move that
+    /// would split a span or ghost is refused with
+    /// [`EditError::Straddles`] and nothing changes.
+    ///
+    /// Set-aside hints follow the move the same way, and set-aside items whose
+    /// text is back at their anchor are re-attached. The outcome has the shape
+    /// of [`apply_edit`](Self::apply_edit)'s: a move never detaches anything,
+    /// so `detached` is empty and `warning` is `None`.
+    pub fn move_range(
+        &mut self,
+        start: usize,
+        end: usize,
+        to: usize,
+    ) -> Result<EditOutcome, EditError> {
+        let outcome = self.doc.move_range(start, end, to)?;
+        let reattached = if outcome.moved {
+            self.set_aside.move_hints(start, end, to);
+            self.reattach(None)
+        } else {
+            Vec::new()
+        };
+        Ok(EditOutcome {
+            detached: Vec::new(),
+            reattached,
+            set_aside: self.set_aside.len(),
+            warning: None,
+            notice: self.set_aside_notice(),
+        })
+    }
+}
+
+/// Moves the body text `start..end` to `to` (UTF-16 code units; `to` is an
+/// insertion point in the pre-move body, outside the range), carrying the
+/// spans and ghosts inside the range. Returns
+/// `{ detached, reattached, setAside, warning, notice }` like [`apply_edit`];
+/// throws (changing nothing) if the range or destination is invalid or the
+/// move would split a span or ghost.
+///
+/// `MarkdownEditor.moveRange` calls this and then updates the editing surface
+/// without mirroring the change through [`apply_edit`].
+#[wasm_bindgen]
+pub fn move_document_range(start: u32, end: u32, to: u32) -> Result<JsValue, JsValue> {
+    with_session(|s| s.move_range(start as usize, end as usize, to as usize))
+        .map(|outcome| to_js(&outcome.to_json()))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// End of moving text (issue #44).
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use terraphim_alternatives::{Source, SpanKind};
+
+    // ----- moving text (issue #44) ------------------------------------------
+
+    /// Two paragraphs: a span and a ghost in the first, plain text after.
+    fn two_paragraphs() -> String {
+        let mut doc = Document::new("Pass me a paperclip. Drop this.\n\nSecond block.\n\n");
+        let id = doc.add_span(SpanKind::Word, 10, 19).unwrap();
+        doc.add_alternative(&id, "eraser", Source::Human, None)
+            .unwrap();
+        doc.ghost(20, 31).unwrap();
+        write(&doc)
+    }
+
+    #[test]
+    fn move_carries_annotations_and_survives_save_and_reopen() {
+        let mut session = DocumentSession::new();
+        session.open(&two_paragraphs());
+        let outcome = session.move_range(0, 33, 48).unwrap();
+        assert_eq!(outcome, EditOutcome::default());
+        assert_eq!(
+            session.body(),
+            "Second block.\n\nPass me a paperclip. Drop this.\n\n"
+        );
+        let mut reopened = DocumentSession::new();
+        let opened = reopened.open(&session.save());
+        assert_eq!(opened.unresolved, 0);
+        let doc = reopened.document();
+        assert_eq!(doc.annotations.spans[0].id, "s1");
+        assert_eq!(doc.annotations.spans[0].anchor.start, 25);
+        assert_eq!(doc.annotations.spans[0].alts.len(), 2);
+        assert_eq!(doc.annotations.ghosts[0].id, "g1");
+        assert_eq!(doc.annotations.ghosts[0].anchor.text, " Drop this.");
+        assert_eq!(
+            reopened.export(),
+            "Second block.\n\nPass me a paperclip.\n\n"
+        );
+
+        // The inverse move restores the original document exactly.
+        session.move_range(15, 48, 0).unwrap();
+        let mut original = DocumentSession::new();
+        original.open(&two_paragraphs());
+        assert_eq!(session.document(), original.document());
+        assert_eq!(session.save(), two_paragraphs());
+    }
+
+    #[test]
+    fn a_refused_move_changes_nothing() {
+        let mut session = DocumentSession::new();
+        session.open(&two_paragraphs());
+        let before = session.clone();
+        // 12..33 starts inside the span "paperclip".
+        let error = session.move_range(12, 33, 48).unwrap_err();
+        assert_eq!(error, EditError::Straddles("s1".into()));
+        assert_eq!(session, before);
+        assert!(session.move_range(0, 33, 20).is_err(), "inside the range");
+        assert!(session.move_range(0, 99, 0).is_err(), "out of bounds");
+        assert_eq!(session, before);
+        // A no-op move succeeds and changes nothing.
+        assert_eq!(
+            session.move_range(0, 33, 33).unwrap(),
+            EditOutcome::default()
+        );
+        assert_eq!(session, before);
+    }
+
+    #[test]
+    fn set_aside_hints_follow_a_move_and_reattach() {
+        let mut session = DocumentSession::new();
+        session.open(&two_paragraphs());
+        // Detach the span by typing inside it ("papXerclip").
+        session.apply_edit(13, 0, "X").unwrap();
+        assert_eq!(session.set_aside().spans.len(), 1);
+        // Move the first paragraph (now 34 units) to the end: the hint moves
+        // with its text.
+        let outcome = session.move_range(0, 34, 49).unwrap();
+        assert_eq!(outcome.set_aside, 1);
+        assert!(outcome.notice.is_some());
+        assert_eq!(session.set_aside().spans[0].anchor.start, 25);
+        // Fixing the typo where the text now is re-attaches the span.
+        let outcome = session.apply_edit(28, 1, "").unwrap();
+        assert_eq!(outcome.reattached, vec!["s1".to_string()]);
+
+        // Hints between the range and the destination shift; others stay.
+        let mut hints = SetAside::default();
+        for (start, end) in [(0, 2), (5, 7), (9, 10), (7, 9), (12, 13)] {
+            hints.ghosts.push(Ghost {
+                id: format!("g{start}"),
+                anchor: Anchor::new(start, end, "x".repeat(end - start)),
+            });
+        }
+        let starts = |hints: &SetAside| -> Vec<usize> {
+            hints.ghosts.iter().map(|g| g.anchor.start).collect()
+        };
+        // Move 4..8 to 11: inside moves by 3, between moves back by 4, the
+        // one straddling the range end and the ones outside stay.
+        hints.move_hints(4, 8, 11);
+        assert_eq!(starts(&hints), vec![0, 8, 5, 7, 12]);
+        // Move 7..11 back to 4: the two hints now inside move back by 3, the
+        // one between moves on by 4.
+        hints.move_hints(7, 11, 4);
+        assert_eq!(starts(&hints), vec![0, 5, 9, 4, 12]);
+        hints.move_hints(0, 2, 2);
+        assert_eq!(starts(&hints), vec![0, 5, 9, 4, 12], "a no-op move");
+    }
 
     /// A saved file with one word span (active alternative 1), one ghost and
     /// overflow, built through the crate so the fixture is always valid.
