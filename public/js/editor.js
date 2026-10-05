@@ -1088,6 +1088,8 @@ class MarkdownEditor {
     this.warningListeners = new Set();
     this.warningElement = null;
     this.warning = null;
+    // What the current warning is about: 'open' or 'detached'.
+    this.warningKind = null;
     this.suppressModelSync = false;
   }
 
@@ -1396,12 +1398,23 @@ class MarkdownEditor {
     const api = this.documentApi();
     if (!api) return;
     const { edit, text } = change;
+    let outcome;
     try {
-      api.apply_edit(edit.start, edit.deletedLength, edit.insertedText);
+      outcome = api.apply_edit(edit.start, edit.deletedLength, edit.insertedText);
     } catch (err) {
       // The model refused the edit (for example a stale ghost): fall back to
       // replacing its body with the surface text and re-anchoring by text.
       api.sync_document_body(text);
+      return;
+    }
+    if (!outcome) return;
+    if (outcome.warning) {
+      // The edit detached alternatives: they are preserved (and saved), and
+      // come back if the edit is undone.
+      this.showWarning(outcome.warning, 'detached');
+    } else if (outcome.reattached.length > 0 && outcome.setAside === 0 && this.warningKind === 'detached') {
+      // Everything detached is attached again: the notice no longer applies.
+      this.showWarning(null);
     }
   }
 
@@ -1412,11 +1425,19 @@ class MarkdownEditor {
 
   /**
    * Open `.md` source: the body goes on the surface (the annotation block
-   * never does), the undo history starts afresh and a malformed block shows
-   * one non-blocking warning. Returns { body, warning, unresolved }.
+   * never does), the undo history starts afresh and a malformed block (or
+   * annotations that no longer match the text) shows one non-blocking
+   * warning. Returns { body, warning, unresolved }.
+   *
+   * `name` (a string, or `{ name }`) becomes `editor.documentKey`; without
+   * one, `documentKey` is left as it is, so a caller may set it beforehand.
+   * Afterwards `editor.chrome.documentChanged()` is called when the chrome
+   * (issue #7) is attached.
    */
-  openDocument(source) {
+  openDocument(source, name) {
     const api = this.requireDocumentApi();
+    const key = typeof name === 'string' ? name : name && typeof name.name === 'string' ? name.name : null;
+    if (key) this.documentKey = key;
     const opened = api.open_document(String(source));
     this.suppressModelSync = true;
     try {
@@ -1427,7 +1448,14 @@ class MarkdownEditor {
     this.surface.resetHistory();
     // The surface normalises line endings; re-anchor if that changed the text.
     this.alignDocumentModel(api);
-    this.showWarning(opened.warning || null);
+    this.showWarning(opened.warning || null, 'open');
+    if (this.chrome && typeof this.chrome.documentChanged === 'function') {
+      try {
+        this.chrome.documentChanged();
+      } catch (err) {
+        console.error('chrome.documentChanged failed', err);
+      }
+    }
     return opened;
   }
 
@@ -1452,7 +1480,10 @@ class MarkdownEditor {
     return api.document_counts();
   }
 
-  /** { spans, ghosts, overflow, setAside, preservedBlock } in UTF-16 offsets. */
+  /**
+   * { spans, ghosts, overflow, setAside: { spans, ghosts }, preservedBlock }
+   * in UTF-16 offsets. Set-aside items are out of the live model but saved.
+   */
   annotations() {
     const api = this.requireDocumentApi();
     this.alignDocumentModel(api);
@@ -1471,10 +1502,12 @@ class MarkdownEditor {
   /**
    * Show (or, with null, clear) the single non-blocking document warning:
    * a `.te-warning` status element above the surface, which never takes
-   * focus, plus every onWarning subscriber.
+   * focus, plus every onWarning subscriber. `kind` records what the warning
+   * is about ('open' or 'detached'); it is exposed as `data-kind`.
    */
-  showWarning(message) {
+  showWarning(message, kind = null) {
     this.warning = message || null;
+    this.warningKind = this.warning ? kind : null;
     if (this.warning && !this.warningElement && this.input && this.input.parentNode) {
       const el = document.createElement('div');
       el.className = 'te-warning';
@@ -1497,6 +1530,8 @@ class MarkdownEditor {
     }
     if (this.warningElement) {
       this.warningElement.hidden = !this.warning;
+      if (this.warningKind) this.warningElement.dataset.kind = this.warningKind;
+      else delete this.warningElement.dataset.kind;
       this.warningElement.querySelector('.te-warning-text').textContent = this.warning || '';
     }
     for (const listener of this.warningListeners) {

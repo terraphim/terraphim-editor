@@ -41,6 +41,28 @@ fn bench_document(c: &mut Criterion) {
             session.apply_edit(0, 1, "").unwrap();
         })
     });
+
+    // With a detached span waiting to be re-attached, every keystroke also
+    // shifts its hint and checks whether its text is back.
+    c.bench_function("document_keystroke_with_set_aside_5k_words", |b| {
+        let mut session = DocumentSession::new();
+        session.open(&source);
+        let span = session.document().annotations.spans[0].anchor.clone();
+        let outcome = session.apply_edit(span.start + 1, 0, "z").unwrap();
+        assert_eq!(outcome.set_aside, 1);
+        b.iter(|| {
+            session.apply_edit(0, 0, black_box("x")).unwrap();
+            session.apply_edit(0, 1, "").unwrap();
+        })
+    });
+
+    c.bench_function("document_save_with_set_aside_5k_words", |b| {
+        let mut session = DocumentSession::new();
+        session.open(&source);
+        let span = session.document().annotations.spans[0].anchor.clone();
+        session.apply_edit(span.start + 1, 0, "z").unwrap();
+        b.iter(|| black_box(session.save()))
+    });
 }
 
 criterion_group!(benches, bench_document);
