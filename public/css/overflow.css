@@ -1,0 +1,150 @@
+/*
+ * Overflow panel (issue #12; spec R-6.1, R-6.2, R-6.4)
+ * ====================================================
+ *
+ * The DOM is built by public/js/overflow.js. Consumes the tokens in
+ * public/css/tokens.css; no colours, fonts or radii are hard-coded here.
+ *
+ * A right-hand panel floating between the top-right keyboard glyph and the
+ * bottom-right XYZ control, so neither corner control is covered. The title
+ * is the cursive display face in lavender; the text area uses the document's
+ * monospace face; the footer hint is dim. While it is open
+ * (<body data-te-overflow="open">) the writing column is centred in the
+ * space left of the panel instead of running underneath it.
+ */
+
+.te-overflow {
+    --te-overflow-width: clamp(16rem, 28vw, 26rem);
+    position: fixed;
+    top: 3.75rem;
+    right: 1.25rem;
+    bottom: 4.25rem;
+    z-index: 18;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: var(--te-overflow-width);
+    padding: 0.75rem 1rem 0.75rem;
+    background-color: var(--te-color-panel);
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: var(--te-radius-popover);
+    color: var(--te-color-text);
+    font-family: var(--te-font-mono);
+}
+
+.te-overflow[hidden] {
+    display: none;
+}
+
+.te-overflow-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.te-overflow-title {
+    margin: 0;
+    color: var(--te-color-accent);
+    font-family: var(--te-font-display);
+    font-size: 1.9rem;
+    font-weight: 400;
+    line-height: 1.1;
+}
+
+.te-overflow-tools {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.te-overflow-button {
+    margin: 0;
+    padding: 0.25rem 0.4rem;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--te-color-text-dim);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.te-overflow-button:hover {
+    color: var(--te-color-text);
+    background-color: var(--te-color-popover-hover);
+}
+
+.te-overflow-button:focus-visible {
+    outline: 2px solid var(--te-color-accent);
+    outline-offset: 2px;
+}
+
+.te-overflow-note {
+    margin: 0.5rem 0 0;
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.te-overflow-text {
+    flex: 1 1 auto;
+    min-height: 6rem;
+    margin: 0.5rem 0 0;
+    padding: 0.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--te-color-panel-border);
+    background: transparent;
+    color: var(--te-color-text);
+    caret-color: var(--te-color-accent);
+    font-family: var(--te-font-mono);
+    font-size: 0.875rem;
+    line-height: var(--te-line-height);
+    resize: none;
+    outline: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.te-overflow-text::placeholder {
+    color: var(--te-color-text-dim);
+    opacity: 1;
+}
+
+.te-overflow-text::selection {
+    background-color: var(--te-color-accent-soft);
+}
+
+.te-overflow-text:focus-visible {
+    border-top-color: var(--te-color-accent-soft);
+}
+
+.te-overflow-text[readonly] {
+    color: var(--te-color-text-dim);
+}
+
+.te-overflow-hint {
+    margin: 0.5rem 0 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--te-color-panel-border);
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+}
+
+/* Keep the writing column clear of the open panel on wide screens. */
+@media (min-width: 60rem) {
+    body[data-mode="write-on"][data-te-overflow="open"] #app {
+        padding-right: calc(clamp(16rem, 28vw, 26rem) + 2rem);
+    }
+}
+
+/* Narrow screens: the panel spans the width above the bottom controls. */
+@media (max-width: 40rem) {
+    .te-overflow {
+        left: 0.75rem;
+        right: 0.75rem;
+        width: auto;
+        top: auto;
+        height: 50vh;
+    }
+}
