@@ -81,8 +81,9 @@ fn test_each_action_marks_exactly_the_engine_spans_and_clear_works() {
           const wantLabels = ['Fix punctuation and typos', 'Mark the weakest sentences', 'Mark sentences that run long',
             'Mark convoluted sentences', "Mark words that don't fit the tone", 'Mark hedges and filler'];
           if (JSON.stringify(labels) !== JSON.stringify(wantLabels)) out.push('labels ' + JSON.stringify(labels));
+          // The trim slot is filled by trim.js (issue #15; tests/web_trim.rs).
           const trim = pop.querySelector('[data-slot="trim"]');
-          if (!trim || !trim.hidden) out.push('trim slot missing or visible');
+          if (!trim || trim.hidden || trim.querySelectorAll('[role="radio"]').length !== 5) out.push('trim slot missing or empty');
           // Anchored above the pill, horizontally centred on it.
           const pr = teLab.pill().getBoundingClientRect(), r = pop.getBoundingClientRect();
           if (!(r.bottom <= pr.top)) out.push('popover not above the pill: ' + r.bottom + ' vs ' + pr.top);
@@ -121,7 +122,7 @@ fn test_each_action_marks_exactly_the_engine_spans_and_clear_works() {
           if (teLab.marks().length !== 0) out.push('clear left marks');
           if (s.root.querySelector('.te-lab-mark')) out.push('clear left rendered marks');
           if (!pop.querySelector('.te-lab-results').hidden) out.push('results visible after clear');
-          if (pop.querySelector('[aria-checked="true"]')) out.push('an action still checked');
+          if (pop.querySelector('[role="menuitemradio"][aria-checked="true"]')) out.push('an action still checked');
           if (document.activeElement !== teLab.item('typos_and_punctuation') && !pop.contains(document.activeElement)) out.push('focus left the popover on clear');
           if (s.getText() !== teLab.fixture) out.push('clear changed text');
           return out.join('\n');

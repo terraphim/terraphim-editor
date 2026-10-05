@@ -12,6 +12,9 @@
 //! * [`lab_mark`] runs one action and returns
 //!   `[{ kind, start, end, score, reason, proposal }]`.
 //!
+//! * [`trim_plan_json`], [`trim_status`] and [`trim_make_cuts`] are the trim
+//!   levels of issue #15 (see the delimited block below).
+//!
 //! The caller must align the model body with the surface first
 //! (`MarkdownEditor.alignDocumentModel()`), exactly as `annotations()` does.
 //!
@@ -20,14 +23,18 @@
 //! pay nothing for it. Role support (`LabConfig::with_role`) is a follow-up:
 //! it needs the active role's thesaurus and rolegraph in the browser.
 
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 
 use serde_json::{json, Value};
-use terraphim_lab::{mark, LabAction, LabConfig, LabError};
+use terraphim_lab::{
+    make_cuts, mark, trim_plan, CutId, LabAction, LabConfig, LabError, TrimLevel, TrimPlan,
+};
 use wasm_bindgen::prelude::*;
 
 thread_local! {
     static CONFIG: OnceCell<Result<LabConfig, LabError>> = const { OnceCell::new() };
+    // Trim (issue #15): the last plan and the exact body it was computed for.
+    static TRIM: RefCell<Option<(String, TrimPlan)>> = const { RefCell::new(None) };
 }
 
 /// The serde id of an action (`"weakest_sentences"`, ...).
@@ -94,6 +101,160 @@ pub fn lab_mark(action: &str) -> Result<JsValue, JsValue> {
         .map(|v| to_js(&v))
         .map_err(|e| JsValue::from_str(&e))
 }
+
+// ===== Trim levels (issue #15, spec R-8.3 to R-8.5) =====================
+//
+// Three calls over the open document's body, all on UTF-16 offsets:
+//
+// * [`trim_plan_json`] computes the engine's [`TrimPlan`] once per version
+//   of the body and caches it with that body. It returns
+//   `{ totalWords, levels: [{ id, label, target }], cuts: [Cut] }`, every
+//   `Cut` in the engine's serde form (`id`, `start`, `end`, `tier`,
+//   `first_level`, `score`, `reason`, `words`).
+// * [`trim_status`] returns the status card for a level with the kept cut
+//   ids excluded, plus the active pieces to fade (`TrimPlan::active`: keeps
+//   applied, outer cuts split around kept ranges), so the UI needs one call
+//   per step: `{ level, label, words_before, words_after, percent,
+//   target_percent, cardText, active: [Cut] }`.
+// * [`trim_make_cuts`] returns `{ text, edits: [{ start, end, insert, kind }] }`
+//   (the engine's `MadeCuts`) for the editor to apply as one undo step.
+//
+// Status and make-cuts **refuse** (Err) when the body is no longer the one
+// the cached plan was computed for, so stale cuts are never applied: the UI
+// then recomputes the plan. Kept ids travel as a JSON array of integers.
+
+/// The serde id of a trim level (`"slight"`, ...).
+pub fn level_id(level: TrimLevel) -> String {
+    match serde_json::to_value(level) {
+        Ok(Value::String(id)) => id,
+        // TrimLevel is a unit enum with snake_case names: always a string.
+        _ => unreachable!("TrimLevel serialises to a string"),
+    }
+}
+
+/// Parse a trim level id as produced by [`level_id`].
+pub fn parse_level(id: &str) -> Result<TrimLevel, String> {
+    serde_json::from_value(Value::String(id.to_string()))
+        .map_err(|_| format!("unknown trim level: {id}"))
+}
+
+/// Parse kept cut ids: a JSON array of non-negative integers (or "").
+pub fn parse_kept(kept: &str) -> Result<Vec<CutId>, String> {
+    let kept = kept.trim();
+    if kept.is_empty() {
+        return Ok(Vec::new());
+    }
+    serde_json::from_str::<Vec<u32>>(kept)
+        .map(|ids| ids.into_iter().map(CutId).collect())
+        .map_err(|e| format!("invalid kept cut ids: {e}"))
+}
+
+/// The plan JSON for `plan` (see [`trim_plan_json`]).
+pub fn plan_json(plan: &TrimPlan) -> Result<Value, String> {
+    let levels: Vec<Value> = TrimLevel::ALL
+        .iter()
+        .map(|&l| {
+            json!({
+                "id": level_id(l),
+                "label": l.label(),
+                "target": (100.0 * l.target_fraction()).round() as i64,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "totalWords": plan.total_words(),
+        "levels": levels,
+        "cuts": serde_json::to_value(plan.cuts()).map_err(|e| e.to_string())?,
+    }))
+}
+
+/// The status card and active pieces of `plan` at `level` (see [`trim_status`]).
+pub fn status_json(plan: &TrimPlan, level: &str, kept: &str) -> Result<Value, String> {
+    let level = parse_level(level)?;
+    let kept = parse_kept(kept)?;
+    let status = plan.status(level, &kept);
+    let mut value = serde_json::to_value(status).map_err(|e| e.to_string())?;
+    value["label"] = json!(level.label());
+    value["cardText"] = json!(status.card_text());
+    value["active"] = serde_json::to_value(plan.active(level, &kept)).map_err(|e| e.to_string())?;
+    Ok(value)
+}
+
+/// "Make the cuts" over `body` with `plan` (see [`trim_make_cuts`]).
+pub fn make_cuts_json(
+    body: &str,
+    plan: &TrimPlan,
+    level: &str,
+    kept: &str,
+) -> Result<Value, String> {
+    let level = parse_level(level)?;
+    let kept = parse_kept(kept)?;
+    let made = make_cuts(body, &plan.active(level, &kept));
+    serde_json::to_value(made).map_err(|e| e.to_string())
+}
+
+/// Compute and cache the plan for the open document's body.
+pub fn session_trim_plan_json() -> Result<Value, String> {
+    let body = crate::with_session(|s| s.body().to_string());
+    let plan = with_config(|config| trim_plan(&body, config))?;
+    let value = plan_json(&plan)?;
+    TRIM.with(|cell| *cell.borrow_mut() = Some((body, plan)));
+    Ok(value)
+}
+
+/// Runs `f` with the cached plan, refusing when the body has changed since.
+fn with_fresh_plan<R>(f: impl FnOnce(&str, &TrimPlan) -> Result<R, String>) -> Result<R, String> {
+    let body = crate::with_session(|s| s.body().to_string());
+    TRIM.with(|cell| match &*cell.borrow() {
+        None => Err("no trim plan: compute one first".to_string()),
+        Some((planned, _)) if *planned != body => {
+            Err("stale trim plan: the text changed since it was computed".to_string())
+        }
+        Some((_, plan)) => f(&body, plan),
+    })
+}
+
+/// Status card JSON for the open document (refuses a stale plan).
+pub fn session_trim_status(level: &str, kept: &str) -> Result<Value, String> {
+    with_fresh_plan(|_, plan| status_json(plan, level, kept))
+}
+
+/// Make-the-cuts JSON for the open document (refuses a stale plan).
+pub fn session_trim_make_cuts(level: &str, kept: &str) -> Result<Value, String> {
+    with_fresh_plan(|body, plan| make_cuts_json(body, plan, level, kept))
+}
+
+/// Computes the trim plan for the current document body and returns
+/// `{ totalWords, levels, cuts }` (UTF-16 offsets). Align the model with the
+/// surface first. Never changes text.
+#[wasm_bindgen]
+pub fn trim_plan_json() -> Result<JsValue, JsValue> {
+    session_trim_plan_json()
+        .map(|v| to_js(&v))
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// The status card for trim level `level` (`"slight"`, ...) with the cut
+/// ids in `kept` (a JSON array) kept, plus the active pieces to fade. Throws
+/// for an unknown level, bad ids, no plan or a stale plan.
+#[wasm_bindgen]
+pub fn trim_status(level: &str, kept: &str) -> Result<JsValue, JsValue> {
+    session_trim_status(level, kept)
+        .map(|v| to_js(&v))
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// The typed edits "Make the cuts" applies at `level` with `kept` kept:
+/// `{ text, edits: [{ start, end, insert, kind }] }` on the current body's
+/// UTF-16 offsets. Throws for a stale plan; never changes text itself.
+#[wasm_bindgen]
+pub fn trim_make_cuts(level: &str, kept: &str) -> Result<JsValue, JsValue> {
+    session_trim_make_cuts(level, kept)
+        .map(|v| to_js(&v))
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+// ===== end trim levels (issue #15) =======================================
 
 #[cfg(test)]
 mod tests {
@@ -216,5 +377,137 @@ mod tests {
         let typos = with_config(|c| mark(body, c, LabAction::TyposAndPunctuation)).unwrap();
         let proposals: Vec<_> = typos.iter().map(|m| m.proposal.as_deref()).collect();
         assert_eq!(proposals, [Some("receive"), Some(",")]);
+    }
+    // ---- Trim (issue #15) ----
+
+    const TRIM_BODY: &str = "The editor, which owns its DOM, is the only target here today.";
+
+    #[test]
+    fn trim_levels_round_trip_and_bad_input_is_an_error() {
+        for level in TrimLevel::ALL {
+            assert_eq!(parse_level(&level_id(level)), Ok(level));
+        }
+        assert_eq!(level_id(TrimLevel::Half), "half");
+        assert!(parse_level("quarter").is_err());
+        assert_eq!(parse_kept(""), Ok(vec![]));
+        assert_eq!(parse_kept("[2, 0]"), Ok(vec![CutId(2), CutId(0)]));
+        assert!(parse_kept("[-1]").is_err());
+        assert!(parse_kept("{}").is_err());
+    }
+
+    #[test]
+    fn trim_plan_json_lists_levels_and_engine_cuts() {
+        let plan = with_config(|c| trim_plan(TRIM_BODY, c)).unwrap();
+        let value = plan_json(&plan).unwrap();
+        assert_eq!(value["totalWords"], 12);
+        let levels: Vec<(&str, &str, i64)> = value["levels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| {
+                (
+                    l["id"].as_str().unwrap(),
+                    l["label"].as_str().unwrap(),
+                    l["target"].as_i64().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            levels,
+            [
+                ("original", "Original", 0),
+                ("slight", "Slight trim", 10),
+                ("tighten", "Tighten more", 20),
+                ("sharper", "Even sharper", 30),
+                ("half", "Cut in half", 50),
+            ]
+        );
+        assert_eq!(value["cuts"], serde_json::to_value(plan.cuts()).unwrap());
+        let first = &value["cuts"][0];
+        assert!(first["tier"].is_string() && first["first_level"].is_string());
+        assert!(first["reason"].is_string());
+    }
+
+    #[test]
+    fn trim_status_and_make_cuts_equal_the_engine() {
+        let plan = with_config(|c| trim_plan(TRIM_BODY, c)).unwrap();
+        let status = status_json(&plan, "sharper", "[]").unwrap();
+        assert_eq!(status["cardText"], "12 \u{2192} 8 words \u{b7} \u{2212}33%");
+        assert_eq!(status["words_before"], 12);
+        assert_eq!(status["words_after"], 8);
+        assert_eq!(status["label"], "Even sharper");
+        assert_eq!(
+            status["active"],
+            serde_json::to_value(plan.active(TrimLevel::Sharper, &[])).unwrap()
+        );
+        let made = make_cuts_json(TRIM_BODY, &plan, "sharper", "[]").unwrap();
+        assert_eq!(made["text"], "The editor is the only target here today.");
+        let edits = made["edits"].as_array().unwrap();
+        assert!(!edits.is_empty());
+        assert_eq!(edits[0]["kind"], "cut");
+        // Keeping every active cut leaves nothing to cut.
+        let ids: Vec<u32> = plan
+            .active(TrimLevel::Sharper, &[])
+            .iter()
+            .map(|c| c.id.0)
+            .collect();
+        let kept = serde_json::to_string(&ids).unwrap();
+        let status = status_json(&plan, "sharper", &kept).unwrap();
+        assert_eq!(status["words_after"], 12);
+        assert_eq!(status["active"], json!([]));
+        let made = make_cuts_json(TRIM_BODY, &plan, "sharper", &kept).unwrap();
+        assert_eq!(made["text"], TRIM_BODY);
+        assert_eq!(made["edits"], json!([]));
+        assert!(status_json(&plan, "nope", "[]").is_err());
+        assert!(make_cuts_json(TRIM_BODY, &plan, "slight", "not json").is_err());
+    }
+
+    #[test]
+    fn session_trim_refuses_a_stale_plan_and_recomputes() {
+        crate::with_session(|s| {
+            s.open(TRIM_BODY);
+        });
+        TRIM.with(|cell| *cell.borrow_mut() = None);
+        assert!(session_trim_status("slight", "[]")
+            .unwrap_err()
+            .contains("no trim plan"));
+        session_trim_plan_json().unwrap();
+        let status = session_trim_status("sharper", "[]").unwrap();
+        assert_eq!(status["words_after"], 8);
+        // The body changes: both calls refuse until the plan is recomputed.
+        crate::with_session(|s| {
+            s.sync_body("The editor is here.");
+        });
+        assert!(session_trim_status("sharper", "[]")
+            .unwrap_err()
+            .contains("stale"));
+        assert!(session_trim_make_cuts("sharper", "[]")
+            .unwrap_err()
+            .contains("stale"));
+        session_trim_plan_json().unwrap();
+        assert!(session_trim_make_cuts("sharper", "[]").is_ok());
+        // Planning never changes the body.
+        assert_eq!(
+            crate::with_session(|s| s.body().to_string()),
+            "The editor is here."
+        );
+    }
+
+    /// The browser fixture has cuts at every level, including a cut nested
+    /// inside a larger cut (the outer-cut resolution the keep test relies on).
+    #[test]
+    fn lab_fixture_has_trim_cuts_at_every_level_and_a_nested_cut() {
+        let body = include_str!("../tests/fixtures/lab/lab.md");
+        let plan = with_config(|c| trim_plan(body, c)).unwrap();
+        for level in &TrimLevel::ALL[1..] {
+            assert!(plan.faded(*level).count() > 0, "{level:?} fades nothing");
+        }
+        let half: Vec<_> = plan.faded(TrimLevel::Half).collect();
+        let nested = half.iter().any(|inner| {
+            half.iter().any(|outer| {
+                outer.id != inner.id && outer.start <= inner.start && inner.end <= outer.end
+            })
+        });
+        assert!(nested, "no nested cut at Half");
     }
 }

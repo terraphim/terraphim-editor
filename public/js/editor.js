@@ -180,6 +180,60 @@ class EditorSurface {
     return edit;
   }
 
+  // ---- Several edits as one undo step (issue #15, trim "Make the cuts") ----
+  /**
+   * Apply `edits` ([{ start, end, insert }] on the CURRENT text's UTF-16
+   * offsets, non-overlapping) as ONE undo step. Each edit goes through the
+   * normal edit path: decorations are mapped and change listeners notified
+   * once per edit (so the document model mirrors each one with apply_edit
+   * and spans and ghosts follow the usual rules), applied from the last to
+   * the first so earlier offsets stay valid. The surface renders once and
+   * one history entry records every step in application order, so undo
+   * replays their inverses (and the model re-attaches what they detached)
+   * and redo replays them again. Options: source (default 'api'), and
+   * selectStart/selectEnd on the final text (default: a caret at the first
+   * edit). Returns the applied edits, or [] when nothing changed.
+   */
+  replaceRanges(edits, options = {}) {
+    const source = options.source || 'api';
+    const sorted = (edits || [])
+      .map((e) => ({ start: Math.min(e.start, e.end), end: Math.max(e.start, e.end), insert: String(e.insert || '') }))
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].start < sorted[i - 1].end) throw new Error('replaceRanges: edits overlap');
+    }
+    const applied = [];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const old = this.text;
+      const s = this.snap(this.clamp(sorted[i].start), old);
+      const e = this.snap(this.clamp(sorted[i].end), old);
+      const inserted = EditorSurface.normaliseNewlines(sorted[i].insert);
+      if (s === e && inserted === '') continue;
+      if (old.slice(s, e) === inserted) continue;
+      const edit = { start: s, deletedLength: e - s, deletedText: old.slice(s, e), insertedText: inserted };
+      this.text = old.slice(0, s) + inserted + old.slice(e);
+      this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+      applied.push(edit);
+      this.emitChange(edit, source);
+    }
+    if (applied.length === 0) return [];
+    this.render();
+    const first = applied[applied.length - 1];
+    const selStart = options.selectStart === undefined ? first.start + first.insertedText.length : options.selectStart;
+    const selEnd = options.selectEnd === undefined ? selStart : options.selectEnd;
+    this.setSelectionOffsets(selStart, selEnd);
+    this.record(source, this.lastSelection, applied[0]);
+    const entry = this.history[this.historyIndex];
+    if (entry && entry.text === this.text) {
+      entry.edits = applied.map((edit) => ({
+        start: edit.start, deletedText: edit.deletedText, insertedText: edit.insertedText,
+      }));
+    }
+    this.dispatchInput('insertReplacementText', null);
+    return applied;
+  }
+  // ---- end several edits as one undo step (issue #15) ----
+
   /** Replace the current selection with `insert`. */
   replaceSelection(insert, source = 'api') {
     const { start, end } = this.getSelectionOffsets();

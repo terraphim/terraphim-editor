@@ -15,7 +15,7 @@ pub use document::{
 pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
 
 mod lab;
-pub use lab::{lab_actions, lab_mark};
+pub use lab::{lab_actions, lab_mark, trim_make_cuts, trim_plan_json, trim_status};
 
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!
 
