@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2024"
 description = "Deterministic Lab mark engine: typos and punctuation, weakest, long and convoluted sentences, off-tone words, hedges and filler. No DOM; builds native and wasm32."
 license = "MIT"
-publish = false
+repository = "https://git.terraphim.cloud/terraphim/terraphim-editor"
+readme = false
+keywords = ["markdown", "writing", "lab", "editor"]
+# Published to the private registry so terraphim_lsp_core (terraphim-ai) can
+# produce Lab-mark diagnostics with this engine (issue #68).
+publish = ["terraphim"]
 
 [dependencies]
 # KG matching (Aho-Corasick, LeftmostLongest, ASCII case-insensitive,
@@ -22,7 +27,7 @@ thiserror = "2"
 markdown = "1.0.0-alpha.21"
 # The editor's one word definition (issue #59), shared with the Write_On
 # counter. Its dependencies are a subset of this crate's, so it adds nothing.
-terraphim_alternatives = { path = "../terraphim_alternatives" }
+terraphim_alternatives = { version = "0.1", path = "../terraphim_alternatives", registry = "terraphim" }
 
 # criterion pulls in rayon, and terraphim_rolegraph pulls in tokio "full";
 # neither compiles for wasm32, so both are native-only dev-dependencies.
