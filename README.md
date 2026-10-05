@@ -1,118 +1,220 @@
+<div align="center">
+
 # Terraphim Editor
 
-A Markdown editor built with Rust compiled to WebAssembly and plain JavaScript. It renders Markdown with a live preview and adds a distraction-free **Write_On** mode for working with alternative wordings: keep several versions of a word, sentence or paragraph, cycle between them in place, ghost text you are unsure about, stash ideas in an overflow panel, and let the Lab mark weak, long or hedged sentences or trim the draft by a chosen amount. Nothing is rewritten without you asking; every change is one undo step.
+**A Markdown editor for writers who keep changing their minds.**
 
-Trunk is the build system. Styles come from [Shoelace](https://shoelace.style/) and design tokens; there are no JavaScript build dependencies.
+Keep several versions of every word, sentence and paragraph, cycle between them in place, fade what you are unsure of, stash what does not fit, and let the Lab show you what to cut. Rust compiled to WebAssembly, plain JavaScript, no framework.
 
-![Write_On mode](docs/images/write-on.png)
+![Rust](https://img.shields.io/badge/Rust-2021%20%2F%202024-b7410e?logo=rust&logoColor=white)
+![WebAssembly](https://img.shields.io/badge/WebAssembly-wasm32-654ff0?logo=webassembly&logoColor=white)
+![Trunk](https://img.shields.io/badge/build-Trunk-3a3a3a)
+![Licence](https://img.shields.io/badge/licence-MIT-blue)
+
+<img src="docs/images/write-on.png" alt="Write_On mode: a full-window writing surface with corner controls" width="860">
+
+[Features](#features) ·
+[Run it locally](#run-it-locally) ·
+[Try it in five minutes](#try-it-in-five-minutes) ·
+[Keyboard shortcuts](#keyboard-shortcuts) ·
+[Embed it](#embed-it-in-a-page) ·
+[Develop](#develop-and-test)
+
+</div>
+
+---
+
+## Why
+
+Drafting is mostly choosing. Ordinary editors make you delete the version you are not sure about; Terraphim Editor keeps every alternative attached to the text it belongs to, inside the Markdown file itself, so you can decide later. Nothing is rewritten without you asking, and every change is one undo step.
 
 ## Features
 
-- **Plain mode.** A Markdown source pane with a live preview (debounced), a formatting toolbar with Open, Save and Markdown export buttons, and a `/` command palette.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/alternatives-panel.png" alt="Alternatives panel with Word, Sentence and Paragraph tabs">
+      <h3>Alternatives, in place</h3>
+      Any word, sentence or paragraph can hold several versions. Dots under the text show how many and which is active; hover and press Up or Down to cycle, and "a" / "an" fix themselves. The panel lists every version, one editable line each: a dot for yours, a robot for AI or knowledge-graph lines.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/kg-alternatives.png" alt="Knowledge-graph terms with synonym dots">
+      <h3>Knowledge-graph synonyms</h3>
+      Load a thesaurus and every term it knows becomes cyclable, with capitalisation kept. Matching comes from <code>terraphim_lsp_core</code>, the same engine as the Terraphim language server. These spans are derived each time and never written into your file.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/ghosts-and-menu.png" alt="A ghosted sentence and the selection menu">
+      <h3>Ghost it</h3>
+      Not sure about a sentence? Fade it. Ghosted text stays editable, counted and saved, and is left out of exports. Right-click a selection for the menu, or press Ctrl+/.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/overflow-panel.png" alt="The Overflow panel beside the page">
+      <h3>Overflow</h3>
+      A scratch area for the tangent that does not belong yet. Stash a selection there with Ctrl+Shift+X (one undo step); pull it back with Ctrl+Enter or by dragging. Saved with the document, never exported.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/lab-marks.png" alt="The Lab marking the weakest sentences">
+      <h3>The Lab</h3>
+      Six deterministic checks that mark and never rewrite: typos and punctuation (with fixes you can accept), the weakest sentences, sentences that run long, convoluted sentences, words off the tone, and hedges and filler.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/lab-trim.png" alt="Trim preview with the status card">
+      <h3>Trim</h3>
+      Ask for a 10%, 20%, 30% or 50% trim and see the cuts faded with the word count before and after. Click a cut to keep it, walk through them one by one, then make the cuts as a single undo step.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/blocks-view.png" alt="The Blocks view: the document as cards">
+      <h3>Blocks view</h3>
+      The same text as a list of cards (headings, paragraphs, lists, quotes). Edit in place, add, delete or move blocks with Alt+Up and Alt+Down; alternatives and ghosts move with them, and a half-typed draft is never lost.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/plain.png" alt="Plain mode: source and live preview">
+      <h3>Plain mode</h3>
+      A classic source pane with a live Markdown preview, a formatting toolbar and a <code>/</code> command palette. Click the word counter to switch between plain and Write_On.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/restore-draft.png" alt="The restore-draft notice after a reload">
+      <h3>Save and open real files</h3>
+      Ctrl+S saves the document, alternatives, ghosts and overflow included, as a <code>.md</code> file: in Chrome and Edge the first save asks where and later saves write to the same file; in Firefox and Safari it downloads. Ctrl+O, the folder icon or dropping a file opens one and restores everything. A dot shows unsaved changes, and an autosaved draft survives a reload.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/markdown-export.png" alt="The Markdown export dialog">
+      <h3>Markdown export</h3>
+      <code>M↓</code> (or the toolbar's Markdown button) shows the clean Markdown: the active alternatives, without ghosted text, the overflow or the annotation block, ready to copy or download.
+    </td>
+  </tr>
+</table>
 
-  ![Plain mode](docs/images/plain.png)
+Your alternatives, ghosts and overflow live in a small trailing block at the end of the Markdown file:
 
-- **Write_On mode.** A full-window writing surface with corner controls: the word and character counter (click it to switch modes), `●●●` alternatives panel, `M↓` (the Markdown export view), the keyboard reference, save and open, the **LAB** pill and the **XYZ** Overflow panel.
+````markdown
+Every team runs on a handful of trade-offs.
 
-- **Save and open real files.** Ctrl+S (or the floppy) saves the document, alternatives, ghosts and overflow included, as a `.md` file: in Chrome and Edge the first save asks where and later saves write to the same file; in Firefox and Safari the file is downloaded. Ctrl+O (or the folder), or dropping a `.md` file on the editor, opens one and restores everything. A dot on the save button and a `•` in the tab title show unsaved changes, opening another file over them asks first, and an autosaved draft survives a reload: the editor offers to restore it.
+```terraphim-alternatives
+{"version":1,"spans":[{"id":"s1","kind":"word","anchor":{"start":32,"end":42,"text":"trade-offs"},
+  "active":0,"alts":[{"text":"trade-offs","source":"original"},{"text":"choices","source":"human"}]}]}
+```
+````
 
-  ![Restore draft notice](docs/images/restore-draft.png)
+Any Markdown viewer still shows the text; Terraphim Editor shows the alternatives.
 
-- **Markdown export.** `M↓` (or the toolbar's Markdown button) shows the clean Markdown, with the active alternatives and without ghosted text, the overflow or the annotation block, ready to copy or download.
+## Run it locally
 
-  ![Markdown export](docs/images/markdown-export.png)
+You need Rust, the WebAssembly target, Trunk, and two small Node tools that build the embeddable bundle.
 
-- **Alternatives and inline indicators.** A word, sentence or paragraph can hold several alternatives. Text with alternatives shows a row of dots under it (one per alternative, the active one lit); hover it and press Up or Down to cycle in place. "a" and "an" before the word are corrected as you cycle. Alternatives are stored in a trailing `terraphim-alternatives` block in the Markdown file, so the file stays plain Markdown.
+**1. Toolchain**
 
-- **Alternatives panel.** Word, Sentence and Paragraph tabs list every alternative for the span at the caret, one editable line each. A dot marks your own lines and a robot glyph marks AI or knowledge-graph lines.
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Rust (skip if installed)
+rustup target add wasm32-unknown-unknown
+cargo install trunk wasm-pack
+npm install -g terser clean-css-cli                               # used by Trunk's build hook
+```
 
-  ![Alternatives panel](docs/images/alternatives-panel.png)
+**2. Access to the Terraphim crate registry**
 
-- **Knowledge-graph alternatives.** Load a thesaurus and every term it knows gets its synonyms as alternatives, with capitalisation kept and "a"/"an" fixed. The matching comes from [`terraphim_lsp_core`](https://git.terraphim.cloud/terraphim/terraphim-ai), the same engine the Terraphim language server uses. Knowledge-graph spans are worked out from the text each time and are not saved into the file.
+Some dependencies (`terraphim_automata`, `terraphim_types`, `terraphim_lsp_core` and the editor's own crates) come from the private Terraphim registry on `git.terraphim.cloud`. The repository already declares it in `.cargo/config.toml`; you only need a Gitea token with package read access:
 
-  ![Knowledge-graph alternatives](docs/images/kg-alternatives.png)
+```bash
+export CARGO_REGISTRIES_TERRAPHIM_TOKEN="Bearer <your-gitea-token>"
+```
 
-- **Ghosting and the selection menu.** Right-click a selection (or press the Menu key or Shift+F10) for "Alternatives for selection", "AI alternatives for selection", "Ghost it" and "Stash this in Overflow". Ghosted text fades but stays editable, counted and saved; it is left out of exports.
+**3. Clone and serve**
 
-  ![Ghost and the selection menu](docs/images/ghosts-and-menu.png)
+```bash
+git clone https://github.com/terraphim/terraphim-editor.git
+cd terraphim-editor
+trunk serve
+```
 
-- **Overflow panel.** A free-form scratch area on the right. Stashing moves the selection into it as one undo step; Ctrl+Enter or dragging copies text back into the page. The overflow is saved with the document and left out of exports.
+Open <http://127.0.0.1:8080>. Trunk compiles the Rust to WebAssembly, serves the page and rebuilds on every change. The first build takes a few minutes; later ones take seconds.
 
-  ![Overflow panel](docs/images/overflow-panel.png)
+**4. Check everything works (optional)**
 
-- **The Lab.** Six actions that mark text and never rewrite it: fix punctuation and typos (proposed fixes you can accept), mark the weakest sentences, sentences that run long, convoluted sentences, words that don't fit the tone, and hedges and filler.
+```bash
+cargo test --workspace          # Rust tests
+scripts/browser-tests.sh        # browser tests in headless Chrome (needs Chrome)
+```
 
-  ![The Lab](docs/images/lab-marks.png)
+## Try it in five minutes
 
-- **Trim.** Slight trim (about 10%), Tighten more (20%), Even sharper (30%) or Cut in half (50%) fades the candidate cuts and shows the word count before and after. Click a faded span to keep it, walk through the cuts one by one, then make the cuts as one undo step.
-
-  ![Trim preview](docs/images/lab-trim.png)
-
-- **Blocks view.** The document as a list of block cards (heading, paragraph, list, quote and so on) over the same Markdown text. Edit a block in place, add or delete blocks, or move a block up or down; spans and ghosts move with it. A draft you are typing is never lost: if the text changes underneath it, it is kept in a notice with Replace or Insert and Discard.
-
-  ![Blocks view](docs/images/blocks-view.png)
+1. **Switch to Write_On.** Click the word counter at the top left.
+2. **Add alternatives.** Select a word, press **Ctrl+Shift+A**, type another version in the panel and press Enter. Dots appear under the word.
+3. **Cycle.** Close the panel (Escape), hover the word and press **Up** or **Down**.
+4. **Ghost a sentence.** Select it and press **Ctrl+/**. Press it again with the caret inside to revive it.
+5. **Stash a tangent.** Select a paragraph and press **Ctrl+Shift+X**; open **XYZ** at the bottom right to see it.
+6. **Ask the Lab.** Click **LAB**, choose "Mark hedges and filler", then try **Tighten more** and **Make the cuts**. **Ctrl+Z** undoes the whole trim.
+7. **Rearrange.** Switch to **Blocks** in plain mode and move a paragraph with **Alt+Down**.
+8. **Save.** Press **Ctrl+S** (or click the floppy). In Chrome and Edge the first save asks where to put the `.md` file and later saves write to it; in Firefox and Safari it downloads. Opening it again (**Ctrl+O**, the folder icon, or dropping the file on the editor) restores every alternative, ghost and stash, and unsaved work survives a reload as a draft the editor offers to restore.
 
 ## Keyboard shortcuts
 
-The keyboard glyph in Write_On mode opens the same reference. Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, redo, save, open and Ctrl+Enter also accept Cmd.
+Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, redo, save, open and Ctrl+Enter also accept Cmd. The keyboard glyph in Write_On mode shows the same reference.
 
-### Writing
+<details open>
+<summary><b>Writing</b></summary>
 
 | Keys | Action |
 |---|---|
-| Ctrl+B | Bold |
-| Ctrl+I | Italic |
-| Ctrl+K | Inline code |
-| Ctrl+L | Link |
+| Ctrl+B / Ctrl+I | Bold / italic |
+| Ctrl+K / Ctrl+L | Inline code / link |
 | Ctrl+H | Heading |
-| `/` | Command palette (headings, bold, italic, underline) |
+| `/` | Command palette |
 | Ctrl+Z / Ctrl+Y (or Cmd) | Undo / redo |
-| Ctrl+S (or Cmd) | Save (replaces the browser's Save page) |
-| Ctrl+O (or Cmd) | Open a `.md`, `.markdown` or `.txt` file (replaces the browser's Open file) |
+| Ctrl+S / Ctrl+O (or Cmd) | Save / open a file (replaces the browser's own) |
 
-### Selection (Write_On mode)
+</details>
+
+<details open>
+<summary><b>Selection (Write_On)</b></summary>
 
 | Keys | Action |
 |---|---|
-| Right-click, Menu key or Shift+F10 | Open the selection menu |
-| Ctrl+Shift+A | Alternatives for selection (opens the panel) |
+| Right-click, Menu key or Shift+F10 | Selection menu |
+| Ctrl+Shift+A | Alternatives for selection |
 | Ctrl+Shift+G | AI alternatives for selection (knowledge-graph synonyms) |
-| Ctrl+/ | Ghost it / Revive (a caret inside a ghost revives it) |
+| Ctrl+/ | Ghost it / Revive |
 | Ctrl+Shift+X | Stash this in Overflow |
 
-### Alternatives
+</details>
+
+<details>
+<summary><b>Alternatives</b></summary>
 
 | Keys | Action |
 |---|---|
-| Hover a span, then Up / Down | Cycle its alternatives in place (wraps round) |
-| Alt+Up / Alt+Down with the caret in a span | Cycle without the mouse |
+| Hover a span, Up / Down | Cycle in place (wraps round) |
+| Alt+Up / Alt+Down, caret in a span | Cycle without the mouse |
 | Click a dot | Jump to that alternative |
-| In the panel: Up / Down | Make a line the active alternative |
-| In the panel: Alt+Up / Alt+Down | Reorder alternatives |
-| In the panel: Enter on the last line | Add an alternative |
+| Panel: Up / Down | Make a line active |
+| Panel: Alt+Up / Alt+Down | Reorder |
+| Panel: Enter on the last line | Add an alternative |
 | Escape | Close the panel |
 
-### Overflow panel
+</details>
+
+<details>
+<summary><b>Overflow, Lab and trim</b></summary>
 
 | Keys | Action |
 |---|---|
-| XYZ (bottom right) | Open or close the panel |
-| Ctrl+Enter | Insert the panel selection (or the current line) at the caret |
-| Drag | Panel text into the page copies it; page text onto the panel stashes it |
-| Escape | Close the panel |
+| XYZ (bottom right) | Open or close Overflow |
+| Ctrl+Enter in Overflow | Insert the selection (or current line) at the caret |
+| LAB (bottom centre) | Open the Lab; Up / Down, Home / End move between actions |
+| Walk through: Left / Right, K, Escape | Previous / next cut, keep it, stop |
 
-### Lab and trim
+</details>
 
-| Keys | Action |
-|---|---|
-| LAB (bottom centre) | Open the Lab |
-| Up / Down, Home / End | Move between actions |
-| Escape | Close the Lab |
-| Walk through: Left / Right | Previous / next cut |
-| Walk through: K | Keep the current cut |
-| Walk through: Escape | Stop |
-
-### Blocks view
+<details>
+<summary><b>Blocks view</b></summary>
 
 | Keys | Action |
 |---|---|
@@ -120,83 +222,87 @@ The keyboard glyph in Write_On mode opens the same reference. Formatting and sel
 | Enter or F2 | Edit the block |
 | Shift+Enter | Add a paragraph below |
 | Delete | Delete the block |
-| Alt+Up / Alt+Down | Move the block up or down |
-| Ctrl+Enter (while editing) | Commit the edit |
-| Escape (while editing) | Close; typed text is kept in the drafts notice |
+| Alt+Up / Alt+Down | Move the block |
+| Ctrl+Enter / Escape (editing) | Commit / close (typed text is kept in the drafts notice) |
 
-## Saving, opening and host pages
+</details>
 
-Save and open work in the standalone page with no host code. Saved files are plain Markdown with a trailing `terraphim-alternatives` block that holds alternatives, ghosts and the overflow; opening the file again restores them. The `M↓` export leaves the block out. Unsaved work is also kept as a draft in the browser's local storage, keyed by file name (or by the starting text for an unnamed document). Design notes: `docs/design/persistence.md`.
+## Embed it in a page
 
-A page that embeds the editor and stores documents itself can take over: `te:save`, `te:open` and `te:markdown` bubble to `document` and are cancelable, so `preventDefault()` stops the built-in action. `te:saved` carries the serialised document (`detail.text`) whenever the editor saves; once the host has stored it, `editor.persistence.markClean()` clears the unsaved-changes dot. `editor.openDocument(text, name)` loads a document (and resets the unsaved state and draft key to it). `te:written`, `te:opened`, `te:dirty-change`, `te:mode-change` and `te:blocks-drafts` report what happened. Set `fileSystemAccess: false` in the editor config to always download instead of using the browser's file picker.
+Save and open work in the standalone page with no host code. To host the editor in your own application, serve the page Trunk builds (`index.html` plus the generated assets in `target/trunk-dist`) or adapt it. It creates the editor on load and exposes it as `window.terraphimEditor`, so a host script can take over storage:
 
-## Prerequisites
+```html
+<script>
+  document.addEventListener('te:save', (event) => {
+    event.preventDefault(); // store documents yourself instead of a file
+    const text = window.terraphimEditor.saveDocument(); // Markdown plus annotation block
+    fetch('/documents/draft.md', { method: 'PUT', body: text })
+      .then(() => window.terraphimEditor.persistence.markClean());
+  });
 
-1. Install Rust:
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
-2. Add the WebAssembly target:
-   ```bash
-   rustup target add wasm32-unknown-unknown
-   ```
-3. Install Trunk and wasm-pack:
-   ```bash
-   cargo install trunk wasm-pack
-   ```
-
-Some crates come from the private `terraphim` Cargo registry on git.terraphim.cloud (`terraphim_automata`, `terraphim_types`, `terraphim_lsp_core`, and the editor's own `terraphim_alternatives` and `terraphim_lab`).
-
-## Development
-
-```bash
-trunk serve
+  document.addEventListener('te:open', (event) => {
+    event.preventDefault();
+    fetch('/documents/draft.md')
+      .then((response) => response.text())
+      .then((text) => window.terraphimEditor.openDocument(text, 'draft.md'));
+  });
+</script>
 ```
 
-Visit `http://127.0.0.1:8080`. Trunk rebuilds on change.
+`te:save`, `te:open` and `te:markdown` (the `M↓` control) bubble to `document` and are cancelable; without `preventDefault()` the editor saves to a file or download, opens a file, and shows the export dialog. `te:saved` carries the serialised document (`detail.text`) whenever the editor saves; `te:written`, `te:opened`, `te:dirty-change`, `te:mode-change` and `te:blocks-drafts` report what happened. `exportDocument()` returns the clean Markdown. Set `fileSystemAccess: false` in the editor config to always download instead of using the browser's file picker. Design notes: `docs/design/persistence.md`.
 
-## Testing
+A self-contained embed (a single script that renders the editor into any element) is not ready yet: `trunk build --release` also writes `terraphim-editor.min.js` with a `TeraphimEditor` wrapper, but it still expects the full page's markup. That work is tracked in issue #77.
 
-| Command | What it runs |
-|---|---|
-| `cargo test --workspace` | Rust unit and integration tests for the editor and the `terraphim_alternatives` and `terraphim_lab` crates |
-| `scripts/browser-tests.sh` | Every browser test binary in headless Chrome, one at a time, with a per-binary time and load table; waits for the machine to settle and skips the benchmarks under heavy load (exit code 3) |
-| `wasm-pack test --headless --chrome --test web_kg` | One browser test binary |
-| `cargo bench` | Criterion benchmarks |
-| `cargo clippy --workspace --all-targets -- -D warnings` | Lints (also run with `--target wasm32-unknown-unknown --lib --tests`) |
+## How it is built
 
-Browser tests use the real DOM and real WebAssembly bindings; there are no mocks.
-
-## Building for production
-
-`trunk build`, `trunk build --release` and `trunk serve` write to `target/trunk-dist`, which is not tracked.
-
-## Release build
-
-The repository keeps a deliberate release copy of the build in `dist/`. Development builds never touch it. Regenerate it on purpose with:
-
-```bash
-scripts/release-dist.sh
+```mermaid
+flowchart LR
+  subgraph Browser
+    UI["public/js<br/>surface, chrome, panels,<br/>Lab, trim, Blocks"]
+  end
+  subgraph WebAssembly
+    Bridge["src/<br/>document, lab, kg bridges"]
+    Alt["terraphim_alternatives<br/>spans, ghosts, overflow,<br/>annotation block"]
+    Lab["terraphim_lab<br/>marks and trim"]
+    Core["terraphim_lsp_core<br/>KG matching, synonyms"]
+  end
+  UI <--> Bridge
+  Bridge --> Alt
+  Bridge --> Lab
+  Bridge --> Core
+  Core --> Alt
+  Lab --> Alt
 ```
 
-This runs `trunk build --release --dist dist` and adds the embeddable bundle (`terraphim-editor.min.js`, `terraphim-editor.min.css`, `example.html`; needs `terser` and `cleancss`). Review `git status dist` and commit the result.
-
-## Project layout
+The Rust model is the source of truth: every edit goes to it first, and the surface follows, so undo and redo restore text and annotations together.
 
 | Path | Contents |
 |---|---|
-| `src/` | The WebAssembly entry point, Markdown rendering, the document bridge (`document.rs`), the Lab bridge (`lab.rs`) and knowledge-graph alternatives (`kg.rs`) |
-| `crates/terraphim_alternatives` | The span model: alternatives, ghosts, overflow, the annotation block, re-anchoring, moves and the shared word count |
-| `crates/terraphim_lab` | The Lab engine: mark actions and the trim engine |
-| `public/js/` | The editor surface and its features: chrome, indicators, selection menu, Lab, trim, Blocks view, alternatives panel, Overflow panel, save, open and export |
-| `public/css/` | Design tokens and feature styles |
+| `src/` | WebAssembly entry point, Markdown rendering, the document, Lab and knowledge-graph bridges |
+| `crates/terraphim_alternatives` | The span model, annotation block, re-anchoring, moves and the shared word count |
+| `crates/terraphim_lab` | The Lab engine: mark actions and trim |
+| `public/js/`, `public/css/` | The editor surface and features (including save, open and export); design tokens |
 | `docs/requirements/`, `docs/design/` | Specification and per-feature design notes |
 | `tests/` | Native tests and the browser test binaries (`web_*.rs`) |
 
+## Develop and test
+
+| Command | What it does |
+|---|---|
+| `trunk serve` | Development server with live rebuild at <http://127.0.0.1:8080> |
+| `cargo test --workspace` | Rust unit and integration tests |
+| `scripts/browser-tests.sh` | Every browser test binary in headless Chrome, one at a time, with a time and load table; waits for the machine to settle and skips the benchmarks under heavy load (exit code 3) |
+| `wasm-pack test --headless --chrome --test web_kg` | A single browser test binary |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Lints (also run with `--target wasm32-unknown-unknown --lib --tests`) |
+| `cargo bench` | Criterion benchmarks |
+| `scripts/release-dist.sh` | Regenerate the committed release copy in `dist/` |
+
+Browser tests drive the real DOM and the real WebAssembly bindings; there are no mocks. Development builds write to `target/trunk-dist`; `dist/` changes only through `scripts/release-dist.sh`.
+
 ## Contributing
 
-Work is tracked in Gitea issues at git.terraphim.cloud. Create a branch per issue (`task/<number>-<short-title>`), open a pull request against `main`, and reference the issue in commits.
+Work is tracked in Gitea issues at git.terraphim.cloud. Create a branch per issue (`task/<number>-<short-title>`), keep each change one undo step for the writer, and open a pull request against `main`.
 
 ## Licence
 
-This project is licensed under the MIT Licence; see the [LICENSE](LICENSE) file for details.
+MIT. See [LICENSE](LICENSE).
