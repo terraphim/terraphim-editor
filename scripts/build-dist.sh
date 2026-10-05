@@ -15,14 +15,16 @@ OUT="${1:-${TRUNK_STAGING_DIR:-target/trunk-dist}}"
 mkdir -p "$OUT"
 
 # Copy and minify JS files
-# Order matters: config, then the Write_On chrome and the decoration
+# Order matters: config, then the Write_On chrome, the decoration
 # registry/inline indicators, the ghost layer and selection menu, the Lab
-# popover, then the editor that instantiates them, then the embeddable wrapper.
-terser public/js/config.js public/js/chrome.js public/js/indicators.js public/js/selection-menu.js public/js/lab.js public/js/editor.js public/js/terraphim-editor.js -o "$OUT/terraphim-editor.min.js"
+# popover and the Blocks view, then the editor that instantiates them, then
+# the embeddable wrapper.
+terser public/js/config.js public/js/chrome.js public/js/indicators.js public/js/selection-menu.js public/js/lab.js public/js/blocks.js public/js/editor.js public/js/terraphim-editor.js -o "$OUT/terraphim-editor.min.js"
 
 # Copy and minify CSS
-# Design tokens before the Write_On layout and chrome that consume them.
-cleancss public/styles.css public/css/tokens.css public/css/write-on.css public/css/selection-menu.css public/css/lab.css -o "$OUT/terraphim-editor.min.css"
+# Design tokens before the Write_On layout, chrome, selection menu, Lab
+# popover and Blocks view that consume them.
+cleancss public/styles.css public/css/tokens.css public/css/write-on.css public/css/selection-menu.css public/css/lab.css public/css/blocks.css -o "$OUT/terraphim-editor.min.css"
 
 # Create example usage file
 cat > "$OUT/example.html" << EOL
