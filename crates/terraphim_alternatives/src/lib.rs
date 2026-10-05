@@ -82,7 +82,7 @@ pub mod offset;
 pub mod reanchor;
 pub mod words;
 
-pub use article::{Article, article_for};
+pub use article::{Article, article_for, preceding_article, respell};
 pub use block::{BlockError, BlockErrorKind, FENCE_INFO, parse, write};
 pub use document::{Counts, Document, EditError, MoveOutcome, SpanFate};
 pub use model::{
