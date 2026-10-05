@@ -276,7 +276,10 @@ class EditorSurface {
 
   /**
    * Decorate ranges of the text. Each item is { start, end, className?, id?,
-   * data? } in UTF-16 offsets; empty or out-of-range items are ignored.
+   * data?, attributes? } in UTF-16 offsets; empty or out-of-range items are
+   * ignored. `attributes` is a map of extra attributes (for example
+   * `aria-describedby`) set on every rendered span of the decoration; where
+   * decorations overlap, the later one (by start, then end) wins.
    * Overlapping ranges are allowed: each rendered span lists every covering
    * decoration id in `data-te-decoration` (space separated) and carries the
    * union of their class names. Decorations move with edits made before them
@@ -295,6 +298,7 @@ class EditorSurface {
         end: e,
         className: item.className || '',
         data: item.data,
+        attributes: item.attributes || null,
       });
     }
     next.sort((a, b) => a.start - b.start || a.end - b.end);
@@ -503,6 +507,10 @@ class EditorSurface {
           }
           span.className = Array.from(new Set(classes)).join(' ');
           span.setAttribute('data-te-decoration', covering.map((d) => d.id).join(' '));
+          for (const d of covering) {
+            if (!d.attributes) continue;
+            for (const [name, value] of Object.entries(d.attributes)) span.setAttribute(name, String(value));
+          }
           span.appendChild(document.createTextNode(piece));
           frag.appendChild(span);
         }
@@ -1113,6 +1121,7 @@ class MarkdownEditor {
     }
     this.createdNodes = [];
     if (this.chrome) this.chrome.destroy();
+    if (this.indicators) this.indicators.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();
   }
@@ -1146,6 +1155,16 @@ class MarkdownEditor {
     // Write_On mode toggle and corner chrome (public/js/chrome.js, issue #7).
     if (typeof window.WriteOnChrome === 'function') {
       this.chrome = new window.WriteOnChrome(this, { signal: this.abortController.signal });
+    }
+
+    // Decoration registry and inline indicators (public/js/indicators.js,
+    // issue #8): later layers (ghosts, issue #11) register with
+    // this.decorations.
+    if (typeof window.TeDecorationRegistry === 'function') {
+      this.decorations = new window.TeDecorationRegistry(this.surface);
+      if (typeof window.TeIndicatorLayer === 'function') {
+        this.indicators = new window.TeIndicatorLayer(this, { signal: this.abortController.signal });
+      }
     }
   }
 
@@ -1495,6 +1514,7 @@ class MarkdownEditor {
         console.error('chrome.documentChanged failed', err);
       }
     }
+    if (this.indicators) this.indicators.flush();
     return opened;
   }
 
