@@ -331,6 +331,17 @@ class EditorSurface {
     return () => this.changeListeners.delete(callback);
   }
 
+  /**
+   * Forget the undo history so the current text becomes the base state.
+   * Used when a different document is opened: undo must not step back into
+   * the previous file.
+   */
+  resetHistory() {
+    this.history = [];
+    this.historyIndex = -1;
+    this.record('init', this.lastSelection);
+  }
+
   canUndo() {
     return this.historyIndex > 0;
   }
@@ -1071,6 +1082,13 @@ class MarkdownEditor {
     this.abortController = new AbortController();
     this.createdNodes = [];
     this.destroyed = false;
+    // Document model bridge (issue #6): warning subscribers, the notice
+    // element and a guard that stops opening a file from being mirrored as
+    // an edit.
+    this.warningListeners = new Set();
+    this.warningElement = null;
+    this.warning = null;
+    this.suppressModelSync = false;
   }
 
   /**
@@ -1089,6 +1107,7 @@ class MarkdownEditor {
     }
     this.createdNodes = [];
     if (this.surface) this.surface.destroy();
+    this.warningListeners.clear();
   }
 
   initialize() {
@@ -1111,6 +1130,7 @@ class MarkdownEditor {
     }
 
     this.surface = new EditorSurface(this.input);
+    this.connectDocumentModel();
 
     this.setupShortcuts();
     this.setupHelpDialog();
@@ -1334,6 +1354,158 @@ class MarkdownEditor {
     window.addEventListener('scroll', positionCommandMenu, { signal });
     window.addEventListener('resize', positionCommandMenu, { signal });
     this.input.addEventListener('scroll', positionCommandMenu, { signal });
+  }
+
+  // ---------------------------------------------------------------------
+  // Document model (issue #6)
+  //
+  // The Rust span model (crates/terraphim_alternatives, wrapped by
+  // src/document.rs) holds the open document: the body shown on the surface
+  // plus alternatives, ghosts and overflow, which never appear on the
+  // surface or in the preview. Every surface edit is mirrored into it so
+  // anchors follow typing. Offsets are UTF-16 code units on both sides.
+  // ---------------------------------------------------------------------
+
+  /**
+   * The WASM document API: `window.wasmBindings` in the Trunk build. Returns
+   * null when the module does not expose it, in which case the editor still
+   * works as a plain Markdown editor.
+   */
+  documentApi() {
+    const api = window.wasmBindings;
+    return api && typeof api.open_document === 'function' && typeof api.apply_edit === 'function'
+      ? api
+      : null;
+  }
+
+  requireDocumentApi() {
+    const api = this.documentApi();
+    if (!api) throw new Error('The WASM document API is not available');
+    return api;
+  }
+
+  /** Subscribe the model to surface edits and align it with the surface. */
+  connectDocumentModel() {
+    const api = this.documentApi();
+    if (api) api.sync_document_body(this.surface.getText());
+    this.surface.onChange((change) => this.mirrorEdit(change));
+  }
+
+  mirrorEdit(change) {
+    if (this.suppressModelSync) return;
+    const api = this.documentApi();
+    if (!api) return;
+    const { edit, text } = change;
+    try {
+      api.apply_edit(edit.start, edit.deletedLength, edit.insertedText);
+    } catch (err) {
+      // The model refused the edit (for example a stale ghost): fall back to
+      // replacing its body with the surface text and re-anchoring by text.
+      api.sync_document_body(text);
+    }
+  }
+
+  /** Make sure the model body is exactly the surface text before reading it. */
+  alignDocumentModel(api) {
+    api.sync_document_body(this.surface.getText());
+  }
+
+  /**
+   * Open `.md` source: the body goes on the surface (the annotation block
+   * never does), the undo history starts afresh and a malformed block shows
+   * one non-blocking warning. Returns { body, warning, unresolved }.
+   */
+  openDocument(source) {
+    const api = this.requireDocumentApi();
+    const opened = api.open_document(String(source));
+    this.suppressModelSync = true;
+    try {
+      this.surface.setText(opened.body, { source: 'open', selectStart: 0, selectEnd: 0 });
+    } finally {
+      this.suppressModelSync = false;
+    }
+    this.surface.resetHistory();
+    // The surface normalises line endings; re-anchor if that changed the text.
+    this.alignDocumentModel(api);
+    this.showWarning(opened.warning || null);
+    return opened;
+  }
+
+  /** The document as `.md` text: body plus the trailing annotation block. */
+  saveDocument() {
+    const api = this.requireDocumentApi();
+    this.alignDocumentModel(api);
+    return api.save_document();
+  }
+
+  /** Clean Markdown: active alternatives, ghosted text dropped, no block. */
+  exportDocument() {
+    const api = this.requireDocumentApi();
+    this.alignDocumentModel(api);
+    return api.export_document();
+  }
+
+  /** { words, chars } of the body, ghosted text included. */
+  counts() {
+    const api = this.requireDocumentApi();
+    this.alignDocumentModel(api);
+    return api.document_counts();
+  }
+
+  /** { spans, ghosts, overflow, setAside, preservedBlock } in UTF-16 offsets. */
+  annotations() {
+    const api = this.requireDocumentApi();
+    this.alignDocumentModel(api);
+    return api.document_annotations();
+  }
+
+  /**
+   * Subscribe to document warnings. The callback receives the message, or
+   * null when the warning is cleared. Returns an unsubscribe function.
+   */
+  onWarning(callback) {
+    this.warningListeners.add(callback);
+    return () => this.warningListeners.delete(callback);
+  }
+
+  /**
+   * Show (or, with null, clear) the single non-blocking document warning:
+   * a `.te-warning` status element above the surface, which never takes
+   * focus, plus every onWarning subscriber.
+   */
+  showWarning(message) {
+    this.warning = message || null;
+    if (this.warning && !this.warningElement && this.input && this.input.parentNode) {
+      const el = document.createElement('div');
+      el.className = 'te-warning';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      const text = document.createElement('span');
+      text.className = 'te-warning-text';
+      const dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.className = 'te-warning-dismiss';
+      dismiss.setAttribute('aria-label', 'Dismiss warning');
+      dismiss.textContent = '×';
+      dismiss.addEventListener('click', () => this.showWarning(null), {
+        signal: this.abortController.signal,
+      });
+      el.append(text, dismiss);
+      this.input.parentNode.insertBefore(el, this.input);
+      this.createdNodes.push(el);
+      this.warningElement = el;
+    }
+    if (this.warningElement) {
+      this.warningElement.hidden = !this.warning;
+      this.warningElement.querySelector('.te-warning-text').textContent = this.warning || '';
+    }
+    for (const listener of this.warningListeners) {
+      try {
+        listener(this.warning);
+      } catch (err) {
+        console.error('Document warning listener failed', err);
+      }
+    }
   }
 
   showCustomDialog() {
