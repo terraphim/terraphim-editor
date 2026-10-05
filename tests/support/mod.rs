@@ -19,8 +19,8 @@ pub use fixtures::*;
 pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
     flush_preview, ghost_range, lab_actions, lab_mark, move_document_range, open_document,
-    preview_delay, preview_pending, preview_render_count, revive_range, save_document,
-    set_preview_delay, sync_document_body, DEFAULT_PREVIEW_DELAY_MS,
+    preview_delay, preview_pending, preview_render_count, render_markdown, revive_range,
+    save_document, set_preview_delay, sync_document_body, DEFAULT_PREVIEW_DELAY_MS,
 };
 // In-place cycling of alternatives (issue #9).
 pub use terraphim_editor::set_active_alternative;
@@ -34,6 +34,8 @@ pub const TOKENS_CSS: &str = include_str!("../../public/css/tokens.css");
 pub const WRITE_ON_CSS: &str = include_str!("../../public/css/write-on.css");
 pub const SELECTION_MENU_CSS: &str = include_str!("../../public/css/selection-menu.css");
 pub const LAB_JS: &str = include_str!("../../public/js/lab.js");
+pub const BLOCKS_JS: &str = include_str!("../../public/js/blocks.js");
+pub const BLOCKS_CSS: &str = include_str!("../../public/css/blocks.css");
 pub const LAB_CSS: &str = include_str!("../../public/css/lab.css");
 
 /// Small helpers shared by the JavaScript snippets below.
@@ -60,6 +62,11 @@ window.teTest = {
     }
     delete document.body.dataset.mode;
   },
+  // Forget the per-viewer Blocks view preference (issue #19).
+  resetBlocks() {
+    try { localStorage.removeItem(window.BLOCKS_VIEW_STORAGE_KEY); } catch (e) {}
+  },
+  blocks() { return window.__teEditor.blocks; },
   // Rendered and not hidden by CSS (display, visibility or the hidden attribute).
   visible(el) {
     return !!el && el.isConnected && el.getClientRects().length > 0 &&
@@ -167,7 +174,9 @@ pub fn document() -> Document {
 pub fn fresh_rust_editor() -> Document {
     let document = document();
     while let Some(node) = document
-        .query_selector("#app, .command-menu, .te-bench, .te-chrome, .te-selection-menu")
+        .query_selector(
+            "#app, .command-menu, .te-bench, .te-chrome, .te-selection-menu, .te-blocks",
+        )
         .unwrap()
     {
         node.remove();
@@ -194,7 +203,7 @@ pub fn load_editor_scripts(document: &Document) {
     let style = document.create_element("style").unwrap();
     style.set_attribute("data-te-test", "").unwrap();
     style.set_text_content(Some(&format!(
-        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}"
+        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{BLOCKS_CSS}"
     )));
     document
         .document_element()
@@ -207,6 +216,7 @@ pub fn load_editor_scripts(document: &Document) {
         INDICATORS_JS,
         SELECTION_MENU_JS,
         LAB_JS,
+        BLOCKS_JS,
         EDITOR_JS,
         TEST_HELPERS_JS,
     ] {
@@ -259,6 +269,13 @@ pub fn install_document_bindings() {
             .into_js_value(),
     );
     install(
+        "render_markdown",
+        Closure::<dyn FnMut(String) -> Result<String, JsValue>>::new(|s: String| {
+            render_markdown(&s)
+        })
+        .into_js_value(),
+    );
+    install(
         "ghost_range",
         Closure::<dyn FnMut(u32, u32) -> JsValue>::new(ghost_range).into_js_value(),
     );
@@ -307,6 +324,7 @@ pub fn fresh_full_editor() -> Document {
           // Tests share one page: start every editor in plain mode with no
           // persisted Write_On state.
           teTest.resetWriteOn();
+          teTest.resetBlocks();
           const ed = new MarkdownEditor(window.EditorConfig);
           ed.initialize();
           window.__teEditor = ed;
@@ -352,4 +370,44 @@ pub fn js_string_literal(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// Blocks view fixtures (issue #19), exposed to JavaScript as
+/// `window.teBlockFixtures`.
+pub fn install_block_fixtures() {
+    let src = format!(
+        "window.teBlockFixtures = {{ mixed: {}, edge: {}, full: {}, plain: {} }}; 'ok'",
+        js_string_literal(include_str!("../fixtures/blocks/mixed.md")),
+        js_string_literal(include_str!("../fixtures/blocks/edge.md")),
+        js_string_literal(include_str!("../fixtures/persistence/full.md")),
+        js_string_literal(include_str!("../fixtures/persistence/plain.md"))
+    );
+    assert_eq!(js_string(&src), "ok");
+}
+
+/// Run browser test steps with a yield to the event loop between them, so a
+/// long scenario never holds the main thread long enough to starve the
+/// webdriver poll. Each step is a function body with `ed` (the editor), `bv`
+/// (its Blocks view), `s` (the surface), `T` (an object shared by the steps)
+/// and `out` (a problem list) in scope. A step either returns a string or
+/// falls through, in which case `out` is reported. Stops at the first step
+/// that reports a problem and returns "step N: ...", or "" when all pass.
+pub async fn run_steps(steps: &[&str]) -> String {
+    js_eval("window.__teT = {}; 0");
+    for (i, body) in steps.iter().enumerate() {
+        let src = format!(
+            "(() => {{ const ed = window.__teEditor; const bv = ed.blocks; const s = ed.surface; \
+             const T = window.__teT; const out = []; \
+             const r = (() => {{ {body}\n }})(); \
+             return typeof r === 'string' ? r : out.join('; '); }})()"
+        );
+        let r = js_string(&src);
+        if !r.is_empty() {
+            return format!("step {}: {r}", i + 1);
+        }
+        // A real timer tick (not just a microtask) so a pending webdriver
+        // command runs before the next step.
+        sleep(1).await;
+    }
+    String::new()
 }

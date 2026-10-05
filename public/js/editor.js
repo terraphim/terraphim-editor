@@ -1164,10 +1164,11 @@ class MarkdownEditor {
   /**
    * Tear the editor down: remove every listener it added (on the surface,
    * the document and the window), remove the DOM it created and destroy the
-   * editing surface. Safe to call more than once.
+   * editing surface. Safe to call more than once. Returns the Blocks view's
+   * unapplied drafts (issue #19; also sent as `te:blocks-drafts`), or [].
    */
   destroy() {
-    if (this.destroyed) return;
+    if (this.destroyed) return [];
     this.destroyed = true;
     this.abortController.abort();
     for (const node of this.createdNodes) {
@@ -1176,6 +1177,8 @@ class MarkdownEditor {
       node.remove();
     }
     this.createdNodes = [];
+    // Blocks view (issue #19): reports unapplied drafts, never edits.
+    const drafts = this.blocks ? this.blocks.destroy() : [];
     if (this.chrome) this.chrome.destroy();
     if (this.selectionMenu) this.selectionMenu.destroy();
     if (this.ghosts) this.ghosts.destroy();
@@ -1184,6 +1187,7 @@ class MarkdownEditor {
     if (this.decorations) this.decorations.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();
+    return drafts;
   }
 
   initialize() {
@@ -1237,6 +1241,12 @@ class MarkdownEditor {
       if (typeof window.TeLabPopover === 'function') {
         this.lab = new window.TeLabPopover(this, { signal: this.abortController.signal });
       }
+    }
+
+    // Blocks view (public/js/blocks.js, issue #19): a separate view of the
+    // same body, created after the chrome so it can see the Write_On mode.
+    if (typeof window.BlocksView === 'function') {
+      this.blocks = new window.BlocksView(this, { signal: this.abortController.signal });
     }
   }
 
