@@ -92,9 +92,13 @@ fn setup() {
     let _document = fresh_full_editor();
     install_helpers();
     // These tests cover the ghost item (and plug-in items) on their own; the
-    // "Alternatives for selection" item (#10) is covered in web_alt_panel.rs.
+    // "Alternatives for selection" item (#10) is covered in web_alt_panel.rs
+    // and "AI alternatives for selection" (#13) in web_kg_menu.rs.
     assert_eq!(
-        js_string("window.__teEditor.selectionMenu.unregister('alternatives'); 'ok'"),
+        js_string(
+            "const m = window.__teEditor.selectionMenu; \
+             m.unregister('alternatives'); m.unregister('ai-alternatives'); 'ok'"
+        ),
         "ok"
     );
 }

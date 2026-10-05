@@ -20,6 +20,15 @@ pub use document::{
     OverflowError, Rebased, StashOutcome,
 };
 
+// Knowledge-graph alternatives through terraphim_lsp_core (issue #13).
+mod kg;
+pub use document::EditOutcome;
+pub use kg::{
+    alt_kg_append, clear_thesaurus, kg_append, kg_clear_thesaurus, kg_document_spans,
+    kg_load_thesaurus, kg_lookup, kg_lookup_selection, kg_spans, kg_spans_json, kg_swap,
+    kg_swap_alternative, load_thesaurus, thesaurus_name, KgError, KgSpan, KG_MODEL,
+};
+
 mod lab;
 pub use lab::{lab_actions, lab_mark, trim_make_cuts, trim_plan_json, trim_status};
 // The alternatives side panel (issue #10).
