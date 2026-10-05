@@ -16,13 +16,13 @@ mkdir -p "$OUT"
 
 # Copy and minify JS files
 # Order matters: config, then the Write_On chrome and the decoration
-# registry/inline indicators, the Lab popover, then the editor that instantiates them, then
-# the embeddable wrapper.
-terser public/js/config.js public/js/chrome.js public/js/indicators.js public/js/lab.js public/js/editor.js public/js/terraphim-editor.js -o "$OUT/terraphim-editor.min.js"
+# registry/inline indicators, the ghost layer and selection menu, the Lab
+# popover, then the editor that instantiates them, then the embeddable wrapper.
+terser public/js/config.js public/js/chrome.js public/js/indicators.js public/js/selection-menu.js public/js/lab.js public/js/editor.js public/js/terraphim-editor.js -o "$OUT/terraphim-editor.min.js"
 
 # Copy and minify CSS
 # Design tokens before the Write_On layout and chrome that consume them.
-cleancss public/styles.css public/css/tokens.css public/css/write-on.css public/css/lab.css -o "$OUT/terraphim-editor.min.css"
+cleancss public/styles.css public/css/tokens.css public/css/write-on.css public/css/selection-menu.css public/css/lab.css -o "$OUT/terraphim-editor.min.css"
 
 # Create example usage file
 cat > "$OUT/example.html" << EOL

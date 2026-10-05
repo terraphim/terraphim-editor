@@ -18,18 +18,20 @@ pub use fixtures::*;
 
 pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
-    flush_preview, lab_actions, lab_mark, move_document_range, open_document, preview_delay,
-    preview_pending, preview_render_count, save_document, set_preview_delay, sync_document_body,
-    DEFAULT_PREVIEW_DELAY_MS,
+    flush_preview, ghost_range, lab_actions, lab_mark, move_document_range, open_document,
+    preview_delay, preview_pending, preview_render_count, revive_range, save_document,
+    set_preview_delay, sync_document_body, DEFAULT_PREVIEW_DELAY_MS,
 };
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
 pub const EDITOR_JS: &str = include_str!("../../public/js/editor.js");
 pub const CHROME_JS: &str = include_str!("../../public/js/chrome.js");
 pub const INDICATORS_JS: &str = include_str!("../../public/js/indicators.js");
-pub const LAB_JS: &str = include_str!("../../public/js/lab.js");
+pub const SELECTION_MENU_JS: &str = include_str!("../../public/js/selection-menu.js");
 pub const TOKENS_CSS: &str = include_str!("../../public/css/tokens.css");
 pub const WRITE_ON_CSS: &str = include_str!("../../public/css/write-on.css");
+pub const SELECTION_MENU_CSS: &str = include_str!("../../public/css/selection-menu.css");
+pub const LAB_JS: &str = include_str!("../../public/js/lab.js");
 pub const LAB_CSS: &str = include_str!("../../public/css/lab.css");
 
 /// Small helpers shared by the JavaScript snippets below.
@@ -163,7 +165,7 @@ pub fn document() -> Document {
 pub fn fresh_rust_editor() -> Document {
     let document = document();
     while let Some(node) = document
-        .query_selector("#app, .command-menu, .te-bench, .te-chrome")
+        .query_selector("#app, .command-menu, .te-bench, .te-chrome, .te-selection-menu")
         .unwrap()
     {
         node.remove();
@@ -189,7 +191,9 @@ pub fn load_editor_scripts(document: &Document) {
     // styles exactly as Trunk ships them.
     let style = document.create_element("style").unwrap();
     style.set_attribute("data-te-test", "").unwrap();
-    style.set_text_content(Some(&format!("{TOKENS_CSS}\n{WRITE_ON_CSS}\n{LAB_CSS}")));
+    style.set_text_content(Some(&format!(
+        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}"
+    )));
     document
         .document_element()
         .unwrap()
@@ -199,6 +203,7 @@ pub fn load_editor_scripts(document: &Document) {
         CONFIG_JS,
         CHROME_JS,
         INDICATORS_JS,
+        SELECTION_MENU_JS,
         LAB_JS,
         EDITOR_JS,
         TEST_HELPERS_JS,
@@ -250,6 +255,14 @@ pub fn install_document_bindings() {
         "sync_document_body",
         Closure::<dyn FnMut(String) -> JsValue>::new(|s: String| sync_document_body(&s))
             .into_js_value(),
+    );
+    install(
+        "ghost_range",
+        Closure::<dyn FnMut(u32, u32) -> JsValue>::new(ghost_range).into_js_value(),
+    );
+    install(
+        "revive_range",
+        Closure::<dyn FnMut(u32, u32) -> JsValue>::new(revive_range).into_js_value(),
     );
     install(
         "lab_actions",
