@@ -161,7 +161,12 @@ class WriteOnChrome {
         span.textContent = opts.text;
         b.appendChild(span);
       }
-      listen(b, 'click', opts.onClick);
+      // Corner controls act only in Write_On mode; when plain they are
+      // hidden, and a programmatic click must not dispatch te:* events.
+      listen(b, 'click', (e) => {
+        if (!this.isWriteOn()) return;
+        opts.onClick(e);
+      });
       parent.appendChild(b);
       return b;
     };

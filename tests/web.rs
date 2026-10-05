@@ -1490,6 +1490,20 @@ fn test_plain_mode_shows_only_the_counter() {
             else if (teTest.visible(el)) out.push('control visible in plain mode: ' + name);
           }}
           if (teTest.visible(document.querySelector('.te-chrome-shortcuts'))) out.push('reference visible');
+          // Hidden corner controls must not act in plain mode, even when
+          // clicked programmatically.
+          const types = ['te:open-panel', 'te:markdown', 'te:shortcuts', 'te:save', 'te:open', 'te:lab', 'te:overflow'];
+          const fired = [];
+          const onAny = (e) => fired.push(e.type);
+          for (const t of types) document.addEventListener(t, onAny);
+          for (const name of {CHROME_CONTROLS_JS}) {{
+            const el = teTest.control(name);
+            if (el) el.click();
+          }}
+          for (const t of types) document.removeEventListener(t, onAny);
+          if (fired.length) out.push('plain-mode clicks dispatched ' + fired.join(','));
+          if (document.body.dataset.mode !== undefined) out.push('plain-mode click changed mode');
+          if (document.querySelector('.te-chrome-shortcuts')?.open) out.push('plain-mode click opened reference');
           // The plain editor itself is unchanged.
           if (!teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar hidden in plain mode');
           // Counter text follows the surface: whitespace-separated words,
