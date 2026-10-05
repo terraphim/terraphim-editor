@@ -33,7 +33,9 @@
 use std::cell::RefCell;
 
 use serde_json::{json, Value};
-use terraphim_alternatives::{parse, write, Counts, Document, EditError};
+use terraphim_alternatives::{
+    parse, write, Counts, Document, EditError, Ghost, ReanchorReport, Span,
+};
 use wasm_bindgen::prelude::*;
 
 /// Outcome of [`DocumentSession::open`].
@@ -65,10 +67,32 @@ pub struct DocumentSession {
     /// The unreadable block exactly as found, written back verbatim on save.
     raw_block: Option<String>,
     warning: Option<String>,
-    /// Ids of spans taken out of the model because an edit changed their text
-    /// or they could not be re-anchored, since the last open. Reported, not
-    /// saved.
-    set_aside: Vec<String>,
+    /// Spans and ghosts taken out of the model since the last open, kept whole
+    /// so a later feature can restore them. Reported, not saved.
+    set_aside: SetAside,
+}
+
+/// Annotations removed from the model during this session: spans an edit
+/// detached (it changed their text) and spans or ghosts that could not be
+/// re-anchored. They are kept intact in memory but are not written on save.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SetAside {
+    /// Detached or unplaceable spans, with their last known anchors.
+    pub spans: Vec<Span>,
+    /// Unplaceable ghosts, with their last known anchors.
+    pub ghosts: Vec<Ghost>,
+}
+
+impl SetAside {
+    /// Keeps everything a re-anchoring pass could not place; returns how many.
+    fn keep_unresolved(&mut self, report: ReanchorReport) -> usize {
+        let count = report.unresolved.len() + report.unresolved_ghosts.len();
+        self.spans
+            .extend(report.unresolved.into_iter().map(|u| u.span));
+        self.ghosts
+            .extend(report.unresolved_ghosts.into_iter().map(|u| u.ghost));
+        count
+    }
 }
 
 impl DocumentSession {
@@ -91,12 +115,7 @@ impl DocumentSession {
         let mut unresolved = 0;
         match parse(source) {
             Ok(mut doc) => {
-                let report = doc.reanchor();
-                unresolved = report.unresolved.len() + report.unresolved_ghosts.len();
-                self.set_aside
-                    .extend(report.unresolved.iter().map(|u| u.span.id.clone()));
-                self.set_aside
-                    .extend(report.unresolved_ghosts.iter().map(|u| u.ghost.id.clone()));
+                unresolved = self.set_aside.keep_unresolved(doc.reanchor());
                 if unresolved > 0 {
                     self.warning = Some(format!(
                         "{unresolved} saved alternative or ghost annotation(s) no longer match \
@@ -160,6 +179,11 @@ impl DocumentSession {
         self.raw_block.is_some()
     }
 
+    /// Annotations removed from the model since the last open.
+    pub fn set_aside(&self) -> &SetAside {
+        &self.set_aside
+    }
+
     /// Read-only access to the span model.
     pub fn document(&self) -> &Document {
         &self.doc
@@ -185,8 +209,8 @@ impl DocumentSession {
                 end: usize::MAX,
             })?;
         let detached = self.doc.apply_edit(start, end, inserted)?;
-        let ids: Vec<String> = detached.into_iter().map(|span| span.id).collect();
-        self.set_aside.extend(ids.iter().cloned());
+        let ids = detached.iter().map(|span| span.id.clone()).collect();
+        self.set_aside.spans.extend(detached);
         Ok(ids)
     }
 
@@ -199,27 +223,23 @@ impl DocumentSession {
             return Synced::default();
         }
         self.doc.body = text.to_string();
-        let report = self.doc.reanchor();
-        self.set_aside
-            .extend(report.unresolved.iter().map(|u| u.span.id.clone()));
-        self.set_aside
-            .extend(report.unresolved_ghosts.iter().map(|u| u.ghost.id.clone()));
+        let unresolved = self.set_aside.keep_unresolved(self.doc.reanchor());
         Synced {
             changed: true,
-            unresolved: report.unresolved.len() + report.unresolved_ghosts.len(),
+            unresolved,
         }
     }
 
     /// Spans, ghosts and overflow as JSON, for decorations and inspection:
-    /// `{ spans, ghosts, overflow, setAside, preservedBlock }`. Spans and
-    /// ghosts use the block's own schema (UTF-16 anchors).
+    /// `{ spans, ghosts, overflow, setAside: { spans, ghosts }, preservedBlock }`.
+    /// Spans and ghosts use the block's own schema (UTF-16 anchors).
     pub fn annotations_json(&self) -> Value {
         let annotations = &self.doc.annotations;
         json!({
             "spans": annotations.spans,
             "ghosts": annotations.ghosts,
             "overflow": annotations.overflow,
-            "setAside": self.set_aside,
+            "setAside": { "spans": self.set_aside.spans, "ghosts": self.set_aside.ghosts },
             "preservedBlock": self.raw_block.is_some(),
         })
     }
@@ -306,7 +326,7 @@ pub fn document_body() -> String {
     with_session(|s| s.body().to_string())
 }
 
-/// `{ spans, ghosts, overflow, setAside, preservedBlock }` of the current
+/// `{ spans, ghosts, overflow, setAside: { spans, ghosts }, preservedBlock }` of the current
 /// document, in UTF-16 offsets.
 #[wasm_bindgen]
 pub fn document_annotations() -> JsValue {
@@ -388,7 +408,18 @@ mod tests {
         let detached = session.apply_edit(12, 1, "X").unwrap();
         assert_eq!(detached, vec!["s1".to_string()]);
         assert!(session.document().annotations.spans.is_empty());
-        assert_eq!(session.annotations_json()["setAside"], json!(["s1"]));
+        let kept = &session.set_aside().spans;
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].id, "s1");
+        assert_eq!(
+            kept[0].alts.len(),
+            2,
+            "the detached span keeps its alternatives"
+        );
+        assert_eq!(
+            session.annotations_json()["setAside"]["spans"][0]["id"],
+            "s1"
+        );
     }
 
     #[test]
@@ -441,6 +472,7 @@ mod tests {
         let opened = session.open(&source);
         assert_eq!(opened.unresolved, 1);
         assert!(opened.warning.unwrap().contains("set aside"));
+        assert_eq!(session.set_aside().spans[0].alts[1].text, "eraser");
     }
 
     #[test]

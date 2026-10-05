@@ -8,7 +8,7 @@ mod document;
 pub use document::{
     apply_edit, counts_json, document_annotations, document_body, document_counts, export_document,
     open_document, save_document, sync_document_body, with_session, DocumentSession, Opened,
-    Synced,
+    SetAside, Synced,
 };
 
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!

@@ -1985,7 +1985,38 @@ fn test_typing_inside_ghost_and_undo_keep_model_in_step() {
           document.execCommand('insertText', false, 'z');
           const a = ed.annotations();
           if (a.spans.some((x) => x.id === 's3')) out.push('edited span still attached');
-          if (!a.setAside.includes('s3')) out.push('detached span not reported');
+          const kept = a.setAside.spans.find((x) => x.id === 's3');
+          if (!kept || kept.alts.length !== 3) out.push('detached span not kept ' + JSON.stringify(a.setAside));
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_crlf_file_reanchors_after_surface_normalises_line_endings() {
+    let _document = fresh_full_editor();
+    install_fixtures();
+    let result = js_string(
+        r##"(() => {
+          const ed = window.__teEditor;
+          const s = ed.surface;
+          const out = [];
+          // Body with CRLF line endings; the block itself stays as written.
+          const md = teFixtures.full.md;
+          const cut = md.indexOf('```terraphim-alternatives');
+          const crlf = md.slice(0, cut).replace(/\n/g, '\r\n') + md.slice(cut);
+          const opened = ed.openDocument(crlf);
+          if (s.getText().includes('\r')) out.push('surface kept CR');
+          if (window.wasmBindings.document_body() !== s.getText()) out.push('model body not aligned');
+          const a = ed.annotations();
+          if (a.spans.length !== 3 || a.ghosts.length !== 2) out.push('annotations lost ' + JSON.stringify(a.setAside));
+          if (ed.exportDocument() !== teFixtures.full.export) out.push('export ' + JSON.stringify(ed.exportDocument()));
+          const saved = ed.saveDocument();
+          ed.openDocument(saved);
+          const b = ed.annotations();
+          if (JSON.stringify(b.spans) !== JSON.stringify(a.spans)) out.push('spans after reopen');
+          if (JSON.stringify(b.ghosts) !== JSON.stringify(a.ghosts)) out.push('ghosts after reopen');
           return out.join('; ');
         })()"##,
     );
