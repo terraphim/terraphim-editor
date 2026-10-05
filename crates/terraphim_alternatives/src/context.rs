@@ -22,7 +22,10 @@
 //! the body next to the candidate: the common suffix of `before` and the text
 //! preceding the candidate, or the common prefix of `after` and the text
 //! following it, compared character by character (plain string comparison at
-//! known offsets, not a search). The side **agrees** when
+//! known offsets, not a search). Carriage returns are ignored on both sides,
+//! so context captured before a file's line endings were converted between
+//! CRLF and LF still agrees (they count towards `m` when the stored context
+//! holds them). The side **agrees** when
 //!
 //! * `L > 0` and `m >= max(ceil(L / 2), CONTEXT_UNITS / 4)`: at least half of
 //!   the stored context, and at least 8 units, matches; or
@@ -224,23 +227,21 @@ impl<'a> Probe<'a> {
             let preceding = &body[..byte_start];
             // Equal bytes are equal characters once the match is cut back to
             // a character boundary of the stored text.
-            let same = common_len(before.bytes().rev(), preceding.bytes().rev());
+            let (same, exact) = agree(before.bytes().rev(), preceding.bytes().rev());
             let mut from = before.len() - same;
             while !before.is_char_boundary(from) {
                 from += 1;
             }
             let matched = utf16_len(&before[from..]);
-            let exact = preceding.len() == before.len();
             result.add(side(stored_units, matched, exact));
         }
         if let Some((after, stored_units)) = self.after {
             let following = &body[byte_end..];
-            let mut to = common_len(after.bytes(), following.bytes());
+            let (mut to, exact) = agree(after.bytes(), following.bytes());
             while !after.is_char_boundary(to) {
                 to -= 1;
             }
             let matched = utf16_len(&after[..to]);
-            let exact = following.len() == after.len();
             result.add(side(stored_units, matched, exact));
         }
         (result.sides > 0).then_some(result)
@@ -263,9 +264,41 @@ fn side(stored_units: usize, matched: usize, exact: bool) -> (bool, usize) {
     (enough || at_same_edge, matched)
 }
 
-/// Length of the common prefix of two byte sequences.
-fn common_len(a: impl Iterator<Item = u8>, b: impl Iterator<Item = u8>) -> usize {
-    a.zip(b).take_while(|(x, y)| x == y).count()
+/// Compares stored context with the body, both walked outwards from the
+/// candidate, ignoring carriage returns on either side (so a file whose line
+/// endings were converted between CRLF and LF still agrees). Returns how many
+/// bytes of the stored context agree, and whether the whole stored context
+/// agrees and the body on that side ends there too (CRs aside).
+///
+/// A carriage return is the single byte `0x0D` and never part of a
+/// multi-byte character, so skipping it keeps both sides aligned on
+/// characters.
+fn agree(stored: impl Iterator<Item = u8>, body: impl Iterator<Item = u8>) -> (usize, bool) {
+    const CR: u8 = b'\r';
+    let mut stored = stored.peekable();
+    let mut body = body.peekable();
+    let (mut consumed, mut agreed) = (0, 0);
+    loop {
+        while stored.next_if_eq(&CR).is_some() {
+            consumed += 1;
+        }
+        while body.next_if_eq(&CR).is_some() {}
+        match (stored.peek(), body.peek()) {
+            (None, _) => {
+                agreed = consumed;
+                break;
+            }
+            (Some(s), Some(b)) if s == b => {
+                stored.next();
+                body.next();
+                consumed += 1;
+                agreed = consumed;
+            }
+            _ => break,
+        }
+    }
+    let whole = stored.peek().is_none() && body.peek().is_none();
+    (agreed, whole)
 }
 
 #[cfg(test)]
@@ -376,6 +409,42 @@ mod tests {
         let s = score(&anchor, body, x, x + 1).unwrap();
         assert_eq!(s.sides, 1);
         assert_eq!(s.units, utf16_len("some text before the 😀 "));
+    }
+
+    #[test]
+    fn carriage_returns_are_ignored_on_either_side() {
+        let mut anchor = Anchor::new(0, 1, "x");
+        anchor.before = Some("end of a line.\r\n\r\n".into()); // 18 units
+        anchor.after = Some("\r\n".into());
+        // Stored with CRLF, body converted to LF: both sides agree in full,
+        // and the after side still sits at the document end.
+        let body = "end of a line.\n\nx\n";
+        let s = score(&anchor, body, 16, 17).unwrap();
+        assert_eq!(
+            s,
+            Score {
+                sides: 2,
+                units: 20
+            }
+        );
+        // Stored with LF, body converted to CRLF.
+        anchor.before = Some("end of a line.\n\n".into());
+        anchor.after = Some("\n".into());
+        let body = "end of a line.\r\n\r\nx\r\n";
+        let s = score(&anchor, body, 18, 19).unwrap();
+        assert_eq!(
+            s,
+            Score {
+                sides: 2,
+                units: 17
+            }
+        );
+        // A CR before a mismatch does not count as agreeing.
+        anchor.after = Some("\r\nabc".into());
+        let body = "end of a line.\n\nx\nzzz";
+        assert_eq!(agree("\r\nabc".bytes(), "\nzzz".bytes()), (2, false));
+        assert_eq!(agree("\rq".bytes(), "z".bytes()), (0, false));
+        assert_eq!(score(&anchor, body, 16, 17).unwrap().sides, 1);
     }
 
     #[test]

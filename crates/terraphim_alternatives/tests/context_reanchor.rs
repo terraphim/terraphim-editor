@@ -238,6 +238,35 @@ fn context_and_legacy_items_share_one_pass() {
     assert!(doc.span(&legacy).unwrap().anchor.has_context());
 }
 
+#[test]
+fn converting_line_endings_keeps_context_agreeing() {
+    // Context captured on a CRLF body; the editor surface then normalises the
+    // body to LF and the document is re-anchored.
+    let crlf = "# Title\r\n\r\nThe tension rises here.\r\n\r\nThis whole paragraph might go.\r\n";
+    let mut doc = Document::new(crlf);
+    let word = span(&mut doc, "tension");
+    let start = at(&doc, "This whole");
+    doc.ghost(start, start + utf16_len("This whole paragraph might go."))
+        .unwrap();
+    assert!(
+        context(&doc.annotations.ghosts[0].anchor)
+            .0
+            .contains("\r\n")
+    );
+    doc.body = crlf.replace("\r\n", "\n");
+    let report = doc.reanchor();
+    assert!(report.is_clean(), "{report:?}");
+    assert_eq!(doc.span(&word).unwrap().anchor.start, at(&doc, "tension"));
+    assert_eq!(
+        doc.annotations.ghosts[0].anchor.start,
+        at(&doc, "This whole")
+    );
+    // And back again.
+    doc.body = doc.body.replace('\n', "\r\n");
+    assert!(doc.reanchor().is_clean());
+    assert_context_current(&doc);
+}
+
 // ----- capture ------------------------------------------------------------------
 
 #[test]
