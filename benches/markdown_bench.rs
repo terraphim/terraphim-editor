@@ -33,11 +33,9 @@ fn hello_world() {
 
 fn benchmark_markdown(c: &mut Criterion) {
     let options = Options::default();
-    
+
     c.bench_function("markdown_conversion", |b| {
-        b.iter(|| {
-            markdown::to_html_with_options(black_box(BENCHMARK_TEXT), &options)
-        })
+        b.iter(|| markdown::to_html_with_options(black_box(BENCHMARK_TEXT), &options))
     });
 }
 

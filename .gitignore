@@ -28,3 +28,6 @@ desktop/src-tauri/Cargo.lock
 docs/src/thesaurus.json
 docs/src/*.json
 dist/
+
+# Claude Code agent worktrees
+.claude/worktrees/
