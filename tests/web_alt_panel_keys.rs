@@ -1,7 +1,8 @@
 //! Browser tests for the alternatives side panel (issue #10), part two:
 //! Ctrl+Shift+A on a caret and inside the panel, the selection menu item, the
 //! chrome control with Escape returning focus, leaving Write_On mode, the
-//! text helpers and `destroy()`. Split from `web_alt_panel.rs` to keep each
+//! text helpers, typed text committed on blur, tab change and close (never
+//! lost), and `destroy()`. Split from `web_alt_panel.rs` to keep each
 //! binary inside its time budget. Run with `wasm-pack test --headless
 //! --chrome`. Real scripts and the real document API; nothing is mocked.
 #![cfg(target_arch = "wasm32")]
@@ -110,11 +111,91 @@ async fn test_keyboard_toggle_mode_and_destroy() {
           if (!teAlt.inSync()) out.push('model out of step after undo');
           P.close({ restoreFocus: false });
         "##,
+        // Typed text is never silently lost: text left in the empty line is
+        // committed like Enter when focus leaves it (here to the document),
+        // creating the pending span; one undo step removes it again.
         r##"
-          // destroy() removes the panel and its listeners.
+          ed.chrome.setMode('write-on');
+          s.setText('Red green blue.');
+          s.focus();
+          s.setSelectionOffsets(5, 5);
           const P = teAlt.P();
           P.open();
+          if (!P.target.pending) return 'not pending ' + JSON.stringify(P.target);
+          teAlt.newInput().focus();
+          teAlt.newInput().value = 'pair';
+          s.focus();
+          const spans = teAlt.spans();
+          if (spans.length !== 1 || JSON.stringify(spans[0].alts.map((a) => a.text)) !== '["green","pair"]') return 'blur did not add ' + JSON.stringify(spans);
+          if (document.activeElement !== s.root) out.push('focus did not stay on the document');
+          s.undo();
+          P.flush();
+          if (teAlt.spans().length !== 0) out.push('undo did not remove it');
+          if (!teAlt.inSync()) out.push('model out of step');
+        "##,
+        // A tab click (which need not move focus), closing with the chrome
+        // control and Escape all commit the empty line; whitespace-only
+        // text is ignored.
+        r##"
+          const P = teAlt.P();
+          P.open({ start: 10, end: 14, kind: 'word' }, { focus: false });
+          P.addAlternative('pair');
+          T.id = P.target.spanId;
+          teAlt.newInput().focus();
+          teAlt.newInput().value = 'quill';
+          P.tabs.sentence.click();
+          const texts = () => (teAlt.spans()[0] || { alts: [] }).alts.map((a) => a.text);
+          if (JSON.stringify(texts()) !== '["blue","pair","quill"]') return 'tab click ' + JSON.stringify(texts());
+          s.undo();
+          if (JSON.stringify(texts()) !== '["blue","pair"]') out.push('undo tab-click add ' + JSON.stringify(texts()));
+        "##,
+        r##"
+          const P = teAlt.P();
+          const texts = () => (teAlt.spans()[0] || { alts: [] }).alts.map((a) => a.text);
+          P.open({ spanId: T.id });
+          teAlt.newInput().focus();
+          teAlt.newInput().value = 'pen';
+          teTest.control('alternatives').click();
+          if (P.isOpen()) out.push('control did not close');
+          if (JSON.stringify(texts()) !== '["blue","pair","pen"]') return 'close ' + JSON.stringify(texts());
+          P.open({ spanId: T.id });
+          teAlt.newInput().focus();
+          teAlt.newInput().value = 'ink';
+          teTest.key(teAlt.newInput(), 'Escape');
+          if (P.isOpen()) out.push('Escape did not close');
+          if (JSON.stringify(texts()) !== '["blue","pair","pen","ink"]') out.push('Escape ' + JSON.stringify(texts()));
+          s.undo();
+          s.undo();
+          if (JSON.stringify(texts()) !== '["blue","pair"]') out.push('undo ' + JSON.stringify(texts()));
+          // Whitespace only: Enter, blur and close add nothing.
+          P.open({ spanId: T.id });
+          teAlt.newInput().focus();
+          teAlt.newInput().value = '   ';
+          teTest.key(teAlt.newInput(), 'Enter');
+          teAlt.newInput().value = '  ';
+          s.focus();
+          P.open({ spanId: T.id });
+          teAlt.newInput().focus();
+          teAlt.newInput().value = ' ';
+          P.close({ restoreFocus: false });
+          if (JSON.stringify(texts()) !== '["blue","pair"]') out.push('whitespace added ' + JSON.stringify(texts()));
+          if (!teAlt.inSync()) out.push('model out of step');
+        "##,
+        r##"
+          // destroy() removes the panel and its listeners, never edits the
+          // document, and reports text left in a line.
+          const P = teAlt.P();
+          P.open({ spanId: T.id });
+          teAlt.newInput().focus();
+          teAlt.newInput().value = 'draft';
+          const before = JSON.stringify(ed.documentApi().document_annotations().spans);
+          let reported = null;
+          const listener = (e) => { reported = e.detail.drafts; };
+          document.addEventListener('te:alt-drafts', listener);
           ed.destroy();
+          document.removeEventListener('te:alt-drafts', listener);
+          if (!reported || reported.length !== 1 || reported[0].value !== 'draft' || !reported[0].isNew || reported[0].spanId !== T.id) out.push('drafts ' + JSON.stringify(reported));
+          if (JSON.stringify(ed.documentApi().document_annotations().spans) !== before) out.push('destroy edited the document');
           if (document.querySelector('.te-alt-panel')) out.push('panel DOM left');
           if (!P.destroyed || P.isOpen()) out.push('not destroyed');
           document.dispatchEvent(new CustomEvent('te:open-panel', { detail: { panel: 'alternatives', editor: ed } }));

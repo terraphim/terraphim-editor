@@ -55,8 +55,11 @@
  * One `<input>` per alternative (documented choice: inputs give native,
  * accessible single-line editing; Enter, arrows and Escape are handled
  * here). Line 0 is the original and is read-only. A line is committed on
- * Enter or when it loses focus: changed text edits the alternative, empty
- * text deletes it. The last line is always empty: Enter there adds the
+ * Enter, when it loses focus, when the tab changes and when the panel
+ * closes (Escape included): changed text edits the alternative, empty text
+ * deletes it, and text in the empty last line is added (whitespace-only is
+ * ignored). Typed text is never silently lost: destroy() does not edit the
+ * document, it reports uncommitted text as `te:alt-drafts` and returns it. The last line is always empty: Enter there adds the
  * typed text as a new alternative, which appears at once in the document
  * as a new dot (R-4.3). Each line has a leading glyph from the `source`
  * field: a dim dot for the original and the author's lines, a robot
@@ -387,6 +390,9 @@ class TeAlternativesPanel {
 
   close({ restoreFocus = true } = {}) {
     if (!this.opened) return;
+    // Typed text is never silently lost: the focused line is committed
+    // (Escape, Ctrl+Shift+A, the chrome control, leaving Write_On mode).
+    this.commitFocused();
     this.opened = false;
     this.root.hidden = true;
     this.host.classList.remove('te-alt-open');
@@ -841,11 +847,57 @@ class TeAlternativesPanel {
 
   /** Commit line `input` if its text changed. Returns true if it did. */
   commitLine(input) {
-    if (!input || input.classList.contains('te-alt-input--new') || input.readOnly) return false;
+    if (!input || input.readOnly) return false;
+    if (input.classList.contains('te-alt-input--new')) return this.commitNewLine(input);
     if (input.value === input.dataset.committed) return false;
     const index = Number(input.closest('.te-alt-line').dataset.index);
     this.editAlternative(index, input.value);
     return true;
+  }
+
+  /**
+   * Commit the trailing empty line exactly as Enter does: its text is added
+   * as an alternative (or creates the pending span with it), one undo step.
+   * Whitespace-only text is ignored. Returns true if something was added.
+   */
+  commitNewLine(input) {
+    const value = input.value;
+    if (!value.trim()) return false;
+    // Cleared first, so the re-render does not carry it over as a draft.
+    input.value = '';
+    this.addAlternative(value);
+    return true;
+  }
+
+  /** Commit the focused line, if any (see commitLine). */
+  commitFocused() {
+    const active = document.activeElement;
+    if (!this.list || !(active instanceof HTMLInputElement) || !this.list.contains(active)) return false;
+    return this.commitLine(active);
+  }
+
+  /**
+   * Uncommitted text in the lines: [{ value, index, isNew, spanId, pending }]
+   * (index is the line, the empty line's being lines().length).
+   */
+  pendingDrafts() {
+    if (!this.list) return [];
+    const t = this.target || {};
+    const inputs = this.lineInputs();
+    const out = [];
+    inputs.forEach((input, index) => {
+      const isNew = input.classList.contains('te-alt-input--new');
+      if (input.readOnly || input.value === (input.dataset.committed || '')) return;
+      if (isNew && !input.value.trim()) return;
+      out.push({
+        value: input.value,
+        index,
+        isNew,
+        spanId: t.spanId || null,
+        pending: t.pending ? { ...t.pending } : null,
+      });
+    });
+    return out;
   }
 
   // ---------------------------------------------------------------------
@@ -855,9 +907,17 @@ class TeAlternativesPanel {
   onLineBlur(e) {
     if (this.destroyed || !this.opened || this.rendering) return;
     const input = e.target;
-    if (!(input instanceof HTMLInputElement)) return;
-    // Leaving a line commits it (not when the panel itself is being torn down).
-    if (input.isConnected && input.value !== input.dataset.committed) this.commitLine(input);
+    if (!(input instanceof HTMLInputElement) || !input.isConnected) return;
+    if (input.value === (input.dataset.committed || '')) return;
+    // Leaving a line commits it, the empty line included (a tab, the
+    // document, another line). The commit re-renders the list, so focus
+    // moving to another line is put back on that line afterwards.
+    const to = e.relatedTarget;
+    const inputs = this.lineInputs();
+    const toIndex = to && this.list.contains(to) ? inputs.indexOf(to) : -1;
+    const toNew = toIndex !== -1 && to.classList.contains('te-alt-input--new');
+    if (!this.commitLine(input) || toIndex === -1) return;
+    this.focusLine(toNew ? this.lines().length : toIndex);
   }
 
   onListClick(e) {
@@ -878,10 +938,7 @@ class TeAlternativesPanel {
     if (e.key === 'Enter' && plain && !e.altKey) {
       e.preventDefault();
       if (isNew) {
-        const value = input.value;
-        if (!value) return;
-        input.value = '';
-        this.addAlternative(value);
+        if (!this.commitNewLine(input)) return;
         this.focusLine(this.lines().length);
       } else {
         this.commitLine(input);
@@ -903,7 +960,8 @@ class TeAlternativesPanel {
       }
       e.preventDefault();
       this.commitLine(input);
-      const next = index + step;
+      // Text committed from the empty line is now the last alternative.
+      const next = (isNew ? this.lines().length : index) + step;
       if (next < 0) return;
       if (next >= this.lines().length) {
         this.focusLine(this.lines().length);
@@ -919,8 +977,8 @@ class TeAlternativesPanel {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      const input = e.target instanceof HTMLInputElement ? e.target : null;
-      if (input && !input.classList.contains('te-alt-input--new')) input.value = input.dataset.committed;
+      // close() commits the focused line: Escape never discards typing
+      // (undo reverses the commit).
       this.close({ restoreFocus: true });
       return;
     }
@@ -965,6 +1023,7 @@ class TeAlternativesPanel {
   /** Switch granularity (R-4.2) around the reference point. */
   setTab(kind, { focusTab = false } = {}) {
     if (!TE_ALT_KINDS.includes(kind)) throw new Error(`Unknown tab ${kind}`);
+    this.commitFocused();
     this.tab = kind;
     if (this.opened) {
       this.resolveTab();
@@ -977,8 +1036,22 @@ class TeAlternativesPanel {
   // Teardown
   // ---------------------------------------------------------------------
 
+  /**
+   * Tear down. Never changes the document (the host may already have
+   * saved): uncommitted text in the lines is reported instead, as one
+   * bubbling `te:alt-drafts` CustomEvent from the surface root with
+   * detail { editor, drafts } (see pendingDrafts()), and returned. With
+   * nothing pending there is no event and the array is empty.
+   */
   destroy() {
-    if (this.destroyed) return;
+    if (this.destroyed) return [];
+    const drafts = this.pendingDrafts();
+    if (drafts.length && this.surface.root) {
+      this.surface.root.dispatchEvent(new CustomEvent('te:alt-drafts', {
+        bubbles: true,
+        detail: { editor: this.editor, drafts: drafts.map((d) => ({ ...d })) },
+      }));
+    }
     this.destroyed = true;
     this.opened = false;
     if (this.frame) cancelAnimationFrame(this.frame);
@@ -991,6 +1064,7 @@ class TeAlternativesPanel {
     if (this.host) this.host.classList.remove('te-alt-open');
     if (this.root) this.root.remove();
     this.root = null;
+    return drafts;
   }
 }
 
