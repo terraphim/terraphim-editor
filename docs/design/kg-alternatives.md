@@ -152,7 +152,7 @@ typing a new line creates a block span through `alt_kg_append` plus
 ## Size
 
 `trunk build --release`: the `_bg.wasm` grows from 1,688,584 bytes (main at
-2931d63, with #10 and #12) to 1,818,987 bytes, +130,403 bytes (+7.7%).
+2931d63, with #10 and #12) to 1,819,696 bytes, +131,112 bytes (+7.8%).
 `terraphim_automata` 2.1 was already in the bundle through `terraphim_lab`;
 the delta is the core itself, its `ConceptIndex` and offset code, and the
 new exports.
