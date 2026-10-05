@@ -131,7 +131,13 @@ fn test_counter_click_toggles_write_on_and_every_corner_control() {
           // Each control dispatches its documented event from the chrome.
           const seen = [];
           const types = ['te:open-panel', 'te:markdown', 'te:shortcuts', 'te:save', 'te:open', 'te:lab', 'te:overflow'];
-          const rec = (e) => seen.push(e.type + (e.detail.panel ? ':' + e.detail.panel : '') + (e.detail.editor === window.__teEditor ? '' : '!editor'));
+          // Cancelling te:save, te:open and te:markdown keeps their default
+          // actions (download, file picker, export dialog; issue #76) out of
+          // this test; tests/web_files.rs covers them.
+          const rec = (e) => {{
+            if (e.cancelable) e.preventDefault();
+            seen.push(e.type + (e.detail.panel ? ':' + e.detail.panel : '') + (e.detail.editor === window.__teEditor ? '' : '!editor'));
+          }};
           types.forEach((t) => document.addEventListener(t, rec));
           for (const name of {CHROME_CONTROLS_JS}) teTest.control(name).click();
           document.querySelector('.te-chrome-shortcuts').close();

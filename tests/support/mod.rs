@@ -15,12 +15,14 @@ pub use web_sys::{Document, HtmlElement, HtmlTextAreaElement};
 
 mod alt_panel;
 mod bench;
+mod files;
 mod fixtures;
 pub mod indicators;
 pub mod kg;
 pub mod trim;
 pub use alt_panel::*;
 pub use bench::*;
+pub use files::*;
 pub use fixtures::*;
 
 pub use terraphim_editor::{
@@ -65,6 +67,9 @@ pub const KG_THESAURUS: &str = include_str!("../fixtures/kg/thesaurus.json");
 pub const KG_DOC: &str = include_str!("../fixtures/kg/doc.md");
 pub const OVERFLOW_JS: &str = include_str!("../../public/js/overflow.js");
 pub const OVERFLOW_CSS: &str = include_str!("../../public/css/overflow.css");
+// Save, open, drafts and the Markdown export view (issues #76, #73).
+pub const PERSISTENCE_JS: &str = include_str!("../../public/js/persistence.js");
+pub const PERSISTENCE_CSS: &str = include_str!("../../public/css/persistence.css");
 
 /// Small helpers shared by the JavaScript snippets below.
 pub const TEST_HELPERS_JS: &str = r##"
@@ -91,6 +96,14 @@ window.teTest = {
     delete document.body.dataset.mode;
   },
   // Forget the per-viewer Blocks view preference (issue #19).
+  // Forget autosave drafts (issue #76), so a draft left by one test does
+  // not put a restore notice into the next.
+  resetDrafts() {
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(window.TE_DRAFT_PREFIX)) localStorage.removeItem(k);
+    }
+  },
   resetBlocks() {
     try { localStorage.removeItem(window.BLOCKS_VIEW_STORAGE_KEY); } catch (e) {}
   },
@@ -203,7 +216,7 @@ pub fn fresh_rust_editor() -> Document {
     let document = document();
     while let Some(node) = document
         .query_selector(
-            "#app, .command-menu, .te-bench, .te-chrome, .te-selection-menu, .te-blocks, .te-alt-panel, .te-overflow",
+            "#app, .command-menu, .te-bench, .te-chrome, .te-selection-menu, .te-blocks, .te-alt-panel, .te-overflow, .te-files-notice, .te-files-input, .te-files-dialog",
         )
         .unwrap()
     {
@@ -231,7 +244,7 @@ pub fn load_editor_scripts(document: &Document) {
     let style = document.create_element("style").unwrap();
     style.set_attribute("data-te-test", "").unwrap();
     style.set_text_content(Some(&format!(
-        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{TRIM_CSS}\n{BLOCKS_CSS}\n{ALT_PANEL_CSS}\n{OVERFLOW_CSS}"
+        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{TRIM_CSS}\n{BLOCKS_CSS}\n{ALT_PANEL_CSS}\n{OVERFLOW_CSS}\n{PERSISTENCE_CSS}"
     )));
     document
         .document_element()
@@ -248,6 +261,7 @@ pub fn load_editor_scripts(document: &Document) {
         BLOCKS_JS,
         ALT_PANEL_JS,
         OVERFLOW_JS,
+        PERSISTENCE_JS,
         EDITOR_JS,
         TEST_HELPERS_JS,
     ] {
@@ -475,6 +489,7 @@ pub fn fresh_full_editor() -> Document {
           // persisted Write_On state.
           teTest.resetWriteOn();
           teTest.resetBlocks();
+          teTest.resetDrafts();
           const ed = new MarkdownEditor(window.EditorConfig);
           ed.initialize();
           window.__teEditor = ed;

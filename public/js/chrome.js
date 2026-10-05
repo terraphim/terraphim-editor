@@ -10,22 +10,24 @@
  *
  *   top-left       N words M chars   toggles Write_On mode (always visible)
  *   top-centre     ●●●               alternatives panel   -> te:open-panel {panel: 'alternatives'}
- *   top-centre     M↓                Markdown view/export -> te:markdown
+ *   top-centre     M↓                Markdown view/export -> te:markdown (cancelable), then the export dialog
  *   top-right      keyboard glyph    shortcut reference   -> opens the reference, then te:shortcuts
- *   bottom-left    floppy            save                 -> te:save, then editor.saveDocument() if present
- *   bottom-left    folder            open                 -> te:open
+ *   bottom-left    floppy            save                 -> te:save (cancelable), then save and write the file
+ *   bottom-left    folder            open                 -> te:open (cancelable), then pick and open a file
  *   bottom-centre  LAB               Lab                  -> te:lab
  *   bottom-right   XYZ               Overflow panel       -> te:overflow
  *
  * Events are CustomEvents dispatched from the chrome root inside #app; they
  * bubble, so listen on `document`. `detail.editor` is the MarkdownEditor.
- * te:save is cancelable: call preventDefault() to stop the fallback call to
- * editor.saveDocument(), which dispatches te:saved {text} with the saved
- * document (save() also returns it). te:open carries no payload because
- * editor.openDocument(text) needs the text; the owner of the open flow
- * (issue #6) reads the file and then calls openDocument() followed by
- * chrome.documentChanged(). Every mode change dispatches
- * te:mode-change {mode: 'plain' | 'write-on'}.
+ * te:save, te:open and te:markdown are cancelable. Their default actions
+ * belong to editor.persistence (public/js/persistence.js, issues #76 and
+ * #73), which dispatches the events itself: save calls
+ * editor.saveDocument() (te:saved {text}; save() also returns the text) and
+ * writes the file, open picks a file and calls editor.openDocument(text,
+ * name), and M↓ shows the export dialog. A host page that stores documents
+ * itself calls preventDefault(). Without persistence.js, save falls back to
+ * editor.saveDocument() and te:open / te:markdown are only dispatched.
+ * Every mode change dispatches te:mode-change {mode: 'plain' | 'write-on'}.
  *
  * Toggle persistence (per document)
  * ---------------------------------
@@ -205,7 +207,7 @@ class WriteOnChrome {
     control(top, {
       name: 'markdown', className: 'te-chrome-markdown', text: 'M↓',
       label: 'Markdown view and export',
-      onClick: () => this.emit('te:markdown'),
+      onClick: () => this.markdown(),
     });
 
     const topRight = group('top-right');
@@ -224,7 +226,7 @@ class WriteOnChrome {
     control(bottomLeft, {
       name: 'open', className: 'te-chrome-open', icon: 'fa-regular fa-folder-open',
       label: 'Open document',
-      onClick: () => this.emit('te:open'),
+      onClick: () => this.open(),
     });
 
     const bottomCentre = group('bottom-centre');
@@ -252,8 +254,17 @@ class WriteOnChrome {
     return [
       { title: 'Formatting', items: editorShortcuts },
       { title: 'Selection', items: config.writeOnShortcuts || WRITE_ON_SELECTION_SHORTCUTS },
-      { title: 'Editor', items: [{ key: '/', desc: 'Command palette' }] },
+      { title: 'Editor', items: this.editorShortcuts() },
     ];
+  }
+
+  /** The Editor section: the palette, plus save and open (issue #76). */
+  editorShortcuts() {
+    const items = [{ key: '/', desc: 'Command palette' }];
+    if (typeof window.TePersistence === 'function') {
+      items.push({ key: 'ctrl+s', desc: 'Save' }, { key: 'ctrl+o', desc: 'Open' });
+    }
+    return items;
   }
 
   buildShortcutReference(listen) {
@@ -323,9 +334,13 @@ class WriteOnChrome {
    * cancelled or the document model is unavailable (no `window.wasmBindings`:
    * there is nothing to serialise the annotations with, so te:save is still
    * dispatched for listeners but no save happens and no te:saved follows).
-   * The editor dispatches te:saved with the text after a real save.
+   * The editor dispatches te:saved with the text after a real save. With
+   * editor.persistence (issue #76) the whole flow is its save(), which also
+   * writes the file (see public/js/persistence.js).
    */
   save() {
+    const files = this.editor && this.editor.persistence;
+    if (files && !files.destroyed) return files.save();
     const ev = this.emit('te:save', { available: documentModelAvailable(this.editor) }, true);
     if (ev.defaultPrevented || !documentModelAvailable(this.editor)) return null;
     if (typeof this.editor.saveDocument !== 'function') return null;
@@ -335,6 +350,22 @@ class WriteOnChrome {
       console.error('saveDocument failed', err);
       return null;
     }
+  }
+
+  /** te:open, then the open flow (editor.persistence) unless cancelled. */
+  open() {
+    const files = this.editor && this.editor.persistence;
+    if (files && !files.destroyed) return files.open();
+    this.emit('te:open', {}, true);
+    return Promise.resolve(false);
+  }
+
+  /** te:markdown, then the export dialog (editor.persistence) unless cancelled. */
+  markdown() {
+    const files = this.editor && this.editor.persistence;
+    if (files && !files.destroyed) return files.showMarkdown();
+    this.emit('te:markdown', {}, true);
+    return null;
   }
 
   openShortcuts() {

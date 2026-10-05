@@ -1330,6 +1330,7 @@ class MarkdownEditor {
     this.createdNodes = [];
     // Blocks view (issue #19): reports unapplied drafts, never edits.
     const drafts = (this.blocks ? this.blocks.destroy() : []).map((d) => ({ kind: 'block', ...d }));
+    if (this.persistence) this.persistence.destroy(); // #76 save, open, drafts
     if (this.overflow) this.overflow.destroy();
     if (this.chrome) this.chrome.destroy();
     if (this.selectionMenu) this.selectionMenu.destroy();
@@ -1412,6 +1413,12 @@ class MarkdownEditor {
     // (Write_On mode, the XYZ control) and the selection menu (its stash item).
     if (typeof window.TeOverflowPanel === 'function') {
       this.overflow = new window.TeOverflowPanel(this, { signal: this.abortController.signal });
+    }
+
+    // #76 #73 Save, open, autosave drafts and the Markdown export view
+    // (public/js/persistence.js): last, so it sees the chrome and panels.
+    if (typeof window.TePersistence === 'function') {
+      this.persistence = new window.TePersistence(this, { signal: this.abortController.signal });
     }
   }
 
