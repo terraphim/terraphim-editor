@@ -21,6 +21,10 @@ pub(crate) struct Paragraph {
     /// One past the last byte of prose on the block's last line (line ending
     /// excluded).
     pub end: usize,
+    /// Start of the enclosing list item (its marker) when this paragraph is
+    /// the item's only child, so removing the paragraph can remove the
+    /// bullet with it.
+    pub item_start: Option<usize>,
 }
 
 /// One sentence inside a [`Paragraph`].
@@ -217,6 +221,7 @@ fn is_autolink(link: &mdast::Link, text: &str, (start, end): (usize, usize)) -> 
 fn collect(
     node: &Node,
     text: &str,
+    item_start: Option<usize>,
     paragraphs: &mut Vec<Paragraph>,
     protected: &mut Vec<(usize, usize)>,
 ) {
@@ -279,14 +284,28 @@ fn collect(
             if let Some((start, end)) = span(node)
                 && end > start
             {
-                paragraphs.push(Paragraph { start, end });
+                paragraphs.push(Paragraph {
+                    start,
+                    end,
+                    item_start,
+                });
             }
+        }
+        Node::ListItem(item) => {
+            // A list item whose only child is one paragraph: the paragraph
+            // remembers the item's start (its marker).
+            let sole = matches!(item.children.as_slice(), [Node::Paragraph(_)]);
+            let start = span(node).map(|(s, _)| s).filter(|_| sole);
+            for child in &item.children {
+                collect(child, text, start, paragraphs, protected);
+            }
+            return;
         }
         _ => {}
     }
     if let Some(children) = node.children() {
         for child in children {
-            collect(child, text, paragraphs, protected);
+            collect(child, text, None, paragraphs, protected);
         }
     }
 }
@@ -301,7 +320,7 @@ impl<'a> Doc<'a> {
         // Plain Markdown (not MDX) never fails to parse; if it ever did, the
         // document would simply have no prose and so no marks.
         if let Ok(root) = markdown::to_mdast(text, &parse_options()) {
-            collect(&root, text, &mut paragraphs, &mut protected);
+            collect(&root, text, None, &mut paragraphs, &mut protected);
         }
         paragraphs.sort_unstable_by_key(|p| (p.start, p.end));
         let protected = merge(protected);
@@ -341,6 +360,45 @@ impl<'a> Doc<'a> {
         let lo = self.words.partition_point(|w| w.0 < start);
         let hi = self.words.partition_point(|w| w.0 < end);
         &self.words[lo..hi]
+    }
+
+    /// The whole block of paragraph `para`, for deleting it without leaving
+    /// an empty line or bullet behind: from the start of its first line (its
+    /// list marker too, when it is a list item's only child) through its line
+    /// ending and any blank lines after it. When nothing but whitespace
+    /// follows the block, the blank lines before it go instead (one line
+    /// ending after the previous block is kept).
+    ///
+    /// `None` when the block cannot go cleanly: a paragraph that shares its
+    /// first line with other structure, such as the lead paragraph of a list
+    /// item that also holds a nested list (removing it would pull the nested
+    /// list up onto the bullet line).
+    pub(crate) fn block_extent(&self, para: usize) -> Option<(usize, usize)> {
+        let text = self.text;
+        let p = self.paragraphs[para];
+        let anchor = p.item_start.unwrap_or(p.start);
+        let line_start = text[..anchor].rfind('\n').map_or(0, |i| i + 1);
+        if !text[line_start..anchor].chars().all(char::is_whitespace) {
+            return None;
+        }
+        let mut start = line_start;
+        let rest = &text[p.end..];
+        let gap = rest.len() - rest.trim_start().len();
+        let end = match rest[..gap].rfind('\n') {
+            Some(i) if gap < rest.len() => p.end + i + 1,
+            _ => p.end + gap,
+        };
+        if end == text.len() {
+            // Last block: take the blank lines before it, keeping the line
+            // ending that closes the previous block.
+            let before = &text[..start];
+            let content_end = before.trim_end().len();
+            if content_end > 0 {
+                let gap_before = &before[content_end..];
+                start = content_end + gap_before.find('\n').map_or(gap_before.len(), |i| i + 1);
+            }
+        }
+        Some((start, end))
     }
 
     /// True when `start..end` touches protected text.
