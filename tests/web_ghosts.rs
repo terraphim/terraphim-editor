@@ -343,7 +343,7 @@ fn test_menu_keyboard_navigation_and_plugins() {
           const mr = teGh.menu().getBoundingClientRect();
           const lineBottom = Math.max(...lineRects.map((r) => r.bottom));
           const lineLeft = Math.min(...lineRects.map((r) => r.left));
-          if (mr.top < lineBottom || mr.top - lineBottom > 12) out.push('menu top ' + mr.top + ' vs line bottom ' + lineBottom);
+          if (mr.top < lineBottom || mr.top - lineBottom > 24) out.push('menu top ' + mr.top + ' vs line bottom ' + lineBottom);
           if (Math.abs(mr.left - lineLeft) > 2) out.push('menu left ' + mr.left + ' vs ' + lineLeft);
           nav('ArrowDown', 'stash');
           nav('ArrowDown', 'ghost');

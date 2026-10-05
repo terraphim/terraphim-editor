@@ -598,9 +598,14 @@ class TeSelectionMenu {
     if (rects.length > 0) {
       const lastTop = Math.max(...rects.map((r) => r.top));
       const line = rects.filter((r) => r.bottom > lastTop);
+      const bottom = Math.max(...line.map((r) => r.bottom));
+      // Client rects cover the glyph box; clear the line box (half-leading)
+      // so the menu never covers the selection highlight.
+      const glyph = bottom - Math.min(...line.map((r) => r.top));
+      const lineHeight = parseFloat(getComputedStyle(this.surface.root).lineHeight) || glyph;
       return {
         x: Math.min(...line.map((r) => r.left)),
-        y: Math.max(...line.map((r) => r.bottom)) + 4,
+        y: bottom + Math.max(0, (lineHeight - glyph) / 2) + 4,
       };
     }
     const caret = this.surface.getCaretRect(ctx.end);
