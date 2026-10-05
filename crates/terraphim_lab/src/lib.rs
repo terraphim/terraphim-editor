@@ -54,11 +54,17 @@
 //! use terraphim_lab::{LabAction, LabConfig, MarkKind, mark};
 //!
 //! let config = LabConfig::with_defaults().unwrap();
-//! let body = "We recieve it.  It is basically fine.";
+//! let body = "Caf\u{e9} owners recieve it.  It is basically fine.";
 //! let marks = mark(body, &config, LabAction::TyposAndPunctuation);
 //! assert_eq!(marks[0].kind, MarkKind::Typo);
-//! assert_eq!(&body[marks[0].start..marks[0].end], "recieve");
 //! assert_eq!(marks[0].proposal.as_deref(), Some("receive"));
+//!
+//! // Offsets are UTF-16 code units (as in JavaScript), not bytes: slice the
+//! // UTF-16 form of the body, never `body[start..end]`.
+//! let units: Vec<u16> = body.encode_utf16().collect();
+//! let covered = String::from_utf16(&units[marks[0].start..marks[0].end]).unwrap();
+//! assert_eq!(covered, "recieve");
+//! assert_eq!((marks[0].start, marks[0].end), (12, 19));
 //! ```
 
 #![forbid(unsafe_code)]
@@ -71,7 +77,7 @@ mod rolegraph;
 mod text;
 mod weak;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub use lists::{StyleCategory, StyleLists, TypoList};
 pub use rolegraph::{
@@ -95,7 +101,7 @@ pub enum LabError {
 }
 
 /// The six Lab mark actions (spec R-8.2), in popover order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LabAction {
     /// "Fix punctuation and typos".
@@ -137,7 +143,7 @@ impl LabAction {
 }
 
 /// What a mark flags. Several kinds can come from one [`LabAction`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MarkKind {
     /// A misspelling from the typo thesaurus (has a proposal).
@@ -173,7 +179,7 @@ impl MarkKind {
 }
 
 /// One mark: a span of the original body to highlight. Never an edit.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LabMark {
     /// What the mark flags.
     pub kind: MarkKind,

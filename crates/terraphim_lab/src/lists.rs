@@ -77,6 +77,7 @@ impl StyleCategory {
 /// (a test checks the two agree). Embedding JSON rather than the markdown
 /// keeps `terraphim_markdown_parser` (and the `markdown` crate behind it)
 /// out of a wasm build that only uses the defaults: about 280 KB.
+/// Regenerate with `python3 scripts/kg_to_json.py style kg kg/lab-style.json`.
 const DEFAULT_STYLE: &str = include_str!("../kg/lab-style.json");
 const DEFAULT_TYPOS: &str = include_str!("../kg/typos.json");
 
