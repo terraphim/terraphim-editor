@@ -1262,8 +1262,12 @@ class MarkdownEditor {
   /**
    * Tear the editor down: remove every listener it added (on the surface,
    * the document and the window), remove the DOM it created and destroy the
-   * editing surface. Safe to call more than once. Returns the Blocks view's
-   * unapplied drafts (issue #19; also sent as `te:blocks-drafts`), or [].
+   * editing surface. Safe to call more than once. Returns every draft that
+   * was not written into the document, tagged by where it came from, or []:
+   * `{ kind: 'block', ... }` for the Blocks view's unapplied drafts (issue #19;
+   * also sent as `te:blocks-drafts`) and `{ kind: 'alternative', ... }` for
+   * text left in an alternatives-panel line (issue #10; also sent as
+   * `te:alt-drafts`). Teardown never edits the document.
    */
   destroy() {
     if (this.destroyed) return [];
@@ -1276,13 +1280,15 @@ class MarkdownEditor {
     }
     this.createdNodes = [];
     // Blocks view (issue #19): reports unapplied drafts, never edits.
-    const drafts = this.blocks ? this.blocks.destroy() : [];
+    const drafts = (this.blocks ? this.blocks.destroy() : []).map((d) => ({ kind: 'block', ...d }));
     if (this.chrome) this.chrome.destroy();
     if (this.selectionMenu) this.selectionMenu.destroy();
     if (this.ghosts) this.ghosts.destroy();
     if (this.indicators) this.indicators.destroy();
     if (this.lab) this.lab.destroy();
-    if (this.altPanel) this.altPanel.destroy(); // #10
+    if (this.altPanel) { // #10
+      for (const d of this.altPanel.destroy() || []) drafts.push({ kind: 'alternative', ...d });
+    }
     if (this.decorations) this.decorations.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();

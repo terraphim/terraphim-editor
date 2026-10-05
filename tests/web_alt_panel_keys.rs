@@ -192,8 +192,11 @@ async fn test_keyboard_toggle_mode_and_destroy() {
           let reported = null;
           const listener = (e) => { reported = e.detail.drafts; };
           document.addEventListener('te:alt-drafts', listener);
-          ed.destroy();
+          const ret = ed.destroy();
           document.removeEventListener('te:alt-drafts', listener);
+          // The editor-level return value carries the same draft, tagged.
+          if (!Array.isArray(ret) || ret.length !== 1 || ret[0].kind !== 'alternative' || ret[0].value !== 'draft' || ret[0].spanId !== T.id) out.push('destroy returned ' + JSON.stringify(ret));
+          if (JSON.stringify(ed.destroy()) !== '[]') out.push('second destroy');
           if (!reported || reported.length !== 1 || reported[0].value !== 'draft' || !reported[0].isNew || reported[0].spanId !== T.id) out.push('drafts ' + JSON.stringify(reported));
           if (JSON.stringify(ed.documentApi().document_annotations().spans) !== before) out.push('destroy edited the document');
           if (document.querySelector('.te-alt-panel')) out.push('panel DOM left');
