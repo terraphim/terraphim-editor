@@ -11,7 +11,7 @@
 //!   conversion, the main-branch behaviour), and
 //! * the shipped editing surface with the debounced preview,
 //!
-//! on the same 5,043-word document, one warm-up round of 10 keystrokes then
+//! on the same 5,043-word document, one warm-up round of 5 keystrokes then
 //! three measured rounds of 20 keystrokes per path, interleaved, compared by
 //! median per keystroke (#28 acceptance: debounced surface <= textarea baseline).
 //!
@@ -46,9 +46,13 @@ wasm_bindgen_test_configure!(run_in_browser);
 const KEYSTROKES: u32 = 20;
 /// Measured rounds; the median of three is stable against one noisy round.
 const ROUNDS: u32 = 3;
-/// Warm-up rounds (not measured) and keystrokes per path in each.
+/// Warm-up rounds (not measured) and keystrokes per path in each. Without
+/// one, the surface's first two measured rounds ran cold on a loaded host
+/// (median several times steady state); five keystrokes per path are
+/// enough, and the first measured round's residual cold cost is discarded
+/// by the median.
 const WARMUP_ROUNDS: u32 = 1;
-const WARMUP_KEYSTROKES: u32 = 10;
+const WARMUP_KEYSTROKES: u32 = 5;
 /// Untimed keystrokes typed immediately before each measured round's timed
 /// keystrokes, in the same synchronous block (so the debounce cannot fire
 /// between them), on both paths. The first keystrokes after focus moves from

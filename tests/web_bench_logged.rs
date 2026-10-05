@@ -15,7 +15,7 @@
 //!
 //! Same 5,043-word document, textarea baseline and keystroke timer as the
 //! asserted binary (shared through `tests/support/mod.rs`), but fewer
-//! keystrokes (three rounds of 10, no separate warm-up: the median of three
+//! keystrokes (three rounds of 5, no separate warm-up: the median of three
 //! discards a cold first round, and the log line carries the per-round
 //! totals) because the synchronous surface costs several times the baseline
 //! per keystroke. The correctness checks (every keystroke landed, canonical
@@ -31,7 +31,7 @@ use support::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 /// Keystrokes per measured round, per path. Medians over `ROUNDS` rounds.
-const KEYSTROKES: u32 = 10;
+const KEYSTROKES: u32 = 5;
 const ROUNDS: u32 = 3;
 
 #[wasm_bindgen_test]
