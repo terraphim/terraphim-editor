@@ -1108,6 +1108,7 @@ class MarkdownEditor {
       node.remove();
     }
     this.createdNodes = [];
+    if (this.chrome) this.chrome.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();
   }
@@ -1137,6 +1138,11 @@ class MarkdownEditor {
     this.setupShortcuts();
     this.setupHelpDialog();
     this.setupCommandPalette();
+
+    // Write_On mode toggle and corner chrome (public/js/chrome.js, issue #7).
+    if (typeof window.WriteOnChrome === 'function') {
+      this.chrome = new window.WriteOnChrome(this, { signal: this.abortController.signal });
+    }
   }
 
   wrapSelectedText(prefix, suffix) {
