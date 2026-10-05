@@ -343,9 +343,139 @@ impl ConceptMatcher {
     }
 }
 
+/// The trim engine's closed word classes (not role data): what opens a comma
+/// aside, what makes a dash tail resumptive, and the coordinating
+/// conjunctions the tidy-up looks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Connective {
+    /// Opens a removable comma aside (", which ...", ", of course,").
+    Aside,
+    /// Opens the main clause of a periodic sentence after a dash
+    /// ("—even these forms of penance are ..."), so the tail is not an aside.
+    Resumptive,
+    /// "and", "or", "nor", "so".
+    Conjunction,
+    /// "but", "yet": a clause that depends on the aside before it.
+    Contrast,
+}
+
+impl Connective {
+    fn id(self) -> u64 {
+        match self {
+            Connective::Aside => 1,
+            Connective::Resumptive => 2,
+            Connective::Conjunction => 3,
+            Connective::Contrast => 4,
+        }
+    }
+
+    fn from_id(id: u64) -> Option<Connective> {
+        match id {
+            1 => Some(Connective::Aside),
+            2 => Some(Connective::Resumptive),
+            3 => Some(Connective::Conjunction),
+            4 => Some(Connective::Contrast),
+            _ => None,
+        }
+    }
+}
+
+/// Comma-aside openers: the general connectives from the research spike
+/// (`docs/research/lab-heuristics.md` §5.1), without the six fixture-shaped
+/// entries its §6.6 ablation names ("i fancy", "as i expected", "so far as",
+/// "in respect to", "in its most", "if any").
+const ASIDE_OPENERS: [&str; 18] = [
+    "after all",
+    "although",
+    "considering",
+    "especially",
+    "for example",
+    "for instance",
+    "however",
+    "i know",
+    "i mean",
+    "it would appear",
+    "moreover",
+    "of course",
+    "such as",
+    "though",
+    "which",
+    "who",
+    "whom",
+    "whose",
+];
+
+/// Words that open a resumptive dash tail.
+const RESUMPTIVE: [&str; 9] = [
+    "all", "even", "it", "such", "that", "these", "they", "this", "those",
+];
+
+const CONJUNCTIONS: [&str; 4] = ["and", "nor", "or", "so"];
+const CONTRASTS: [&str; 2] = ["but", "yet"];
+
+/// The connective matcher, compiled once per process. `None` only if the
+/// constant lists above failed to compile (a unit test rules that out); trim
+/// then simply finds no asides.
+fn connective_matcher() -> Option<&'static CompiledMatcher> {
+    static MATCHER: std::sync::OnceLock<Option<CompiledMatcher>> = std::sync::OnceLock::new();
+    MATCHER
+        .get_or_init(|| {
+            let mut patterns = BTreeMap::new();
+            let lists: [(&[&str], Connective); 4] = [
+                (&ASIDE_OPENERS, Connective::Aside),
+                (&RESUMPTIVE, Connective::Resumptive),
+                (&CONJUNCTIONS, Connective::Conjunction),
+                (&CONTRASTS, Connective::Contrast),
+            ];
+            for (words, kind) in lists {
+                for w in words {
+                    for variant in with_apostrophe_variants(w) {
+                        patterns.entry(variant).or_insert_with(|| {
+                            NormalizedTerm::new(kind.id(), NormalizedTermValue::from(*w))
+                        });
+                    }
+                }
+            }
+            compile(patterns).ok()
+        })
+        .as_ref()
+}
+
+/// Every connective in `text` (word-boundary filtered, ASCII
+/// case-insensitive, leftmost-longest), as `(start, end, kind)`.
+pub(crate) fn find_connectives(text: &str) -> Vec<(usize, usize, Connective)> {
+    let Some(matcher) = connective_matcher() else {
+        return Vec::new();
+    };
+    find(matcher, text)
+        .into_iter()
+        .filter_map(|h| Some((h.start, h.end, Connective::from_id(h.term.id)?)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connectives_compile_and_match_whole_phrases() {
+        assert!(connective_matcher().is_some());
+        let text = "x, for example, which; but SUCH as theory and evenly";
+        let hits: Vec<(&str, Connective)> = find_connectives(text)
+            .into_iter()
+            .map(|(s, e, k)| (&text[s..e], k))
+            .collect();
+        assert_eq!(
+            hits,
+            vec![
+                ("for example", Connective::Aside),
+                ("which", Connective::Aside),
+                ("but", Connective::Contrast),
+                ("SUCH as", Connective::Aside),
+                ("and", Connective::Conjunction),
+            ]
+        );
+    }
 
     #[test]
     fn embedded_json_matches_the_kg_markdown() {
