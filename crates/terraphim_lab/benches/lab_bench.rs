@@ -72,7 +72,7 @@ fn bench(c: &mut Criterion) {
         b.iter(|| trim_plan(black_box(&body), &config))
     });
     let plan = trim_plan(&body, &config);
-    let cuts: Vec<_> = plan.active(TrimLevel::Half, &[]).cloned().collect();
+    let cuts = plan.active(TrimLevel::Half, &[]);
     eprintln!(
         "trim_5000_words: {} cuts in the plan, {} at Half ({})",
         plan.cuts().len(),

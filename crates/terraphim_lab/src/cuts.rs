@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::lists::{Connective, find_connectives};
 use crate::offset::{bytes_to_utf16, utf16_to_bytes};
-use crate::text::Doc;
+use crate::text::{Doc, full_stop_ends_sentence};
 use crate::trim::Cut;
 
 /// What an [`Edit`] does.
@@ -303,12 +303,15 @@ impl<'a> Tidy<'a> {
 
     /// True when the live text before index `li` (inclusive) ends a
     /// sentence: a terminator, possibly followed by closing quotes,
-    /// brackets or emphasis.
+    /// brackets or emphasis. A full stop counts only when the sentence
+    /// splitter's rule says it can end a sentence (not "e.g.", "Dr.", an
+    /// ellipsis or a decimal point).
     fn ends_sentence(&self, li: usize) -> bool {
         let mut j = Some(li);
         while let Some(x) = j {
             match self.ch(x) {
-                '.' | '!' | '?' => return true,
+                '.' => return full_stop_ends_sentence(self.text, self.out[x].pos),
+                '!' | '?' => return true,
                 '"' | '\u{201D}' | '\u{2019}' | ')' | ']' | '*' | '_' | '`' => {
                     j = self.prev_live(x);
                 }
@@ -395,8 +398,14 @@ impl<'a> Tidy<'a> {
                     && self.near(ri)
                 {
                     self.delete(ri, EditKind::Punctuation);
+                    // The space after it goes only when the left side
+                    // already supplies a separator (or there is no left
+                    // side): "end., of" must become "end. Of", never
+                    // "end.Of", which would join two words.
+                    let (li, lws) = self.left(k);
+                    let separated = li.is_none() || !lws.is_empty();
                     let (ws, _) = self.right(ri + 1);
-                    for x in ws {
+                    for x in ws.into_iter().filter(|_| separated) {
                         if self.ch(x) == '\n' || !self.near(x) {
                             break;
                         }

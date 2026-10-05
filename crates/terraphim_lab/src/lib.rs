@@ -84,7 +84,7 @@
 //! let config = LabConfig::with_defaults().unwrap();
 //! let body = "The editor, which owns its DOM, is the only target here today.";
 //! let plan = trim_plan(body, &config);
-//! let cuts: Vec<_> = plan.active(TrimLevel::Sharper, &[]).cloned().collect();
+//! let cuts = plan.active(TrimLevel::Sharper, &[]);
 //! assert_eq!(make_cuts(body, &cuts).text, "The editor is the only target here today.");
 //! assert_eq!(plan.status(TrimLevel::Sharper, &[]).card_text(), "12 \u{2192} 8 words \u{b7} \u{2212}33%");
 //! ```

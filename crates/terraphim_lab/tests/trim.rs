@@ -64,7 +64,7 @@ fn apply(body: &str, made: &MadeCuts) -> String {
 }
 
 fn active(plan: &TrimPlan, level: TrimLevel, kept: &[CutId]) -> Vec<Cut> {
-    plan.active(level, kept).cloned().collect()
+    plan.active(level, kept)
 }
 
 #[test]
@@ -169,8 +169,8 @@ fn walk_through_order_is_document_order_and_ids_index_the_plan() {
 }
 
 /// Characters in UTF-16 range `a..b` of `body`.
-fn chars_in(body: &str, a: usize, b: usize) -> usize {
-    slice16(body, a, b).chars().count()
+fn chars_in(units: &[u16], a: usize, b: usize) -> usize {
+    char::decode_utf16(units[a..b].iter().copied()).count()
 }
 
 /// The golden invariant from the spike review (#15): the faded ranges are
@@ -178,6 +178,7 @@ fn chars_in(body: &str, a: usize, b: usize) -> usize {
 /// fix-up within two characters of a cut boundary (emptied blocks: only
 /// whitespace and list markers, touching a cut).
 fn assert_golden(name: &str, body: &str, cuts: &[Cut], made: &MadeCuts) {
+    let u = units(body);
     let ranges = merged(cuts);
     let cut_edits: Vec<(usize, usize)> = made
         .edits
@@ -194,7 +195,7 @@ fn assert_golden(name: &str, body: &str, cuts: &[Cut], made: &MadeCuts) {
         "{name}: edits overlap or are unsorted"
     );
     for e in made.edits.iter().filter(|e| e.kind != EditKind::Cut) {
-        let covered = slice16(body, e.start, e.end);
+        let covered = String::from_utf16(&u[e.start..e.end]).expect("char boundary");
         if e.kind == EditKind::EmptyBlock {
             assert!(e.insert.is_empty());
             assert!(
@@ -212,8 +213,8 @@ fn assert_golden(name: &str, body: &str, cuts: &[Cut], made: &MadeCuts) {
         // Within two characters: at most two characters lie between the
         // edit's farthest character and a cut boundary.
         let near = ranges.iter().any(|&(s, en)| {
-            (e.end <= s && chars_in(body, e.start, s) <= 3)
-                || (e.start >= en && chars_in(body, en, e.end) <= 3)
+            (e.end <= s && chars_in(&u, e.start, s) <= 3)
+                || (e.start >= en && chars_in(&u, en, e.end) <= 3)
         });
         assert!(
             near,
@@ -449,6 +450,191 @@ fn kept_spans_reduce_the_cut_and_the_status() {
     assert_eq!(plan.status(level, &[CutId(u32::MAX)]), base);
 }
 
+/// True when `inner` lies inside `outer` (and is a different cut).
+fn inside(outer: &Cut, inner: &Cut) -> bool {
+    outer.id != inner.id && outer.start <= inner.start && inner.end <= outer.end
+}
+
+/// The keep-always-wins checks for one `kept` set: no `Cut` edit touches a
+/// kept range, the golden invariant holds on the effective (post-keep)
+/// ranges, and the card's numbers are the text's numbers.
+fn assert_keep_wins(
+    config: &LabConfig,
+    name: &str,
+    body: &str,
+    plan: &TrimPlan,
+    level: TrimLevel,
+    kept: &[CutId],
+) {
+    let effective = active(plan, level, kept);
+    let made = make_cuts(body, &effective);
+    assert_golden(name, body, &effective, &made);
+    for k in kept.iter().filter_map(|&id| plan.get(id)) {
+        for e in made.edits.iter().filter(|e| e.kind == EditKind::Cut) {
+            assert!(
+                e.end <= k.start || e.start >= k.end,
+                "{name}: kept {:?} deleted",
+                slice16(body, k.start, k.end)
+            );
+        }
+    }
+    let st = plan.status(level, kept);
+    assert_eq!(word_count(&made.text, config), st.words_after, "{name}");
+    assert!(
+        st.words_after >= plan.status(level, &[]).words_after,
+        "{name}"
+    );
+}
+
+#[test]
+fn keeping_a_word_inside_a_faded_sentence_keeps_the_word() {
+    let config = role_config();
+    let level = TrimLevel::Half;
+    let mut checked = 0;
+    for (name, body) in documents() {
+        let plan = trim_plan(body, &config);
+        let base = plan.status(level, &[]);
+        for c in plan.faded(level).filter(|c| c.tier == Tier::Sentence) {
+            let Some(w) = plan
+                .faded(level)
+                .find(|w| w.tier == Tier::Word && inside(c, w))
+            else {
+                continue;
+            };
+            let kept = [w.id];
+            let st = plan.status(level, &kept);
+            assert_eq!(st.words_after, base.words_after + w.words, "{name}");
+            let made = make_cuts(body, &active(&plan, level, &kept));
+            let word = slice16(body, w.start, w.end)
+                .trim_matches(|ch: char| ch.is_whitespace() || ch == ',')
+                .to_lowercase();
+            assert!(
+                made.text.to_lowercase().contains(&word),
+                "{name}: kept {word:?} lost"
+            );
+            assert_keep_wins(&config, name, body, &plan, level, &kept);
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "a word nested in a faded sentence exists");
+}
+
+#[test]
+fn keeping_a_clause_inside_a_faded_sentence_keeps_the_clause() {
+    let config = role_config();
+    let level = TrimLevel::Half;
+    let mut checked = 0;
+    for (name, body) in documents() {
+        let plan = trim_plan(body, &config);
+        let base = plan.status(level, &[]);
+        for c in plan.faded(level).filter(|c| c.tier == Tier::Sentence) {
+            let Some(k) = plan
+                .faded(level)
+                .find(|k| k.tier == Tier::Clause && inside(c, k))
+            else {
+                continue;
+            };
+            let st = plan.status(level, &[k.id]);
+            assert_eq!(st.words_after, base.words_after + k.words, "{name}");
+            assert_keep_wins(&config, name, body, &plan, level, &[k.id]);
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "a clause nested in a faded sentence exists");
+}
+
+#[test]
+fn keeping_two_nested_items() {
+    let config = role_config();
+    let level = TrimLevel::Half;
+    let body = common::THREE_MEN;
+    let plan = trim_plan(body, &config);
+    let base = plan.status(level, &[]);
+    // Two disjoint cuts inside one faded sentence: both survive.
+    let (sentence, a, b) = plan
+        .faded(level)
+        .filter(|c| c.tier == Tier::Sentence)
+        .find_map(|c| {
+            let inner: Vec<&Cut> = plan
+                .faded(level)
+                .filter(|w| {
+                    inside(c, w) && !plan.faded(level).any(|m| inside(c, m) && inside(m, w))
+                })
+                .collect();
+            inner
+                .windows(2)
+                .find(|p| p[0].end <= p[1].start)
+                .map(|p| (c, p[0], p[1]))
+        })
+        .expect("a sentence holding two disjoint cuts");
+    let st = plan.status(level, &[a.id, b.id]);
+    assert_eq!(st.words_after, base.words_after + a.words + b.words);
+    assert_keep_wins(&config, "two inner", body, &plan, level, &[a.id, b.id]);
+    // The outer cut kept with an inner one: the same as keeping the outer.
+    assert_eq!(
+        plan.status(level, &[sentence.id, a.id]),
+        plan.status(level, &[sentence.id])
+    );
+    assert_eq!(
+        active(&plan, level, &[sentence.id, a.id]),
+        active(&plan, level, &[sentence.id])
+    );
+    assert_keep_wins(
+        &config,
+        "outer and inner",
+        body,
+        &plan,
+        level,
+        &[sentence.id, a.id],
+    );
+}
+
+/// A small deterministic generator (SplitMix64) for the property test.
+struct SplitMix(u64);
+
+impl SplitMix {
+    fn next(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+}
+
+#[test]
+fn invariants_hold_with_random_keeps() {
+    let config = role_config();
+    let mut rng = SplitMix(0x15_7215);
+    for (name, body) in documents() {
+        let plan = trim_plan(body, &config);
+        for level in CUTTING {
+            let ids: Vec<CutId> = plan.faded(level).map(|c| c.id).collect();
+            for round in 0..12 {
+                // Keep each faded cut with probability 1/4 (and sometimes one
+                // cut that this level does not fade).
+                let mut kept: Vec<CutId> = ids
+                    .iter()
+                    .copied()
+                    .filter(|_| rng.next().is_multiple_of(4))
+                    .collect();
+                if round % 3 == 0 && !plan.cuts().is_empty() {
+                    let any = (rng.next() % plan.cuts().len() as u64) as u32;
+                    kept.push(CutId(any));
+                }
+                assert_keep_wins(
+                    &config,
+                    &format!("{name} {level:?} round {round}"),
+                    body,
+                    &plan,
+                    level,
+                    &kept,
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn trim_is_deterministic() {
     for (_, body) in documents() {
@@ -590,4 +776,56 @@ fn an_emptied_list_item_loses_its_bullet() {
     let made = cut_needles(body, &["One gone.", " Two gone."]);
     assert_eq!(made.text, "Intro stays.\n\n- Three stays.\n");
     assert!(kinds(&made).contains(&EditKind::EmptyBlock));
+}
+
+#[test]
+fn abbreviations_ellipses_and_decimals_do_not_start_a_sentence() {
+    // Each cut removes the end of one sentence and the start of the next,
+    // leaving the text before it ending in a full stop that does not end a
+    // sentence: no capital.
+    for (body, cut, expected) in [
+        (
+            "Use e.g. the red one. Perhaps this option is best.",
+            " the red one. Perhaps",
+            "Use e.g. this option is best.",
+        ),
+        (
+            "Use i.e. the red one. Perhaps this option is best.",
+            " the red one. Perhaps",
+            "Use i.e. this option is best.",
+        ),
+        (
+            "Ask Dr. the right one. Perhaps jones knows.",
+            " the right one. Perhaps",
+            "Ask Dr. jones knows.",
+        ),
+        (
+            "As in Fig. the left one. Perhaps three shows it.",
+            " the left one. Perhaps",
+            "As in Fig. three shows it.",
+        ),
+        (
+            "It rose to 3.5 percent. Perhaps more came later.",
+            "5 percent. Perhaps ",
+            "It rose to 3.more came later.",
+        ),
+        (
+            "Wait... the red one. Perhaps this works.",
+            " the red one. Perhaps",
+            "Wait... this works.",
+        ),
+    ] {
+        let made = cut_needles(body, &[cut]);
+        assert_eq!(made.text, expected, "{body:?}");
+        assert!(
+            !kinds(&made).contains(&EditKind::Capitalisation),
+            "{body:?}"
+        );
+    }
+    // A real sentence end still capitalises.
+    let made = cut_needles(
+        "Use the red one. Then the blue. Perhaps this option is best.",
+        &[" Then the blue. Perhaps"],
+    );
+    assert_eq!(made.text, "Use the red one. This option is best.");
 }

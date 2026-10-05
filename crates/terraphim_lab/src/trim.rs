@@ -166,13 +166,15 @@ impl TrimStatus {
 
 /// Every span any trim level fades, computed once per version of the body.
 /// Switching level is a filter ([`TrimPlan::faded`]); keeping a span is a
-/// filter on top ([`TrimPlan::active`]); neither recomputes.
+/// filter on top ([`TrimPlan::active`]); neither re-runs the analysis.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TrimPlan {
     total_words: usize,
     cuts: Vec<Cut>,
     /// UTF-16 offset of every word's first unit, in order.
     word_starts: Vec<usize>,
+    /// The body in UTF-16, to tell whitespace-only pieces of split cuts.
+    units: Vec<u16>,
 }
 
 impl TrimPlan {
@@ -202,22 +204,80 @@ impl TrimPlan {
             .filter(move |c| level != TrimLevel::Original && c.first_level <= level)
     }
 
-    /// Cuts faded at `level` that the user has not kept, in document order:
-    /// what "Make the cuts" deletes. Keeping a cut ("Click one to keep it")
-    /// also keeps every cut inside it, so keeping a sentence keeps the filler
-    /// faded within it.
-    pub fn active<'a>(
-        &'a self,
-        level: TrimLevel,
-        kept: &'a [CutId],
-    ) -> impl Iterator<Item = &'a Cut> + 'a {
-        let kept_ranges: Vec<(usize, usize)> = kept
+    /// What "Make the cuts" deletes at `level` when the user has kept the
+    /// cuts in `kept` ("Click one to keep it"), in document order. **A keep
+    /// always wins** (R-8.5): no kept text is ever deleted.
+    ///
+    /// * A faded cut inside a kept cut is dropped, so keeping a sentence also
+    ///   keeps the filler faded within it.
+    /// * A faded cut that encloses or overlaps a kept cut is split around it:
+    ///   each remaining piece is returned as its own [`Cut`] (same id, tier,
+    ///   level and reason; `start`, `end` and `words` of the piece). Pieces
+    ///   that hold only whitespace are dropped. So keeping a word inside a
+    ///   faded sentence deletes the rest of the sentence and keeps the word;
+    ///   [`make_cuts`](crate::make_cuts) tidies the joins around it.
+    ///
+    /// Unknown ids in `kept` are ignored.
+    pub fn active(&self, level: TrimLevel, kept: &[CutId]) -> Vec<Cut> {
+        let mut kept_ranges: Vec<(usize, usize)> = kept
             .iter()
             .filter_map(|&id| self.get(id))
             .map(|c| (c.start, c.end))
             .collect();
-        self.faded(level)
-            .filter(move |c| !kept_ranges.iter().any(|&(s, e)| s <= c.start && c.end <= e))
+        kept_ranges.sort_unstable();
+        let mut out = Vec::new();
+        for c in self.faded(level) {
+            if kept_ranges.iter().any(|&(s, e)| s <= c.start && c.end <= e) {
+                continue;
+            }
+            // Subtract every kept range from `c`.
+            let mut pieces = vec![(c.start, c.end)];
+            for &(ks, ke) in &kept_ranges {
+                if ke <= c.start || ks >= c.end {
+                    continue;
+                }
+                pieces = pieces
+                    .into_iter()
+                    .flat_map(|(ps, pe)| {
+                        if ke <= ps || ks >= pe {
+                            vec![(ps, pe)]
+                        } else {
+                            [(ps, ks.max(ps)), (ke.min(pe), pe)]
+                                .into_iter()
+                                .filter(|(a, b)| b > a)
+                                .collect()
+                        }
+                    })
+                    .collect();
+            }
+            let whole = pieces.len() == 1 && pieces[0] == (c.start, c.end);
+            for (ps, pe) in pieces {
+                if !whole && self.is_blank(ps, pe) {
+                    continue;
+                }
+                out.push(Cut {
+                    start: ps,
+                    end: pe,
+                    words: self.words_in(ps, pe),
+                    ..c.clone()
+                });
+            }
+        }
+        out.sort_by_key(|c| (c.start, c.end));
+        out
+    }
+
+    /// Words whose first unit lies in UTF-16 range `start..end`.
+    fn words_in(&self, start: usize, end: usize) -> usize {
+        let lo = self.word_starts.partition_point(|&w| w < start);
+        let hi = self.word_starts.partition_point(|&w| w < end);
+        hi - lo
+    }
+
+    /// True when UTF-16 range `start..end` of the body is all whitespace.
+    fn is_blank(&self, start: usize, end: usize) -> bool {
+        char::decode_utf16(self.units[start..end].iter().copied())
+            .all(|c| c.is_ok_and(char::is_whitespace))
     }
 
     /// The status card for `level` with `kept` cuts excluded. Words are
@@ -225,17 +285,18 @@ impl TrimPlan {
     /// as the editor's word count, so `words_after` is exactly the word count
     /// of the text "Make the cuts" produces.
     pub fn status(&self, level: TrimLevel, kept: &[CutId]) -> TrimStatus {
-        let mut ranges: Vec<(usize, usize)> =
-            self.active(level, kept).map(|c| (c.start, c.end)).collect();
+        let mut ranges: Vec<(usize, usize)> = self
+            .active(level, kept)
+            .iter()
+            .map(|c| (c.start, c.end))
+            .collect();
         ranges.sort_unstable();
         let mut cut = 0usize;
         let mut covered_to = 0usize;
         for (s, e) in ranges {
             let s = s.max(covered_to);
             if e > s {
-                let lo = self.word_starts.partition_point(|&w| w < s);
-                let hi = self.word_starts.partition_point(|&w| w < e);
-                cut += hi - lo;
+                cut += self.words_in(s, e);
                 covered_to = e;
             }
         }
@@ -351,6 +412,7 @@ pub fn trim_plan(body: &str, config: &LabConfig) -> TrimPlan {
         total_words: doc.words.len(),
         cuts,
         word_starts,
+        units: body.encode_utf16().collect(),
     }
 }
 

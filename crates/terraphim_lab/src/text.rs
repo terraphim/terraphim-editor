@@ -100,6 +100,34 @@ const ABBREVIATIONS: [&str; 12] = [
     "e.g.", "i.e.", "st.", "mr.", "mrs.", "ms.", "dr.", "vs.", "cf.", "no.", "fig.", "etc.",
 ];
 
+/// True when the full stop at byte `dot` of `text` ends an abbreviation
+/// ("e.g.", "Dr.", "Fig.", ...) rather than a sentence. The token is read
+/// back to the previous whitespace, but not before byte `floor`. The single
+/// abbreviation rule shared by sentence splitting and the trim tidy-up.
+pub(crate) fn is_abbreviation(text: &str, floor: usize, dot: usize) -> bool {
+    let tok_start = text[floor..dot]
+        .rfind(char::is_whitespace)
+        .map_or(floor, |p| floor + p + 1);
+    let tok = text[tok_start..=dot]
+        .trim_start_matches(|ch: char| !ch.is_alphanumeric())
+        .to_lowercase();
+    // "**No.**" is a sentence, not the abbreviation "no.".
+    let bold = text[tok_start..].starts_with("**");
+    ABBREVIATIONS.contains(&tok.as_str()) && !bold
+}
+
+/// True when the full stop at byte `dot` of `text` can end a sentence: not an
+/// abbreviation ([`is_abbreviation`]), not part of an ellipsis (`...`), and
+/// not a decimal point (`3.5`).
+pub(crate) fn full_stop_ends_sentence(text: &str, dot: usize) -> bool {
+    let before = text[..dot].chars().next_back();
+    let after = text[dot + 1..].chars().next();
+    let ellipsis = before == Some('.') || after == Some('.');
+    let decimal =
+        before.is_some_and(|c| c.is_ascii_digit()) && after.is_some_and(|c| c.is_ascii_digit());
+    !ellipsis && !decimal && !is_abbreviation(text, 0, dot)
+}
+
 /// Characters that may trail a terminator and still belong to the sentence.
 fn is_closer(c: char) -> bool {
     matches!(
@@ -137,20 +165,9 @@ fn split_sentences(
             i += 1;
             continue;
         }
-        if c == '.' {
-            let tok_start = slice[..pos]
-                .rfind(char::is_whitespace)
-                .map(|p| p + 1)
-                .unwrap_or(0);
-            let tok = slice[tok_start..=pos]
-                .trim_start_matches(|ch: char| !ch.is_alphanumeric())
-                .to_lowercase();
-            // "**No.**" is a sentence, not the abbreviation "no.".
-            let bold = slice[tok_start..].starts_with("**");
-            if ABBREVIATIONS.contains(&tok.as_str()) && !bold {
-                i += 1;
-                continue;
-            }
+        if c == '.' && is_abbreviation(text, start, start + pos) {
+            i += 1;
+            continue;
         }
         let mut j = i + 1;
         while j < chars.len() && is_closer(chars[j].1) {
@@ -540,6 +557,25 @@ mod tests {
                 "ok"
             ]
         );
+    }
+
+    #[test]
+    fn full_stops_that_end_sentences() {
+        let at = |text: &str, needle: &str| text.find(needle).unwrap() + needle.len() - 1;
+        let t = "Use e.g. this, i.e. that; ask Dr. Who; see Fig. 2 at 3.5 or 3. Wait... ok. End.";
+        assert!(!full_stop_ends_sentence(t, at(t, "e.g.")));
+        assert!(!full_stop_ends_sentence(t, at(t, "i.e.")));
+        assert!(!full_stop_ends_sentence(t, at(t, "Dr.")));
+        assert!(!full_stop_ends_sentence(t, at(t, "Fig.")));
+        assert!(!full_stop_ends_sentence(t, at(t, "3.")));
+        assert!(!full_stop_ends_sentence(t, at(t, "Wait.")));
+        assert!(!full_stop_ends_sentence(t, at(t, "Wait...")));
+        assert!(full_stop_ends_sentence(t, at(t, "or 3.")));
+        assert!(full_stop_ends_sentence(t, at(t, "ok.")));
+        assert!(full_stop_ends_sentence(t, at(t, "End.")));
+        // "**No.**" is a sentence, as in the splitter.
+        let bold = "**No.** Then.";
+        assert!(full_stop_ends_sentence(bold, at(bold, "No.")));
     }
 
     #[test]
