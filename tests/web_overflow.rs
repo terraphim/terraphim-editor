@@ -139,12 +139,26 @@ async fn test_stash_is_a_move_and_one_undo_step() {
         if (s.getText() !== 'Pass me \n\n\n') out.push('text ' + JSON.stringify(s.getText()));
         if (teOv.api().document_overflow() !== 'a paperclip. Drop this.\n\nSecond block.') out.push('overflow ' + JSON.stringify(teOv.api().document_overflow()));
         if (s.historyIndex !== T.depth + 2) out.push('depth');"#,
-        // Panel typing after a stash survives undoing the stash.
-        r#"teOv.type(ed.overflow.area, 'Note: a paperclip. Drop this.\n\nSecond block.');
+        // Panel typing after a stash survives undoing it, and an identical
+        // copy typed by the author is not taken for the stashed text.
+        r#"const chunk = '\n\nSecond block.';
+        teOv.type(ed.overflow.area, 'a paperclip. Drop this.' + chunk + chunk + ' mine');
         s.undo();
         if (s.getText() !== 'Pass me \n\nSecond block.\n') out.push('undo text');
-        if (teOv.api().document_overflow() !== 'Note: a paperclip. Drop this.') out.push('rebased ' + JSON.stringify(teOv.api().document_overflow()));
-        if (ed.overflow.area.value !== 'Note: a paperclip. Drop this.') out.push('panel ' + ed.overflow.area.value);"#,
+        if (teOv.api().document_overflow() !== 'a paperclip. Drop this.' + chunk + ' mine') out.push('rebased ' + JSON.stringify(teOv.api().document_overflow()));
+        if (ed.overflow.area.value !== teOv.api().document_overflow()) out.push('panel ' + ed.overflow.area.value);
+        if (ed.warningKind === 'overflow') out.push('notice shown for an exact undo');
+        s.redo();
+        if (teOv.api().document_overflow() !== 'a paperclip. Drop this.' + chunk + chunk + ' mine') out.push('redo ' + JSON.stringify(teOv.api().document_overflow()));"#,
+        // Text typed before the stashed text: undo restores the page, leaves
+        // the overflow alone and says so.
+        r#"const edited = 'Note: a paperclip. Drop this.\n\nSecond block.\n\nSecond block. mine';
+        teOv.type(ed.overflow.area, edited);
+        s.undo();
+        if (s.getText() !== 'Pass me \n\nSecond block.\n') out.push('undo text');
+        if (teOv.api().document_overflow() !== edited) out.push('overflow changed ' + JSON.stringify(teOv.api().document_overflow()));
+        if (ed.warningKind !== 'overflow' || !/left Overflow unchanged/.test(ed.warning)) out.push('notice ' + ed.warningKind);
+        ed.showWarning(null);"#,
         // Plain mode: no stash item, the shortcut is left alone.
         r#"ed.chrome.setMode('plain');
         s.focus();

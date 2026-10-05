@@ -42,8 +42,12 @@
  * MarkdownEditor.stashRange: the text is removed from the page and appended
  * to the end of the overflow (after a blank line when the overflow is not
  * empty) as ONE undo step; undo puts the text back and takes it out of the
- * overflow, redo does both again. If the panel was edited since, the undo
- * removes only the stashed chunk and keeps the rest (rebase in the model).
+ * overflow, redo does both again. The stashed text is identified by its
+ * recorded position in the overflow (the end of the overflow before the
+ * stash), never by searching for it: text typed after it, even an identical
+ * copy, is kept; if text was changed before it, or it was edited itself,
+ * undo leaves the overflow unchanged and shows a notice (`warningKind`
+ * 'overflow') instead of removing some other copy.
  * Annotations inside the stashed text follow the normal edit rules: spans
  * whose text is removed are detached and set aside (saved, with the usual
  * notice), ghosts inside it are set aside, and both re-attach when undo

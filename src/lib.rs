@@ -17,7 +17,7 @@ pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
 pub use document::{
     append_overflow, document_overflow, rebase_overflow, replay_document_overflow,
     replay_overflow_json, set_document_overflow, set_overflow_json, stash_document_range,
-    OverflowError, StashOutcome,
+    OverflowError, Rebased, StashOutcome,
 };
 
 mod lab;

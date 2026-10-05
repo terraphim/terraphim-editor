@@ -1202,33 +1202,71 @@ pub fn append_overflow(current: &str, text: &str) -> String {
     format!("{current}{separator}{text}")
 }
 
+/// Outcome of [`rebase_overflow`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rebased {
+    /// The overflow after the replay.
+    pub text: String,
+    /// Whether the recorded change was applied. `false` means it could not be
+    /// placed safely and `text` is `current` unchanged.
+    pub applied: bool,
+}
+
 /// Replays a recorded overflow change `from` -> `to` (an undo or redo of a
-/// stash) onto `current`, which may hold text typed in the panel since:
+/// stash) onto `current`, which may hold text typed in the panel since.
+///
+/// A stash only ever appends, so one of the two texts is the other plus a
+/// chunk (separator and stashed text), and the step itself records the
+/// chunk's position: it starts at the length of the shorter text (the
+/// pre-stash overflow). The chunk is identified by that position, never by
+/// searching for its text, so an identical copy typed by the author is never
+/// mistaken for it.
 ///
 /// * `current == from`: exactly `to`.
-/// * `to` is `from` minus an appended chunk (undoing a stash): the chunk is
-///   removed from the end of `current`, or else its last occurrence; if it
-///   is gone altogether, `current` is kept.
-/// * `to` is `from` plus an appended chunk (redoing a stash): the chunk is
-///   appended to `current`.
-/// * Anything else: `current` is kept (nothing typed is ever discarded).
-pub fn rebase_overflow(current: &str, from: &str, to: &str) -> String {
+/// * Undo (`to` is `from` minus the chunk): the chunk is removed only when
+///   everything before its recorded position is unchanged (`current` starts
+///   with `to`) and the chunk is still there, intact, right after it. Text
+///   typed after the chunk is kept. Otherwise (text changed before the
+///   chunk, or the chunk itself edited or deleted) nothing is removed:
+///   `current` is kept and `applied` is `false`, so the editor can say so.
+/// * Redo (`to` is `from` plus the chunk): the chunk is inserted at its
+///   recorded position when everything before it is unchanged (`current`
+///   starts with `from`), otherwise appended at the end. Always applied.
+/// * Anything else: `current` is kept, not applied.
+pub fn rebase_overflow(current: &str, from: &str, to: &str) -> Rebased {
+    let kept = || Rebased {
+        text: current.to_string(),
+        applied: false,
+    };
     if current == from {
-        return to.to_string();
+        return Rebased {
+            text: to.to_string(),
+            applied: true,
+        };
     }
     if let Some(chunk) = from.strip_prefix(to).filter(|c| !c.is_empty()) {
-        if let Some(rest) = current.strip_suffix(chunk) {
-            return rest.to_string();
-        }
-        if let Some(at) = current.rfind(chunk) {
-            return format!("{}{}", &current[..at], &current[at + chunk.len()..]);
-        }
-        return current.to_string();
+        return match current
+            .strip_prefix(to)
+            .and_then(|rest| rest.strip_prefix(chunk))
+        {
+            Some(after_chunk) => Rebased {
+                text: format!("{to}{after_chunk}"),
+                applied: true,
+            },
+            None => kept(),
+        };
     }
     if let Some(chunk) = to.strip_prefix(from).filter(|c| !c.is_empty()) {
-        return format!("{current}{chunk}");
+        let text = match current.strip_prefix(from) {
+            Some(rest) => format!("{from}{chunk}{rest}"),
+            None => format!("{current}{chunk}"),
+        };
+        return Rebased {
+            text,
+            applied: true,
+        };
     }
-    current.to_string()
+    kept()
 }
 
 impl DocumentSession {
@@ -1288,11 +1326,11 @@ impl DocumentSession {
     }
 
     /// Replays a recorded overflow change (see [`rebase_overflow`]) and
-    /// returns the new overflow. Refused while a malformed block is
+    /// returns the outcome. Refused while a malformed block is
     /// preserved.
-    pub fn replay_overflow(&mut self, from: &str, to: &str) -> Result<String, OverflowError> {
+    pub fn replay_overflow(&mut self, from: &str, to: &str) -> Result<Rebased, OverflowError> {
         let next = rebase_overflow(self.overflow(), from, to);
-        self.set_overflow(&next)?;
+        self.set_overflow(&next.text)?;
         Ok(next)
     }
 }
@@ -1340,18 +1378,20 @@ pub fn stash_document_range(start: u32, end: u32) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// [`DocumentSession::replay_overflow`] as JSON: `{ ok: true, overflow }` or
-/// `{ ok: false, error, kind }`.
+/// [`DocumentSession::replay_overflow`] as JSON: `{ ok: true, overflow,
+/// applied }` or `{ ok: false, error, kind }`.
 pub fn replay_overflow_json(session: &mut DocumentSession, from: &str, to: &str) -> Value {
     match session.replay_overflow(from, to) {
-        Ok(overflow) => json!({ "ok": true, "overflow": overflow }),
+        Ok(next) => json!({ "ok": true, "overflow": next.text, "applied": next.applied }),
         Err(error) => overflow_error_json(&error),
     }
 }
 
 /// Replays a recorded overflow change `from` -> `to` (undo or redo of a
 /// stash) onto the current overflow, keeping text typed in the panel since
-/// (see [`rebase_overflow`]). Returns `{ ok: true, overflow }` or
+/// (see [`rebase_overflow`]). Returns `{ ok: true, overflow, applied }`
+/// (`applied: false` when an undo could not find the stashed text intact at
+/// its recorded position and left the overflow unchanged) or
 /// `{ ok: false, error, kind }`. Never throws.
 #[wasm_bindgen]
 pub fn replay_document_overflow(from: &str, to: &str) -> JsValue {
@@ -2272,7 +2312,7 @@ mod tests {
         let undone = session
             .replay_overflow(&stash.overflow_after, &stash.overflow_before)
             .unwrap();
-        assert_eq!(undone, "");
+        assert_eq!((undone.text.as_str(), undone.applied), ("", true));
         assert_eq!(session.body(), "Pass me a paperclip. Drop this.");
         assert!(session.set_aside().is_empty());
         assert_eq!(session.document().annotations.spans.len(), 1);
@@ -2291,25 +2331,38 @@ mod tests {
     #[test]
     fn replaying_a_stash_keeps_text_typed_in_the_panel() {
         let (before, after) = ("note", "note\n\nchunk");
+        let undo = |current: &str| rebase_overflow(current, after, before);
+        let redo = |current: &str| rebase_overflow(current, before, after);
+        let applied = |text: &str| Rebased {
+            text: text.into(),
+            applied: true,
+        };
+        let kept = |text: &str| Rebased {
+            text: text.into(),
+            applied: false,
+        };
         // Unchanged since the stash: exact.
-        assert_eq!(rebase_overflow(after, after, before), "note");
-        assert_eq!(rebase_overflow(before, before, after), after);
-        // Typed after the chunk: the chunk is removed where it is.
-        assert_eq!(
-            rebase_overflow("note\n\nchunk more", after, before),
-            "note more"
-        );
-        // Typed after the stash, chunk still at the end.
-        assert_eq!(
-            rebase_overflow("edited note\n\nchunk", after, before),
-            "edited note"
-        );
-        // Chunk deleted by hand: nothing else is touched.
-        assert_eq!(rebase_overflow("other", after, before), "other");
-        // Redo onto edited text appends the chunk again.
-        assert_eq!(rebase_overflow("edited", before, after), "edited\n\nchunk");
+        assert_eq!(undo(after), applied("note"));
+        assert_eq!(redo(before), applied(after));
+        // Typed after the chunk: the chunk is removed at its position.
+        assert_eq!(undo("note\n\nchunk more"), applied("note more"));
+        // The same chunk typed again after it: the stashed copy (at the
+        // recorded position) goes, the author's copy stays.
+        assert_eq!(undo("note\n\nchunk\n\nchunk"), applied("note\n\nchunk"));
+        // Text typed before the chunk moves it off its recorded position:
+        // nothing is removed, and the caller is told.
+        assert_eq!(undo("edited note\n\nchunk"), kept("edited note\n\nchunk"));
+        // The chunk edited or deleted by hand: nothing is removed.
+        assert_eq!(undo("note\n\nchUnk"), kept("note\n\nchUnk"));
+        assert_eq!(undo("note"), kept("note"));
+        // A copy elsewhere is never taken for the stashed one.
+        assert_eq!(undo("x\n\nchunk"), kept("x\n\nchunk"));
+        // Redo: at the recorded position when the text before it is intact,
+        // otherwise at the end.
+        assert_eq!(redo("note, more"), applied("note\n\nchunk, more"));
+        assert_eq!(redo("edited"), applied("edited\n\nchunk"));
         // An unrelated change is never forced over the current text.
-        assert_eq!(rebase_overflow("mine", "x", "y"), "mine");
+        assert_eq!(rebase_overflow("mine", "x", "y"), kept("mine"));
     }
 
     #[test]
@@ -2367,6 +2420,9 @@ mod tests {
         let json = set_overflow_json(&mut session, "a");
         assert_eq!(json, json!({ "ok": true, "overflow": "a" }));
         let json = replay_overflow_json(&mut session, "a", "a\n\nb");
-        assert_eq!(json, json!({ "ok": true, "overflow": "a\n\nb" }));
+        assert_eq!(
+            json,
+            json!({ "ok": true, "overflow": "a\n\nb", "applied": true })
+        );
     }
 }

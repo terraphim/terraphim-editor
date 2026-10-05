@@ -1814,7 +1814,9 @@ class MarkdownEditor {
   /**
    * Replay a recorded stash step (undo or redo): the text edit through the
    * normal edit path, then the overflow change, rebased onto anything typed
-   * in the panel since (replay_document_overflow). If the model refuses the
+   * in the panel since (replay_document_overflow; an undo that cannot find
+   * the stashed text intact at its recorded position leaves the overflow
+   * unchanged and shows an 'overflow' notice). If the model refuses the
    * edit or its body differs from the surface text, the body is re-synced
    * from the surface, so the two never diverge.
    */
@@ -1828,12 +1830,23 @@ class MarkdownEditor {
     } catch (err) {
       outcome = null;
     }
-    api.replay_document_overflow(edit.overflow.before, edit.overflow.after);
+    const replay = api.replay_document_overflow(edit.overflow.before, edit.overflow.after);
     if (!outcome || api.document_body() !== text) {
       this.reflectSync(api.sync_document_body(text));
-      return;
+    } else {
+      this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
     }
-    this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+    // The stashed text is identified by its recorded position in the
+    // overflow, never by searching for it: when the panel was edited before
+    // it (or it was edited itself), undo leaves the overflow alone and says
+    // so, rather than removing some other copy.
+    if (replay && replay.ok && replay.applied === false && this.warningKind !== 'malformed') {
+      this.showWarning(
+        'Undo put the text back on the page but left Overflow unchanged: the stashed text there was edited, ' +
+          'or text was added before it. Remove it from Overflow by hand if you no longer need it.',
+        'overflow',
+      );
+    }
   }
 
   // ---------------------------------------------------------------------
