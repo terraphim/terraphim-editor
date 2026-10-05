@@ -297,7 +297,8 @@ fn collect(
 impl<'a> Doc<'a> {
     /// Analyse `text` without copying or normalising it. Block and inline
     /// structure comes from the `markdown` crate's mdast (GFM plus front
-    /// matter); sentences and words are segmented here, on prose only.
+    /// matter); sentences are segmented here, on prose only;
+    /// words come from `terraphim_alternatives::words`, over the whole body.
     pub(crate) fn parse(text: &'a str) -> Doc<'a> {
         let mut paragraphs = Vec::new();
         let mut protected = Vec::new();
