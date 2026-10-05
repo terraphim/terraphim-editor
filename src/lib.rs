@@ -14,6 +14,15 @@ pub use document::{
 // In-place cycling of alternatives (issue #9).
 pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
 
+// Knowledge-graph alternatives through terraphim_lsp_core (issue #13).
+mod kg;
+pub use document::EditOutcome;
+pub use kg::{
+    clear_thesaurus, kg_append, kg_append_alternatives, kg_clear_thesaurus, kg_document_spans,
+    kg_load_thesaurus, kg_lookup, kg_lookup_selection, kg_spans, kg_spans_json, kg_swap,
+    kg_swap_alternative, load_thesaurus, thesaurus_name, KgError, KgSpan, KG_MODEL,
+};
+
 mod lab;
 pub use lab::{lab_actions, lab_mark, trim_make_cuts, trim_plan_json, trim_status};
 

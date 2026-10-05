@@ -55,7 +55,7 @@ use std::collections::HashSet;
 use serde_json::{json, Value};
 use terraphim_alternatives::{
     parse, utf16_len, utf16_to_byte, write, Anchor, Counts, Document, EditError, Ghost,
-    ReanchorReport, Span,
+    ReanchorReport, Source, Span, SpanKind,
 };
 use wasm_bindgen::prelude::*;
 
@@ -742,11 +742,19 @@ pub fn document_body() -> String {
     with_session(|s| s.body().to_string())
 }
 
-/// `{ spans, ghosts, overflow, setAside: { spans, ghosts }, preservedBlock }`
-/// of the current document, in UTF-16 offsets.
+/// `{ spans, ghosts, overflow, setAside: { spans, ghosts }, preservedBlock,
+/// kg }` of the current document, in UTF-16 offsets. `kg` holds the derived
+/// knowledge-graph spans (issue #13, see [`crate::kg::KgSpan::to_json`]);
+/// they are never saved.
 #[wasm_bindgen]
 pub fn document_annotations() -> JsValue {
-    to_js(&with_session(|s| s.annotations_json()))
+    to_js(&with_session(|s| {
+        let mut value = s.annotations_json();
+        if let Value::Object(map) = &mut value {
+            map.insert("kg".into(), crate::kg::kg_spans_json(s));
+        }
+        value
+    }))
 }
 
 /// An error object for JavaScript: `{ ok: false, error, kind }`, where `kind`
@@ -1092,6 +1100,74 @@ pub fn set_active_alternative(span_id: &str, index: u32) -> Result<JsValue, JsVa
 
 // ---------------------------------------------------------------------------
 // End of in-place cycling (issue #9).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Appending alternatives from a provider (issue #13, R-8.6). Kept in one
+// block, apart from the other exports, so parallel additions to this file
+// merge cleanly.
+// ---------------------------------------------------------------------------
+
+impl DocumentSession {
+    /// Appends `texts` as alternatives (with `source` and `model`) to the
+    /// live span exactly over `start..end` (UTF-16), creating a `kind` span
+    /// there when there is none. Texts the span already offers (its original
+    /// included) are skipped, so repeating the call adds nothing. Returns the
+    /// span id and the number of alternatives added.
+    ///
+    /// Atomic: a range that partly overlaps another span, an invalid range,
+    /// or nothing to add to a new span is refused and changes nothing.
+    pub fn append_alternatives(
+        &mut self,
+        kind: SpanKind,
+        start: usize,
+        end: usize,
+        texts: &[String],
+        source: Source,
+        model: Option<&str>,
+    ) -> Result<(String, usize), EditError> {
+        let existing = self
+            .doc
+            .annotations
+            .spans
+            .iter()
+            .find(|s| s.anchor.start == start && s.anchor.end == end);
+        let mut offered: HashSet<String> = existing
+            .map(|s| s.alts.iter().map(|a| a.text.clone()).collect())
+            .unwrap_or_default();
+        if existing.is_none() {
+            let body_text = utf16_to_byte(&self.doc.body, start)
+                .zip(utf16_to_byte(&self.doc.body, end))
+                .map(|(a, b)| self.doc.body[a..b].to_string());
+            offered.extend(body_text);
+        }
+        let fresh: Vec<&String> = texts
+            .iter()
+            .filter(|t| !t.is_empty() && offered.insert((*t).clone()))
+            .collect();
+        let before = self.doc.clone();
+        let id = match existing {
+            Some(span) => span.id.clone(),
+            None if fresh.is_empty() => {
+                return Err(EditError::InvalidRange { start, end });
+            }
+            None => self.doc.add_span(kind, start, end)?,
+        };
+        for text in &fresh {
+            if let Err(error) =
+                self.doc
+                    .add_alternative(&id, text.as_str(), source, model.map(str::to_owned))
+            {
+                self.doc = before;
+                return Err(error);
+            }
+        }
+        Ok((id, fresh.len()))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// End of appending alternatives (issue #13).
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]

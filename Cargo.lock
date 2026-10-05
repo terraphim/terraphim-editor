@@ -1792,6 +1792,8 @@ dependencies = [
  "serde_json",
  "terraphim_alternatives",
  "terraphim_lab",
+ "terraphim_lsp_core",
+ "thiserror 2.0.21",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -1862,6 +1864,20 @@ dependencies = [
  "terraphim_rolegraph",
  "terraphim_types",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "terraphim_lsp_core"
+version = "1.21.3"
+source = "sparse+https://git.terraphim.cloud/api/packages/terraphim/cargo/"
+checksum = "551122d2e71306c4db348c4254c198b5480f81736fbb16f7a571597f1ee1d2b4"
+dependencies = [
+ "serde",
+ "serde_json",
+ "terraphim_alternatives",
+ "terraphim_automata",
+ "terraphim_types",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
