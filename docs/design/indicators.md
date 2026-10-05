@@ -15,6 +15,7 @@ Issue: terraphim/terraphim-editor#8 (epic #1). Spec: `docs/requirements/alternat
 - Spans with only their original alternative (R-2.7) and set-aside spans get no indicator.
 - Nothing hovers: no rule changes on hover (R-3.1).
 - Plain mode renders nothing: the layer clears its decorations, removes its overlay and stops observing the surface. Every CSS rule is also scoped to `body[data-mode="write-on"]`.
+- Line height: the dots, rule and column never change it (they are out of flow). The one intended exception is R-3.5: the headline's `1.15em` inline span makes that one line's box slightly taller, as the spec's appearance requires.
 - Headline styling applies to the span only. Styling every Markdown heading line in Write_On mode, with or without alternatives, is a separate decision.
 
 ## How it is drawn
