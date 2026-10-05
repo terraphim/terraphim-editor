@@ -15,9 +15,7 @@ const FIXTURES: [&str; 3] = [
 ];
 
 fn word_count(text: &str) -> usize {
-    text.split_whitespace()
-        .filter(|w| w.chars().any(char::is_alphanumeric))
-        .count()
+    terraphim_alternatives::words::count_words(text)
 }
 
 /// Concatenate the fixtures until the document holds at least 5,000 words.

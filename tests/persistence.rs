@@ -10,6 +10,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use terraphim_alternatives::words::count_words;
 use terraphim_editor::{render_markdown, DocumentSession};
 
 const FIXTURES: [&str; 3] = ["plain", "full", "malformed"];
@@ -85,8 +86,8 @@ fn counts_of_the_full_fixture_include_ghosted_text() {
     let mut session = DocumentSession::new();
     let opened = session.open(&read("full.md"));
     let counts = session.counts();
-    assert_eq!(counts.words, opened.body.split_whitespace().count());
+    assert_eq!(counts.words, count_words(&opened.body));
     assert_eq!(counts.chars, opened.body.chars().count());
     let export = session.export();
-    assert!(export.split_whitespace().count() < counts.words);
+    assert!(count_words(&export) < counts.words);
 }

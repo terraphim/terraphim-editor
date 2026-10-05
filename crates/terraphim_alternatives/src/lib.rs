@@ -34,7 +34,8 @@
 //! * [`Document::ghost`], [`Document::ghost_span`] and [`Document::revive`]
 //!   edit the ghost layer (R-5); [`Document::apply_edit`] tracks live edits.
 //! * [`Document::export`] produces clean Markdown; [`Document::counts`]
-//!   counts words and characters, ghosted text included.
+//!   counts words and characters, ghosted text included, with the one word
+//!   definition in [`words`] (shared with the Lab trim status card).
 //!
 //! # Spans and ghosts
 //!
@@ -79,6 +80,7 @@ mod document;
 mod model;
 pub mod offset;
 pub mod reanchor;
+pub mod words;
 
 pub use article::{Article, article_for};
 pub use block::{BlockError, BlockErrorKind, FENCE_INFO, parse, write};
