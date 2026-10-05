@@ -1094,6 +1094,274 @@ pub fn set_active_alternative(span_id: &str, index: u32) -> Result<JsValue, JsVa
 // End of in-place cycling (issue #9).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Overflow panel: stash, pull back, panel text (issue #12). Kept in one
+// block, apart from the other exports, so parallel additions to this file
+// merge cleanly.
+//
+// The overflow text lives in `Annotations::overflow` and is written into the
+// annotation block on save (omitted when empty); export never includes it.
+// The panel (`public/js/overflow.js`) writes what the author types with
+// `set_document_overflow`. A stash removes a body range through the normal
+// edit path (`apply_edit`) and appends the removed text to the overflow in
+// one call; the editor records both in one undo step and replays the
+// overflow half with `replay_document_overflow`.
+// ---------------------------------------------------------------------------
+
+/// Why an overflow change was refused. Nothing changes on any error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OverflowError {
+    /// A malformed annotation block is being preserved verbatim, so the
+    /// overflow could not be saved (save writes the raw block back, not the
+    /// model's overflow). Stashing would lose the stashed text.
+    PreservedBlock,
+    /// A stash needs a non-empty range.
+    EmptyRange,
+    /// The range does not fit the body (see [`EditError`]).
+    Edit(EditError),
+}
+
+impl std::fmt::Display for OverflowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PreservedBlock => f.write_str(
+                "the annotation block could not be read and is preserved unchanged, so \
+                 Overflow cannot be saved until it is repaired",
+            ),
+            Self::EmptyRange => f.write_str("nothing selected to stash"),
+            Self::Edit(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl OverflowError {
+    /// `"preserved-block"`, `"empty"`, `"invalid-range"`, `"stale"` or
+    /// `"other"`, for JavaScript.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::PreservedBlock => "preserved-block",
+            Self::EmptyRange => "empty",
+            Self::Edit(EditError::InvalidRange { .. }) => "invalid-range",
+            Self::Edit(EditError::StaleAnchor(_)) => "stale",
+            Self::Edit(_) => "other",
+        }
+    }
+}
+
+/// Outcome of [`DocumentSession::stash`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StashOutcome {
+    /// Start of the removed body text (UTF-16).
+    pub start: usize,
+    /// The body text removed (and appended to the overflow).
+    pub text: String,
+    /// The overflow before the stash.
+    pub overflow_before: String,
+    /// The overflow after the stash.
+    pub overflow_after: String,
+    /// The bookkeeping of the removal, as for
+    /// [`apply_edit`](DocumentSession::apply_edit).
+    pub outcome: EditOutcome,
+}
+
+impl StashOutcome {
+    /// `{ edit: { start, deletedLength, deletedText, insertedText },
+    /// overflow: { before, after }, detached, detachedGhosts, reattached,
+    /// setAside, warning, notice }` for JavaScript.
+    pub fn to_json(&self) -> Value {
+        let mut value = self.outcome.to_json();
+        if let Value::Object(map) = &mut value {
+            map.insert(
+                "edit".into(),
+                json!({
+                    "start": self.start,
+                    "deletedLength": utf16_len(&self.text),
+                    "deletedText": self.text,
+                    "insertedText": "",
+                }),
+            );
+            map.insert(
+                "overflow".into(),
+                json!({ "before": self.overflow_before, "after": self.overflow_after }),
+            );
+        }
+        value
+    }
+}
+
+/// `current` with `text` appended as a new entry: directly when `current`
+/// is empty, otherwise after a blank line (completing a trailing newline).
+pub fn append_overflow(current: &str, text: &str) -> String {
+    let separator = if current.is_empty() || current.ends_with("\n\n") {
+        ""
+    } else if current.ends_with('\n') {
+        "\n"
+    } else {
+        "\n\n"
+    };
+    format!("{current}{separator}{text}")
+}
+
+/// Replays a recorded overflow change `from` -> `to` (an undo or redo of a
+/// stash) onto `current`, which may hold text typed in the panel since:
+///
+/// * `current == from`: exactly `to`.
+/// * `to` is `from` minus an appended chunk (undoing a stash): the chunk is
+///   removed from the end of `current`, or else its last occurrence; if it
+///   is gone altogether, `current` is kept.
+/// * `to` is `from` plus an appended chunk (redoing a stash): the chunk is
+///   appended to `current`.
+/// * Anything else: `current` is kept (nothing typed is ever discarded).
+pub fn rebase_overflow(current: &str, from: &str, to: &str) -> String {
+    if current == from {
+        return to.to_string();
+    }
+    if let Some(chunk) = from.strip_prefix(to).filter(|c| !c.is_empty()) {
+        if let Some(rest) = current.strip_suffix(chunk) {
+            return rest.to_string();
+        }
+        if let Some(at) = current.rfind(chunk) {
+            return format!("{}{}", &current[..at], &current[at + chunk.len()..]);
+        }
+        return current.to_string();
+    }
+    if let Some(chunk) = to.strip_prefix(from).filter(|c| !c.is_empty()) {
+        return format!("{current}{chunk}");
+    }
+    current.to_string()
+}
+
+impl DocumentSession {
+    /// The overflow (stash) text.
+    pub fn overflow(&self) -> &str {
+        &self.doc.annotations.overflow
+    }
+
+    /// Replaces the overflow text (the panel's content). Refused, changing
+    /// nothing, while a malformed block is preserved.
+    pub fn set_overflow(&mut self, text: &str) -> Result<(), OverflowError> {
+        if self.raw_block.is_some() {
+            return Err(OverflowError::PreservedBlock);
+        }
+        self.doc.annotations.overflow = text.to_string();
+        Ok(())
+    }
+
+    /// Stash (R-6.3): removes the body text `start..end` (UTF-16) through
+    /// [`apply_edit`](Self::apply_edit), so spans whose text it touches are
+    /// detached and set aside, and ghosts wholly inside it are set aside
+    /// (both re-attach when the text comes back, for example on undo), then
+    /// appends the removed text to the overflow with [`append_overflow`].
+    ///
+    /// Atomic: an empty, reversed or out-of-bounds range, a range splitting a
+    /// character, a refused edit, or a preserved malformed block (whose save
+    /// would drop the overflow) changes neither the body nor the overflow.
+    pub fn stash(&mut self, start: usize, end: usize) -> Result<StashOutcome, OverflowError> {
+        if self.raw_block.is_some() {
+            return Err(OverflowError::PreservedBlock);
+        }
+        if start >= end {
+            return Err(if start == end {
+                OverflowError::EmptyRange
+            } else {
+                OverflowError::Edit(EditError::InvalidRange { start, end })
+            });
+        }
+        let body = &self.doc.body;
+        let (Some(a), Some(b)) = (utf16_to_byte(body, start), utf16_to_byte(body, end)) else {
+            return Err(OverflowError::Edit(EditError::InvalidRange { start, end }));
+        };
+        let text = body[a..b].to_string();
+        let outcome = self
+            .apply_edit(start, end - start, "")
+            .map_err(OverflowError::Edit)?;
+        let before = std::mem::take(&mut self.doc.annotations.overflow);
+        let after = append_overflow(&before, &text);
+        self.doc.annotations.overflow = after.clone();
+        Ok(StashOutcome {
+            start,
+            text,
+            overflow_before: before,
+            overflow_after: after,
+            outcome,
+        })
+    }
+
+    /// Replays a recorded overflow change (see [`rebase_overflow`]) and
+    /// returns the new overflow. Refused while a malformed block is
+    /// preserved.
+    pub fn replay_overflow(&mut self, from: &str, to: &str) -> Result<String, OverflowError> {
+        let next = rebase_overflow(self.overflow(), from, to);
+        self.set_overflow(&next)?;
+        Ok(next)
+    }
+}
+
+fn overflow_error_json(error: &OverflowError) -> Value {
+    json!({ "ok": false, "error": error.to_string(), "kind": error.kind() })
+}
+
+/// The overflow (stash) text of the current document.
+#[wasm_bindgen]
+pub fn document_overflow() -> String {
+    with_session(|s| s.overflow().to_string())
+}
+
+/// [`DocumentSession::set_overflow`] as JSON: `{ ok: true, overflow }` or
+/// `{ ok: false, error, kind }`.
+pub fn set_overflow_json(session: &mut DocumentSession, text: &str) -> Value {
+    match session.set_overflow(text) {
+        Ok(()) => json!({ "ok": true, "overflow": session.overflow() }),
+        Err(error) => overflow_error_json(&error),
+    }
+}
+
+/// Replaces the overflow text (what the Overflow panel holds). Returns
+/// `{ ok: true, overflow }`, or `{ ok: false, error, kind }` (kind
+/// `"preserved-block"`) with nothing changed. Never throws.
+#[wasm_bindgen]
+pub fn set_document_overflow(text: &str) -> JsValue {
+    to_js(&with_session(|s| set_overflow_json(s, text)))
+}
+
+/// Stashes the body text `start..end` (UTF-16) in the overflow: removed
+/// from the body through the normal edit path and appended to the overflow
+/// (R-6.3). Returns `{ edit, overflow: { before, after }, detached,
+/// detachedGhosts, reattached, setAside, warning, notice }`; throws,
+/// changing nothing, for an empty or invalid range or while a malformed
+/// block is preserved.
+///
+/// `MarkdownEditor.stashRange` calls this and then applies `edit` to the
+/// editing surface without mirroring it through [`apply_edit`].
+#[wasm_bindgen]
+pub fn stash_document_range(start: u32, end: u32) -> Result<JsValue, JsValue> {
+    with_session(|s| s.stash(start as usize, end as usize))
+        .map(|outcome| to_js(&outcome.to_json()))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// [`DocumentSession::replay_overflow`] as JSON: `{ ok: true, overflow }` or
+/// `{ ok: false, error, kind }`.
+pub fn replay_overflow_json(session: &mut DocumentSession, from: &str, to: &str) -> Value {
+    match session.replay_overflow(from, to) {
+        Ok(overflow) => json!({ "ok": true, "overflow": overflow }),
+        Err(error) => overflow_error_json(&error),
+    }
+}
+
+/// Replays a recorded overflow change `from` -> `to` (undo or redo of a
+/// stash) onto the current overflow, keeping text typed in the panel since
+/// (see [`rebase_overflow`]). Returns `{ ok: true, overflow }` or
+/// `{ ok: false, error, kind }`. Never throws.
+#[wasm_bindgen]
+pub fn replay_document_overflow(from: &str, to: &str) -> JsValue {
+    to_js(&with_session(|s| replay_overflow_json(s, from, to)))
+}
+
+// ---------------------------------------------------------------------------
+// End of overflow panel (issue #12).
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1928,5 +2196,177 @@ mod tests {
         assert_eq!(ghosts(&session).len(), 1);
         let g = &ghosts(&session)[0];
         assert_eq!((g.1, g.2, g.3.as_str()), (15, 24, "Four five"));
+    }
+
+    // ----- overflow panel (issue #12) ---------------------------------------
+
+    #[test]
+    fn append_overflow_separates_entries_with_a_blank_line() {
+        assert_eq!(append_overflow("", "a"), "a");
+        assert_eq!(append_overflow("x", "a"), "x\n\na");
+        assert_eq!(append_overflow("x\n", "a"), "x\n\na");
+        assert_eq!(append_overflow("x\n\n", "a"), "x\n\na");
+    }
+
+    #[test]
+    fn stash_moves_the_text_into_overflow_atomically() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        session.set_overflow("Earlier note").unwrap();
+        let stash = session.stash(15, 30).unwrap(); // "Four five six. "
+        assert_eq!(stash.text, "Four five six. ");
+        assert_eq!(stash.start, 15);
+        assert_eq!(stash.overflow_before, "Earlier note");
+        assert_eq!(stash.overflow_after, "Earlier note\n\nFour five six. ");
+        assert_eq!(session.body(), "One two three. Seven eight.");
+        assert_eq!(session.overflow(), "Earlier note\n\nFour five six. ");
+        let json = stash.to_json();
+        assert_eq!(json["edit"]["start"], 15);
+        assert_eq!(json["edit"]["deletedLength"], 15);
+        assert_eq!(json["edit"]["deletedText"], "Four five six. ");
+        assert_eq!(json["edit"]["insertedText"], "");
+        assert_eq!(json["overflow"]["before"], "Earlier note");
+        assert_eq!(json["overflow"]["after"], "Earlier note\n\nFour five six. ");
+
+        // Refusals change neither the body nor the overflow.
+        let before = session.clone();
+        assert_eq!(session.stash(3, 3).unwrap_err().kind(), "empty");
+        assert_eq!(session.stash(5, 3).unwrap_err().kind(), "invalid-range");
+        assert_eq!(session.stash(0, 999).unwrap_err().kind(), "invalid-range");
+        assert_eq!(session, before);
+    }
+
+    #[test]
+    fn stash_offsets_are_utf16_and_never_split_a_character() {
+        let mut session = DocumentSession::new();
+        session.open("a\u{1F600}b c");
+        let before = session.clone();
+        // Offset 2 is inside the surrogate pair.
+        assert_eq!(session.stash(0, 2).unwrap_err().kind(), "invalid-range");
+        assert_eq!(session, before);
+        let stash = session.stash(1, 3).unwrap();
+        assert_eq!(stash.text, "\u{1F600}");
+        assert_eq!(session.body(), "ab c");
+    }
+
+    #[test]
+    fn stash_sets_annotations_aside_and_undo_brings_them_back() {
+        let mut session = DocumentSession::new();
+        session.open(&cycling_source());
+        // "Pass me a paperclip. Drop this." with s1 over "paperclip" (10..19)
+        // and a ghost over " Drop this." (20..31). Stash "a paperclip. Drop
+        // this.": the span is detached, the ghost set aside.
+        let stash = session.stash(8, 31).unwrap();
+        assert_eq!(stash.outcome.detached, vec!["s1".to_string()]);
+        assert_eq!(stash.outcome.detached_ghosts.len(), 1);
+        assert!(stash.outcome.warning.is_some());
+        assert!(session.document().annotations.spans.is_empty());
+        assert!(session.document().annotations.ghosts.is_empty());
+        assert_eq!(session.overflow(), "a paperclip. Drop this.");
+        // Saved meanwhile: the set-aside annotations are kept.
+        assert!(session.save().contains("thumbtack"));
+
+        // Undo, as the editor replays it: the text comes back through the
+        // normal edit path, then the overflow change is replayed backwards.
+        session.apply_edit(8, 0, &stash.text).unwrap();
+        let undone = session
+            .replay_overflow(&stash.overflow_after, &stash.overflow_before)
+            .unwrap();
+        assert_eq!(undone, "");
+        assert_eq!(session.body(), "Pass me a paperclip. Drop this.");
+        assert!(session.set_aside().is_empty());
+        assert_eq!(session.document().annotations.spans.len(), 1);
+        assert_eq!(session.document().annotations.ghosts.len(), 1);
+        assert_eq!(session.save(), cycling_source());
+
+        // Redo.
+        session.apply_edit(8, 23, "").unwrap();
+        session
+            .replay_overflow(&stash.overflow_before, &stash.overflow_after)
+            .unwrap();
+        assert_eq!(session.overflow(), "a paperclip. Drop this.");
+        assert_eq!(session.body(), "Pass me ");
+    }
+
+    #[test]
+    fn replaying_a_stash_keeps_text_typed_in_the_panel() {
+        let (before, after) = ("note", "note\n\nchunk");
+        // Unchanged since the stash: exact.
+        assert_eq!(rebase_overflow(after, after, before), "note");
+        assert_eq!(rebase_overflow(before, before, after), after);
+        // Typed after the chunk: the chunk is removed where it is.
+        assert_eq!(
+            rebase_overflow("note\n\nchunk more", after, before),
+            "note more"
+        );
+        // Typed after the stash, chunk still at the end.
+        assert_eq!(
+            rebase_overflow("edited note\n\nchunk", after, before),
+            "edited note"
+        );
+        // Chunk deleted by hand: nothing else is touched.
+        assert_eq!(rebase_overflow("other", after, before), "other");
+        // Redo onto edited text appends the chunk again.
+        assert_eq!(rebase_overflow("edited", before, after), "edited\n\nchunk");
+        // An unrelated change is never forced over the current text.
+        assert_eq!(rebase_overflow("mine", "x", "y"), "mine");
+    }
+
+    #[test]
+    fn overflow_round_trips_through_save_and_is_omitted_from_export() {
+        let mut session = DocumentSession::new();
+        session.open("Body text.\n");
+        session.set_overflow("Idea one\n```\ncode\n```\n").unwrap();
+        let saved = session.save();
+        assert!(saved.starts_with("Body text.\n"));
+        assert!(!session.export().contains("Idea one"));
+        assert_eq!(session.export(), "Body text.\n");
+
+        let mut reopened = DocumentSession::new();
+        let opened = reopened.open(&saved);
+        assert_eq!(opened.body, "Body text.\n");
+        assert_eq!(reopened.overflow(), "Idea one\n```\ncode\n```\n");
+        assert_eq!(
+            reopened.annotations_json()["overflow"],
+            "Idea one\n```\ncode\n```\n"
+        );
+
+        // Emptying the overflow saves plain Markdown again.
+        reopened.set_overflow("").unwrap();
+        assert_eq!(reopened.save(), "Body text.\n");
+    }
+
+    #[test]
+    fn a_preserved_malformed_block_refuses_overflow_changes() {
+        let source =
+            "Body text.\n\n```terraphim-alternatives\n{ \"version\": 1, \"spans\": [,] }\n```\n";
+        let mut session = DocumentSession::new();
+        session.open(source);
+        assert!(session.has_preserved_block());
+        let before = session.clone();
+        assert_eq!(
+            session.stash(0, 4).unwrap_err(),
+            OverflowError::PreservedBlock
+        );
+        assert_eq!(
+            session.set_overflow("x").unwrap_err().kind(),
+            "preserved-block"
+        );
+        assert!(session.replay_overflow("", "x").is_err());
+        assert_eq!(session, before);
+        assert_eq!(session.save(), source);
+        let json = set_overflow_json(&mut session, "x");
+        assert_eq!(json["ok"], false);
+        assert_eq!(json["kind"], "preserved-block");
+    }
+
+    #[test]
+    fn overflow_json_helpers_report_the_new_text() {
+        let mut session = DocumentSession::new();
+        session.open("Text");
+        let json = set_overflow_json(&mut session, "a");
+        assert_eq!(json, json!({ "ok": true, "overflow": "a" }));
+        let json = replay_overflow_json(&mut session, "a", "a\n\nb");
+        assert_eq!(json, json!({ "ok": true, "overflow": "a\n\nb" }));
     }
 }

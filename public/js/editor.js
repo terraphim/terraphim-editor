@@ -168,6 +168,9 @@ class EditorSurface {
     // MarkdownEditor.swapAlternative, issue #9) rides the same way: undo and
     // redo replay it as set_active in the model.
     if (options.swap) edit.swap = { ...options.swap };
+    // An overflow change ({ before, after }, see MarkdownEditor.stashRange,
+    // issue #12) rides the same way: undo and redo replay it in the model.
+    if (options.overflow) edit.overflow = { ...options.overflow };
     this.text = old.slice(0, s) + inserted + old.slice(e);
     this.decorations = EditorSurface.mapRanges(this.decorations, edit);
     this.render();
@@ -723,6 +726,7 @@ class EditorSurface {
       : null;
     if (step && edit.move) step.move = edit.move;
     if (step && edit.swap) step.swap = edit.swap;
+    if (step && edit.overflow) step.overflow = edit.overflow;
     const entry = {
       text: this.text,
       start: sel ? sel.start : this.text.length,
@@ -1090,6 +1094,7 @@ class EditorSurface {
     const inverse = { start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
     if (step.move) inverse.move = EditorSurface.invertMove(step.move);
     if (step.swap) inverse.swap = { span: step.swap.span, from: step.swap.to, to: step.swap.from };
+    if (step.overflow) inverse.overflow = { before: step.overflow.after, after: step.overflow.before };
     return inverse;
   }
 
@@ -1149,6 +1154,7 @@ class EditorSurface {
       };
       if (step.move) edit.move = step.move;
       if (step.swap) edit.swap = step.swap;
+      if (step.overflow) edit.overflow = step.overflow;
       out.push({ edit, text: t });
     }
     return t === expected ? out : null;
@@ -1233,6 +1239,7 @@ class MarkdownEditor {
     this.createdNodes = [];
     // Blocks view (issue #19): reports unapplied drafts, never edits.
     const drafts = this.blocks ? this.blocks.destroy() : [];
+    if (this.overflow) this.overflow.destroy();
     if (this.chrome) this.chrome.destroy();
     if (this.selectionMenu) this.selectionMenu.destroy();
     if (this.ghosts) this.ghosts.destroy();
@@ -1301,6 +1308,12 @@ class MarkdownEditor {
     // same body, created after the chrome so it can see the Write_On mode.
     if (typeof window.BlocksView === 'function') {
       this.blocks = new window.BlocksView(this, { signal: this.abortController.signal });
+    }
+
+    // Overflow panel (public/js/overflow.js, issue #12): after the chrome
+    // (Write_On mode, the XYZ control) and the selection menu (its stash item).
+    if (typeof window.TeOverflowPanel === 'function') {
+      this.overflow = new window.TeOverflowPanel(this, { signal: this.abortController.signal });
     }
   }
 
@@ -1567,6 +1580,10 @@ class MarkdownEditor {
       this.mirrorSwap(api, edit.swap, text);
       return;
     }
+    if (edit.overflow && typeof api.replay_document_overflow === 'function') {
+      this.mirrorOverflow(api, edit, text);
+      return;
+    }
     let outcome;
     try {
       // A recorded text move (undo or redo of moveRange) is replayed as a
@@ -1725,8 +1742,85 @@ class MarkdownEditor {
   // End of in-place cycling (issue #9).
   // ---------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------
+  // Overflow stash (issue #12). Kept in one block so parallel additions to
+  // this class merge cleanly. The panel lives in public/js/overflow.js.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Stash the text [start, end) in the Overflow (R-6.3): a move, not a copy.
+   *
+   * The document model goes first (`stash_document_range`): it removes the
+   * text through the normal edit path, so spans whose text it touches are
+   * detached and set aside and ghosts inside it are set aside (both come
+   * back on undo), and appends the text to the overflow. A stash it refuses
+   * (empty or invalid range, or a preserved malformed block whose save would
+   * drop the overflow) throws and changes nothing. The surface then removes
+   * the text as ONE undo step carrying { before, after } of the overflow, so
+   * undo and redo restore the text and the overflow together (the overflow
+   * half is replayed by mirrorOverflow). Returns the model outcome
+   * ({ edit, overflow: { before, after }, detached, setAside, ... }).
+   */
+  stashRange(start, end) {
+    const api = this.requireDocumentApi();
+    if (typeof api.stash_document_range !== 'function') {
+      throw new Error('The WASM document API cannot stash text');
+    }
+    this.alignDocumentModel(api);
+    // Throws, changing nothing, if the model refuses the stash.
+    const outcome = api.stash_document_range(Math.min(start, end), Math.max(start, end));
+    const edit = outcome.edit;
+    this.suppressModelSync = true;
+    try {
+      this.surface.replaceRange(edit.start, edit.start + edit.deletedLength, '', {
+        source: 'stash',
+        overflow: { before: outcome.overflow.before, after: outcome.overflow.after },
+        selectStart: edit.start,
+        selectEnd: edit.start,
+      });
+    } finally {
+      this.suppressModelSync = false;
+    }
+    this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+    if (this.indicators) this.indicators.flush();
+    if (this.ghosts) this.ghosts.flush();
+    return outcome;
+  }
+
+  /**
+   * Replay a recorded stash step (undo or redo): the text edit through the
+   * normal edit path, then the overflow change, rebased onto anything typed
+   * in the panel since (replay_document_overflow). If the model refuses the
+   * edit or its body differs from the surface text, the body is re-synced
+   * from the surface, so the two never diverge.
+   */
+  mirrorOverflow(api, edit, text) {
+    // Panel text still waiting for its debounce is in the model first, so
+    // the replay is rebased onto it rather than discarding it.
+    if (this.overflow) this.overflow.flush();
+    let outcome = null;
+    try {
+      outcome = api.apply_edit(edit.start, edit.deletedLength, edit.insertedText);
+    } catch (err) {
+      outcome = null;
+    }
+    api.replay_document_overflow(edit.overflow.before, edit.overflow.after);
+    if (!outcome || api.document_body() !== text) {
+      this.reflectSync(api.sync_document_body(text));
+      return;
+    }
+    this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+  }
+
+  // ---------------------------------------------------------------------
+  // End of overflow stash (issue #12).
+  // ---------------------------------------------------------------------
+
   /** Make sure the model body is exactly the surface text before reading it. */
   alignDocumentModel(api) {
+    // Text typed in the Overflow panel reaches the model before any read
+    // (a no-op unless panel input is waiting for its debounce).
+    if (this.overflow) this.overflow.flush();
     this.reflectSync(api.sync_document_body(this.surface.getText()));
   }
 

@@ -13,6 +13,12 @@ pub use document::{
 };
 // In-place cycling of alternatives (issue #9).
 pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
+// Overflow panel: stash, pull back, panel text (issue #12).
+pub use document::{
+    append_overflow, document_overflow, rebase_overflow, replay_document_overflow,
+    replay_overflow_json, set_document_overflow, set_overflow_json, stash_document_range,
+    OverflowError, StashOutcome,
+};
 
 mod lab;
 pub use lab::{lab_actions, lab_mark, trim_make_cuts, trim_plan_json, trim_status};
