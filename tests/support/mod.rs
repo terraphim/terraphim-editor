@@ -357,7 +357,9 @@ pub async fn run_steps(steps: &[&str]) -> String {
         if !r.is_empty() {
             return format!("step {}: {r}", i + 1);
         }
-        sleep(0).await;
+        // A real timer tick (not just a microtask) so a pending webdriver
+        // command runs before the next step.
+        sleep(1).await;
     }
     String::new()
 }

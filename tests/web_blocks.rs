@@ -62,13 +62,16 @@ async fn test_body_to_blocks_round_trip_is_byte_identical() {
             '> quote\n> more', '> lazy\ncontinued', '| a | b |\n|---|:-:|\n| 1 | 2 |', 'a | b\n--|--\n1 | 2',
             '***', '- - -', 'Café 𝄞 é́ text  ', '<div>html</div>', '\tTabbed',
           ];
-          let seed = 0x5eed1234;
+          T.seed = 0x5eed1234;
+          T.iter = 0;
           const rand = (n) => {
-            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-            return seed % n;
+            T.seed = (Math.imul(T.seed, 1664525) + 1013904223) >>> 0;
+            return T.seed % n;
           };
           const seps = ['\n', '\n\n', '\n\n\n', '\n \n', ''];
-          for (let iter = 0; iter < 250 && out.length === 0; iter += 1) {
+          // One random document per call; the 250 cases run in chunks of 50
+          // with a yield between them.
+          T.randomCase = (problems) => {
             let doc = ['', '\n', '\n\n', ' \n'][rand(4)];
             const count = 1 + rand(8);
             for (let k = 0; k < count; k += 1) {
@@ -76,9 +79,29 @@ async fn test_body_to_blocks_round_trip_is_byte_identical() {
               if (k + 1 < count) doc += seps[rand(seps.length)];
             }
             doc += ['', '\n', '\n\n', '\n\n\n'][rand(4)];
-            T.check(out, 'random #' + iter, doc);
-            if (out.length) out.push('document ' + JSON.stringify(doc));
-          }
+            T.check(problems, 'random #' + T.iter, doc);
+            if (problems.length) problems.push('document ' + JSON.stringify(doc));
+            T.iter += 1;
+          };
+        "##,
+        r##"
+          for (let k = 0; k < 50 && out.length === 0; k += 1) T.randomCase(out);
+          return out.slice(0, 5).join('; ');
+        "##,
+        r##"
+          for (let k = 0; k < 50 && out.length === 0; k += 1) T.randomCase(out);
+          return out.slice(0, 5).join('; ');
+        "##,
+        r##"
+          for (let k = 0; k < 50 && out.length === 0; k += 1) T.randomCase(out);
+          return out.slice(0, 5).join('; ');
+        "##,
+        r##"
+          for (let k = 0; k < 50 && out.length === 0; k += 1) T.randomCase(out);
+          return out.slice(0, 5).join('; ');
+        "##,
+        r##"
+          for (let k = 0; k < 50 && out.length === 0; k += 1) T.randomCase(out);
           return out.slice(0, 5).join('; ');
         "##,
     ])
