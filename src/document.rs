@@ -21,7 +21,8 @@
 //!   JavaScript. In the Trunk build they are reachable as
 //!   `window.wasmBindings.<name>`; `MarkdownEditor` wraps them as
 //!   `openDocument`, `saveDocument`, `exportDocument`, `counts` and
-//!   `annotations`.
+//!   `annotations`; the ghost layer (`public/js/selection-menu.js`, issue
+//!   #11) calls [`ghost_range`] and [`revive_range`].
 //!
 //! # Nothing is dropped
 //!
@@ -545,6 +546,23 @@ impl DocumentSession {
             "preservedBlock": self.raw_block.is_some(),
         })
     }
+
+    /// Ghosts `start..end` (R-5.1, R-5.3) and returns the id of the ghost now
+    /// covering it. Ghosts are an independent layer: the range may cover or
+    /// partly overlap spans, and a ghost overlapping or touching it is merged
+    /// in (see [`Document::ghost`]). The text is unchanged, so it stays
+    /// counted and editable; export drops it. On error nothing changes.
+    pub fn ghost(&mut self, start: usize, end: usize) -> Result<String, EditError> {
+        self.doc.ghost(start, end)
+    }
+
+    /// Revives `start..end` (R-5.2): ghosts inside it are removed, ghosts
+    /// partly inside are trimmed and a ghost strictly containing it is split
+    /// (see [`Document::revive`]). Returns whether any ghost changed. On
+    /// error nothing changes.
+    pub fn revive(&mut self, start: usize, end: usize) -> Result<bool, EditError> {
+        self.doc.revive(start, end)
+    }
 }
 
 fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
@@ -684,6 +702,60 @@ pub fn document_body() -> String {
 #[wasm_bindgen]
 pub fn document_annotations() -> JsValue {
     to_js(&with_session(|s| s.annotations_json()))
+}
+
+/// An error object for JavaScript: `{ ok: false, error, kind }`, where `kind`
+/// is `"invalid-range"`, `"stale"` or `"other"`.
+fn edit_error_json(error: &EditError) -> Value {
+    let kind = match error {
+        EditError::InvalidRange { .. } => "invalid-range",
+        EditError::StaleAnchor(_) => "stale",
+        _ => "other",
+    };
+    json!({ "ok": false, "error": error.to_string(), "kind": kind })
+}
+
+/// [`DocumentSession::ghost`] as JSON: `{ ok: true, id, annotations }` or an
+/// error object `{ ok: false, error, kind }`.
+pub fn ghost_json(session: &mut DocumentSession, start: usize, end: usize) -> Value {
+    match session.ghost(start, end) {
+        Ok(id) => json!({ "ok": true, "id": id, "annotations": session.annotations_json() }),
+        Err(error) => edit_error_json(&error),
+    }
+}
+
+/// [`DocumentSession::revive`] as JSON: `{ ok: true, changed, annotations }`
+/// or an error object `{ ok: false, error, kind }`.
+pub fn revive_json(session: &mut DocumentSession, start: usize, end: usize) -> Value {
+    match session.revive(start, end) {
+        Ok(changed) => json!({
+            "ok": true,
+            "changed": changed,
+            "annotations": session.annotations_json(),
+        }),
+        Err(error) => edit_error_json(&error),
+    }
+}
+
+/// Ghosts `start..end` (UTF-16 offsets into the body) in the current
+/// document. Returns `{ ok: true, id, annotations }` with the updated
+/// annotations (as [`document_annotations`]), or `{ ok: false, error, kind }`
+/// with the document unchanged. Never throws.
+#[wasm_bindgen]
+pub fn ghost_range(start: u32, end: u32) -> JsValue {
+    to_js(&with_session(|s| {
+        ghost_json(s, start as usize, end as usize)
+    }))
+}
+
+/// Revives `start..end` (UTF-16 offsets into the body) in the current
+/// document. Returns `{ ok: true, changed, annotations }`, or
+/// `{ ok: false, error, kind }` with the document unchanged. Never throws.
+#[wasm_bindgen]
+pub fn revive_range(start: u32, end: u32) -> JsValue {
+    to_js(&with_session(|s| {
+        revive_json(s, start as usize, end as usize)
+    }))
 }
 
 #[cfg(test)]
@@ -1005,5 +1077,177 @@ mod tests {
         assert!(session.apply_edit(2, 5, "x").is_err());
         assert!(session.apply_edit(usize::MAX, 1, "x").is_err());
         assert_eq!(session.body(), "abc");
+    }
+
+    /// `(id, start, end, text)` of every live ghost.
+    fn ghosts(session: &DocumentSession) -> Vec<(String, usize, usize, String)> {
+        session
+            .document()
+            .annotations
+            .ghosts
+            .iter()
+            .map(|g| {
+                (
+                    g.id.clone(),
+                    g.anchor.start,
+                    g.anchor.end,
+                    g.anchor.text.clone(),
+                )
+            })
+            .collect()
+    }
+
+    fn ghost(id: &str, start: usize, end: usize, text: &str) -> (String, usize, usize, String) {
+        (id.to_string(), start, end, text.to_string())
+    }
+
+    const PLAIN: &str = "One two three. Four five six. Seven eight.";
+
+    #[test]
+    fn ghost_range_returns_id_and_annotations() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        let json = ghost_json(&mut session, 15, 29);
+        assert_eq!(json["ok"], true);
+        assert_eq!(json["id"], "g1");
+        assert_eq!(
+            json["annotations"]["ghosts"][0]["anchor"]["text"],
+            "Four five six."
+        );
+        assert_eq!(json["annotations"]["ghosts"][0]["anchor"]["start"], 15);
+        assert_eq!(json["annotations"], session.annotations_json());
+        // Ghosted text stays in the body and the counts (decision 3) but not
+        // in the export (R-9.3).
+        assert_eq!(session.body(), PLAIN);
+        assert_eq!(session.counts().words, 8);
+        assert_eq!(session.export(), "One two three. Seven eight.");
+    }
+
+    #[test]
+    fn overlapping_and_touching_ghosts_merge() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        assert_eq!(session.ghost(4, 7).unwrap(), "g1");
+        assert_eq!(session.ghost(30, 35).unwrap(), "g2");
+        // Touching g1 at its end: merged, keeping the first id.
+        assert_eq!(session.ghost(7, 13).unwrap(), "g1");
+        assert_eq!(
+            ghosts(&session),
+            vec![
+                ghost("g1", 4, 13, "two three"),
+                ghost("g2", 30, 35, "Seven")
+            ]
+        );
+        // Overlapping both: one ghost spanning them, the first id kept.
+        assert_eq!(session.ghost(10, 32).unwrap(), "g1");
+        assert_eq!(
+            ghosts(&session),
+            vec![ghost("g1", 4, 35, "two three. Four five six. Seven")]
+        );
+    }
+
+    #[test]
+    fn ghost_may_cover_and_partly_overlap_spans() {
+        let mut session = DocumentSession::new();
+        session.open(&annotated_source());
+        assert!(session.revive(0, 38).unwrap());
+        let before = session.document().annotations.spans.clone();
+        // A sentence containing the word with alternatives (11..17)...
+        session.ghost(0, 18).unwrap();
+        assert_eq!(
+            ghosts(&session),
+            vec![ghost("g1", 0, 18, "Pass me an eraser.")]
+        );
+        // ...and a ghost cutting the span in half are both allowed.
+        session.revive(0, 18).unwrap();
+        session.ghost(13, 24).unwrap();
+        assert_eq!(
+            session.document().annotations.spans,
+            before,
+            "spans untouched"
+        );
+        assert_eq!(ghosts(&session)[0].3, "aser. Drop ");
+        // Export keeps the active alternative and drops the ghosted text.
+        assert_eq!(session.export(), "Pass me an erthis sentence.");
+    }
+
+    #[test]
+    fn partial_revive_trims_or_splits() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        session.ghost(0, 29).unwrap();
+        // Strictly inside: split, the left part keeps the id.
+        let json = revive_json(&mut session, 4, 8);
+        assert_eq!(json["ok"], true);
+        assert_eq!(json["changed"], true);
+        assert_eq!(
+            ghosts(&session),
+            vec![
+                ghost("g1", 0, 4, "One "),
+                ghost("g2", 8, 29, "three. Four five six."),
+            ]
+        );
+        assert_eq!(json["annotations"]["ghosts"].as_array().unwrap().len(), 2);
+        // Across the end of a ghost: trimmed.
+        session.revive(20, 40).unwrap();
+        assert_eq!(ghosts(&session)[1], ghost("g2", 8, 20, "three. Four "));
+        // Covering a ghost: removed.
+        assert!(session.revive(0, 4).unwrap());
+        assert_eq!(ghosts(&session).len(), 1);
+        // Nothing ghosted there: no change, still ok.
+        let json = revive_json(&mut session, 30, 35);
+        assert_eq!(json["ok"], true);
+        assert_eq!(json["changed"], false);
+    }
+
+    #[test]
+    fn invalid_ranges_return_an_error_object_and_change_nothing() {
+        let mut session = DocumentSession::new();
+        session.open("Hi 😀 there");
+        session.ghost(0, 2).unwrap();
+        let before = session.clone();
+        for (start, end) in [(5, 3), (4, 4), (0, 99), (4, 5)] {
+            for json in [
+                ghost_json(&mut session, start, end),
+                revive_json(&mut session, start, end),
+            ] {
+                assert_eq!(json["ok"], false, "{start}..{end}");
+                assert_eq!(json["kind"], "invalid-range");
+                assert!(json["error"].as_str().unwrap().contains("range"));
+                assert!(json.get("annotations").is_none());
+            }
+        }
+        // An empty range on a character boundary is refused too.
+        assert_eq!(ghost_json(&mut session, 2, 2)["ok"], false);
+        assert_eq!(session, before);
+        // A whole surrogate pair is fine (UTF-16 offsets).
+        assert_eq!(ghost_json(&mut session, 3, 5)["ok"], true);
+        assert_eq!(ghosts(&session)[1].3, "😀");
+    }
+
+    #[test]
+    fn ghosts_follow_edits_and_survive_save_and_reopen() {
+        let mut session = DocumentSession::new();
+        session.open(PLAIN);
+        session.ghost(15, 29).unwrap();
+        // Typing before the ghost moves it; typing inside resizes it.
+        session.apply_edit(0, 0, "Oh. ").unwrap();
+        session.apply_edit(29, 0, "big ").unwrap();
+        assert_eq!(
+            ghosts(&session),
+            vec![ghost("g1", 19, 37, "Four five big six.")]
+        );
+        let saved = session.save();
+        let mut reopened = DocumentSession::new();
+        let opened = reopened.open(&saved);
+        assert_eq!(opened.unresolved, 0);
+        assert_eq!(ghosts(&reopened), ghosts(&session));
+        assert_eq!(reopened.export(), "Oh. One two three. Seven eight.");
+        // Reviving after reopening saves plain Markdown again.
+        assert!(reopened.revive(19, 37).unwrap());
+        assert_eq!(
+            reopened.save(),
+            "Oh. One two three. Four five big six. Seven eight."
+        );
     }
 }
