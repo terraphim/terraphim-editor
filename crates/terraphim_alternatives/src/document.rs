@@ -163,7 +163,7 @@ pub enum SpanFate {
 /// Word and character counts of the body (ghosted text included).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Counts {
-    /// Whitespace-separated words.
+    /// Words as [`crate::words`] defines them.
     pub words: usize,
     /// Unicode scalar values.
     pub chars: usize,
@@ -537,10 +537,13 @@ impl Document {
     }
 
     /// Word and character counts of the body, ghosted text included
-    /// (decision 3). The annotation block is never part of the body.
+    /// (decision 3). The annotation block is never part of the body. Words
+    /// follow [`crate::words`], the definition the trim status card uses, so
+    /// the counter and the card agree (R-2.1, R-8.4); characters are Unicode
+    /// scalar values.
     pub fn counts(&self) -> Counts {
         Counts {
-            words: self.body.split_whitespace().count(),
+            words: crate::words::count_words(&self.body),
             chars: self.body.chars().count(),
         }
     }

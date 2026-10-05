@@ -227,11 +227,11 @@ fn export_skips_stale_ghosts_rather_than_cutting_the_wrong_text() {
 
 #[test]
 fn counts_include_ghosted_text_and_exclude_the_block() {
-    let mut d = Document::new("Café 𝄞 has five words.");
+    let mut d = Document::new("Café 𝄞 has four words."); // 𝄞 is a symbol, not a word
     d.ghost(0, 4).unwrap();
     d.annotations.overflow = "many many more words in the stash".into();
     let expected = Counts {
-        words: 5,
+        words: 4,
         chars: 22,
     };
     assert_eq!(d.counts(), expected);
