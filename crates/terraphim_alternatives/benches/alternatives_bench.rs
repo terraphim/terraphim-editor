@@ -165,6 +165,10 @@ fn benches(c: &mut Criterion) {
         }
         b.iter(|| black_box(&d).export())
     });
+
+    // The Write_On counter runs on every edit (issue #59): one pass over the
+    // ~3,000-word body with the shared word definition.
+    c.bench_function("counts_3000_words", |b| b.iter(|| black_box(&doc).counts()));
 }
 
 criterion_group!(alternatives, benches);
