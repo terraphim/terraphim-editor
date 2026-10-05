@@ -1317,6 +1317,125 @@ fn test_undo_redo_replays_exact_edits_in_repeated_text() {
     assert_eq!(result, "");
 }
 
+#[wasm_bindgen_test]
+fn test_cancelled_or_stale_beforeinput_hint_is_not_reused() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const before = (s, inputType, range) => {
+            const a = s.offsetToPoint(range[0]);
+            const b = s.offsetToPoint(range[1]);
+            const ev = new InputEvent('beforeinput', {
+              inputType, bubbles: true, cancelable: true,
+              targetRanges: [new StaticRange({ startContainer: a.node, startOffset: a.offset, endContainer: b.node, endOffset: b.offset })],
+            });
+            s.root.dispatchEvent(ev);
+            return ev;
+          };
+          // A later listener cancels the beforeinput, so no input follows it.
+          const cancel = (e) => e.preventDefault();
+          // 1. Cancelled insertText with a target range at 3; the real edit
+          // is an execCommand insertion at 1 (no beforeinput of its own).
+          let r = teTest.editCase('aaaa', [{ id: 'd', start: 2, end: 4 }], 1, 1, (s) => {
+            s.root.addEventListener('beforeinput', cancel);
+            const ev = before(s, 'insertText', [3, 3]);
+            s.root.removeEventListener('beforeinput', cancel);
+            if (!ev.defaultPrevented) out.push('beforeinput was not cancelled');
+            document.execCommand('insertText', false, 'a');
+          });
+          out.push(...teTest.expectEdit('cancelled insert hint', r, {
+            text: 'aaaaa', start: 1, deletedLength: 0, insertedText: 'a', decorations: [['d', 3, 5]], caret: 2,
+          }));
+          // 2. Cancelled backward delete at [0, 1); the real delete is at [1, 2).
+          r = teTest.editCase('aaaa', [{ id: 'd', start: 3, end: 4 }], 2, 2, (s) => {
+            s.root.addEventListener('beforeinput', cancel);
+            before(s, 'deleteContentBackward', [0, 1]);
+            s.root.removeEventListener('beforeinput', cancel);
+            document.execCommand('delete');
+          });
+          out.push(...teTest.expectEdit('cancelled delete hint', r, {
+            text: 'aaa', start: 1, deletedLength: 1, insertedText: '', decorations: [['d', 2, 3]], caret: 1,
+          }));
+          // 3. A selectionchange after the beforeinput makes its hint stale.
+          r = teTest.editCase('aaaa', [{ id: 'd', start: 2, end: 4 }], 1, 1, (s) => {
+            before(s, 'insertText', [3, 3]);
+            document.dispatchEvent(new Event('selectionchange'));
+            if (s.pendingHint !== null) out.push('selectionchange kept the hint');
+            document.execCommand('insertText', false, 'a');
+          });
+          out.push(...teTest.expectEdit('stale hint after selectionchange', r, {
+            text: 'aaaaa', start: 1, deletedLength: 0, insertedText: 'a', decorations: [['d', 3, 5]], caret: 2,
+          }));
+          // 4. A hint is consumed by its input: it cannot serve a second edit.
+          r = teTest.editCase('aaaa', [], 1, 1, (s) => {
+            before(s, 'insertText', [1, 1]);
+            document.execCommand('insertText', false, 'a');
+            if (s.pendingHint !== null) out.push('hint not consumed');
+          });
+          if (r.text !== 'aaaaa' || r.changes.length !== 1 || r.changes[0].start !== 1) out.push('consumed hint edit ' + JSON.stringify(r.changes));
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_custom_dialog_is_removed_by_destroy() {
+    let _document = fresh_full_editor();
+    // Shoelace is not loaded on the test page, so `sl-dialog` is an undefined
+    // element: the test drives its buttons and events directly.
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const ed = window.__teEditor;
+          const s = ed.surface;
+          const parts = (d) => {
+            const [apply, cancel] = d.querySelectorAll('sl-button');
+            return { apply, cancel, prefix: d.querySelector('#prefix-input'), suffix: d.querySelector('#suffix-input') };
+          };
+          // Apply on a live editor wraps the selection and removes the dialog.
+          s.setText('word');
+          s.setSelectionOffsets(0, 4);
+          const d1 = ed.showCustomDialog();
+          if (!d1.isConnected || !ed.createdNodes.includes(d1)) out.push('dialog not shown/tracked');
+          const p1 = parts(d1);
+          p1.prefix.value = '~~';
+          p1.suffix.value = '~~';
+          p1.apply.click();
+          if (s.getText() !== '~~word~~') out.push('apply ' + JSON.stringify(s.getText()));
+          if (d1.isConnected || ed.createdNodes.includes(d1)) out.push('applied dialog left behind');
+          // Normal hide (sl-after-hide) removes and untracks it.
+          const d2 = ed.showCustomDialog();
+          d2.dispatchEvent(new Event('sl-after-hide'));
+          if (d2.isConnected || ed.createdNodes.includes(d2)) out.push('hidden dialog left behind');
+          // Cancel closes without editing.
+          const d3 = ed.showCustomDialog();
+          parts(d3).cancel.click();
+          if (d3.isConnected || s.getText() !== '~~word~~') out.push('cancel');
+          // An open dialog does not survive destroy(), and its handlers detach.
+          s.setText('word');
+          s.setSelectionOffsets(0, 4);
+          const d4 = ed.showCustomDialog();
+          d4.open = true;
+          const p4 = parts(d4);
+          p4.prefix.value = '**';
+          p4.suffix.value = '**';
+          ed.destroy();
+          if (d4.isConnected) out.push('open dialog survived destroy');
+          if (d4.open !== false) out.push('open dialog not closed');
+          if (document.querySelectorAll('sl-dialog:not(.shortcuts-dialog)').length !== 0) out.push('custom dialogs in DOM');
+          const textBefore = s.getText();
+          p4.apply.click();
+          d4.dispatchEvent(new Event('sl-after-hide'));
+          if (s.getText() !== textBefore) out.push('destroyed dialog handler ran: ' + JSON.stringify(s.getText()));
+          if (ed.createdNodes.length !== 0) out.push('nodes still tracked');
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
 /// Roughly 5,000 words of Markdown.
 fn five_thousand_words() -> String {
     let paragraph = "The quick brown fox jumps over the lazy dog while **bold** words and \
