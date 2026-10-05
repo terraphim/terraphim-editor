@@ -441,6 +441,30 @@ class EditorSurface {
     this.record('init', this.lastSelection);
   }
 
+  /**
+   * Fold the last `count` history entries into one undo step (the Blocks
+   * view uses it to keep a block move and its separator fix-up together).
+   * The merged entry keeps every step in order, so undo replays them in
+   * reverse (a recorded text move as a move) and redo replays them forward.
+   * Returns false, changing nothing, when there are fewer than `count`
+   * entries after the base state or one of them has no exact steps.
+   */
+  squashHistory(count, source = null) {
+    const first = this.historyIndex - count + 1;
+    if (count < 2 || first < 1) return false;
+    const group = this.history.slice(first, this.historyIndex + 1);
+    if (group.some((entry) => !entry.edits)) return false;
+    const last = group[group.length - 1];
+    const merged = {
+      ...last,
+      source: source || last.source,
+      edits: group.flatMap((entry) => entry.edits),
+    };
+    this.history.splice(first, count, merged);
+    this.historyIndex = first;
+    return true;
+  }
+
   canUndo() {
     return this.historyIndex > 0;
   }
