@@ -90,6 +90,8 @@ class EditorSurface {
     // eagerly would force a layout on every keystroke).
     this.pendingSelection = null;
     this.onSelectionChange = () => {
+      // A selection change means any recorded beforeinput hint is stale.
+      this.pendingHint = null;
       const sel = document.getSelection();
       if (sel && sel.rangeCount > 0 && this.root.contains(sel.anchorNode) && this.root.contains(sel.focusNode)) {
         this.pendingSelection = [sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset];
@@ -725,7 +727,16 @@ class EditorSurface {
       return;
     }
     this.pendingSource = type.startsWith('delete') ? 'delete' : 'typing';
-    this.pendingHint = this.preEditRange(e);
+    // The hint is single-shot: the native `input` follows synchronously in
+    // the same task, so it is dropped when the next task runs, on any later
+    // selectionchange, and ignored if a later listener cancelled the event.
+    const hint = this.preEditRange(e);
+    this.pendingHint = hint;
+    if (hint) {
+      setTimeout(() => {
+        if (this.pendingHint === hint) this.pendingHint = null;
+      }, 0);
+    }
   }
 
   /**
@@ -758,17 +769,22 @@ class EditorSurface {
       exact,
       inputType: e.inputType || '',
       text: this.text,
+      event: e,
     };
   }
 
   onInput(e) {
     if (this.programmatic) return;
     if (e.isComposing || this.composing) return;
-    const source = this.pendingSource || 'typing';
-    // Only trust a hint recorded for this very edit: same input type and no
-    // model change since it was taken.
+    // Prefer the event's own inputType: a beforeinput that was cancelled
+    // must not label a later, unrelated input.
+    const type = e.inputType || '';
+    const source = type ? (type.startsWith('delete') ? 'delete' : 'typing') : this.pendingSource || 'typing';
+    // Only trust a hint recorded for this very edit: its beforeinput was not
+    // cancelled, same input type and no model change since it was taken.
     const h = this.pendingHint;
-    const hint = h && h.text === this.text && h.inputType === (e.inputType || '') ? h : null;
+    const hint =
+      h && !h.event.defaultPrevented && h.text === this.text && h.inputType === (e.inputType || '') ? h : null;
     this.pendingSource = null;
     this.pendingHint = null;
     this.sync(source, hint, e.inputType || '');
@@ -1066,7 +1082,11 @@ class MarkdownEditor {
     if (this.destroyed) return;
     this.destroyed = true;
     this.abortController.abort();
-    for (const node of this.createdNodes) node.remove();
+    for (const node of this.createdNodes) {
+      // Close an open dialog first so Shoelace releases its scroll lock.
+      if (node.tagName === 'SL-DIALOG' && node.open) node.open = false;
+      node.remove();
+    }
     this.createdNodes = [];
     if (this.surface) this.surface.destroy();
   }
@@ -1328,21 +1348,36 @@ class MarkdownEditor {
     `;
 
     document.body.appendChild(dialog);
+    // Tracked so destroy() removes it even while it is open.
+    this.createdNodes.push(dialog);
+    const signal = this.abortController.signal;
 
     const [applyBtn, cancelBtn] = dialog.querySelectorAll('sl-button');
     const prefixInput = dialog.querySelector('#prefix-input');
     const suffixInput = dialog.querySelector('#suffix-input');
 
+    const dispose = () => {
+      dialog.remove();
+      this.createdNodes = this.createdNodes.filter((node) => node !== dialog);
+    };
+    // Without the Shoelace element defined there is no hide animation (and
+    // so no sl-after-hide); remove the dialog directly.
+    const close = () => {
+      if (typeof dialog.hide === 'function') dialog.hide();
+      else dispose();
+    };
+
     applyBtn.addEventListener('click', () => {
-      this.wrapSelectedText(prefixInput.value, suffixInput.value);
-      dialog.hide();
-    });
+      this.wrapSelectedText(prefixInput.value || '', suffixInput.value || '');
+      close();
+    }, { signal });
 
-    cancelBtn.addEventListener('click', () => dialog.hide());
+    cancelBtn.addEventListener('click', close, { signal });
 
-    dialog.addEventListener('sl-after-hide', () => dialog.remove());
+    dialog.addEventListener('sl-after-hide', dispose, { signal });
 
-    dialog.show();
+    if (typeof dialog.show === 'function') dialog.show();
+    return dialog;
   }
 }
 
