@@ -7,7 +7,7 @@ Issue: terraphim/terraphim-editor#11 (epic #1). Spec: `docs/requirements/alterna
 - Select text and right-click (or press the Menu key or Shift+F10): a dark rounded menu opens near the selection. It has monospace labels on the left and dim shortcuts on the right, and the hovered or keyboard-active row is slightly lighter. Today it holds one item, **Ghost it** (Ctrl+/), or **Revive** when the selection is already entirely ghosted.
 - Ghosted text recedes to about 10% (`--te-ghost-opacity`). It stays in the document: you can still read, select and edit it, and it is still counted (R-5.1, decision 3). Export drops it (R-9.3). Save keeps it, in the block's `ghosts` list.
 - Ctrl+/ toggles the selection with no menu: if the selection is entirely ghosted it is revived, otherwise it is ghosted.
-- With a collapsed caret, right-click or Ctrl+/ inside a ghost offers Revive for that whole ghost. R-5.2 says "right-click ghosted text"; right-clicking with no selection selects nothing in most browsers, so this case needs its own handling. With a collapsed caret outside any ghost, the native context menu is left alone and Ctrl+/ does nothing.
+- With a collapsed caret, right-click or Ctrl+/ inside a ghost offers Revive for that whole ghost. R-5.2 says "right-click ghosted text"; right-clicking with no selection selects nothing in most browsers, so this case needs its own handling. Both ends count as inside: a caret just before a ghost's first character or just after its last one revives it. With a collapsed caret outside any ghost, the native context menu is left alone and Ctrl+/ does nothing.
 
 ## The ghost layer (R-5.3)
 
