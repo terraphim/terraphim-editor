@@ -1,6 +1,8 @@
 [build]
 target = "index.html"
-dist = "dist"
+# Development output. The committed release copy in ./dist is regenerated only
+# by scripts/release-dist.sh (trunk build --release --dist dist).
+dist = "target/trunk-dist"
 
 [serve]
 address = "127.0.0.1"
