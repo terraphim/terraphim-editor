@@ -12,7 +12,7 @@ Trunk is the build system. Styles come from [Shoelace](https://shoelace.style/) 
 
   ![Plain mode](docs/images/plain.png)
 
-- **Write_On mode.** A full-window writing surface with corner controls: the word and character counter (click it to switch modes), `●●●` alternatives panel, `M↓` Markdown view, the keyboard reference, save and open, the **LAB** pill and the **XYZ** Overflow panel.
+- **Write_On mode.** A full-window writing surface with corner controls: the word and character counter (click it to switch modes), `●●●` alternatives panel, `M↓` (sends a `te:markdown` event for a host page to show or export the Markdown; the editor has no built-in view for it yet), the keyboard reference, save and open, the **LAB** pill and the **XYZ** Overflow panel.
 
 - **Alternatives and inline indicators.** A word, sentence or paragraph can hold several alternatives. Text with alternatives shows a row of dots under it (one per alternative, the active one lit); hover it and press Up or Down to cycle in place. "a" and "an" before the word are corrected as you cycle. Alternatives are stored in a trailing `terraphim-alternatives` block in the Markdown file, so the file stays plain Markdown.
 
@@ -46,7 +46,7 @@ Trunk is the build system. Styles come from [Shoelace](https://shoelace.style/) 
 
 ## Keyboard shortcuts
 
-The keyboard glyph in Write_On mode opens the same reference. Ctrl is not aliased to Cmd.
+The keyboard glyph in Write_On mode opens the same reference. Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, redo and Ctrl+Enter also accept Cmd.
 
 ### Writing
 
@@ -58,7 +58,7 @@ The keyboard glyph in Write_On mode opens the same reference. Ctrl is not aliase
 | Ctrl+L | Link |
 | Ctrl+H | Heading |
 | `/` | Command palette (headings, bold, italic, underline) |
-| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Ctrl+Z / Ctrl+Y (or Cmd) | Undo / redo |
 
 ### Selection (Write_On mode)
 
