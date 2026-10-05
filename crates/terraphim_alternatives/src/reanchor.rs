@@ -276,7 +276,9 @@ fn place(anchors: &[&Anchor], occurrences: &Occurrences<'_>) -> Vec<Placement> {
     // Rule 1: exact hint.
     for (i, anchor) in anchors.iter().enumerate() {
         let hint = anchor.start;
-        if occurrences[i].contains(&hint) && !overlaps_claim(&claimed, hint, lengths[i]) {
+        // Starts are in body order, so the hint can be looked up by halving.
+        let at_hint = occurrences[i].binary_search(&hint).is_ok();
+        if at_hint && !overlaps_claim(&claimed, hint, lengths[i]) {
             placed[i] = Some(hint);
             claimed.push((hint, hint + lengths[i]));
         }
