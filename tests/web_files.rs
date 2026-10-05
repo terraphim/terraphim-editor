@@ -5,7 +5,9 @@
 //! downloads are observed). Elsewhere: writing back to a kept file handle,
 //! cancelling te:open / te:markdown and teardown in `web_files_handles.rs`;
 //! opening in `web_files_open.rs` and `web_files_replace.rs`; dirty state
-//! and drafts in `web_files_drafts.rs`; the Markdown export dialog in
+//! in `web_files_drafts.rs`; drafts in `web_files_restore.rs` and
+//! `web_files_identity.rs` (with the shortcut scope); overlapping saves and
+//! opens in `web_files_race.rs`; the Markdown export dialog in
 //! `web_files_markdown.rs`. See `tests/web.rs` for why the browser tests
 //! are split across binaries.
 #![cfg(target_arch = "wasm32")]

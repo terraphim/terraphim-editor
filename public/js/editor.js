@@ -2365,12 +2365,13 @@ const initEditor = () => {
       if (window.terraphimEditor && typeof window.terraphimEditor.destroy === 'function') {
         window.terraphimEditor.destroy();
       }
-      // Pass the EditorConfig when initializing
-      const editor = new MarkdownEditor(window.EditorConfig || {
+      // Pass the EditorConfig when initializing. This page is the editor,
+      // so Ctrl+S / Ctrl+O act anywhere on it (#76, `standalone`).
+      const editor = new MarkdownEditor(Object.assign({ standalone: true }, window.EditorConfig || {
         shortcuts: [],
         commands: [],
         styles: {}
-      });
+      }));
       editor.initialize();
       window.terraphimEditor = editor;
     } else {

@@ -20,12 +20,13 @@ use super::*;
 pub const FILES_HELPERS_JS: &str = r##"
 window.teFiles = {
   // Recreate the editor on the current page with test-friendly options:
-  // the download and file-input paths, and a short autosave delay.
+  // the download and file-input paths, a short autosave delay, and the
+  // standalone page's shortcut scope (keys act anywhere on the page).
   reinit(extra, opts) {
     const old = window.__teEditor;
     if (old) old.destroy();
     if (!(opts && opts.keepDrafts)) teTest.resetDrafts();
-    const config = Object.assign({}, window.EditorConfig, { fileSystemAccess: false, autosaveDelay: 40 }, extra || {});
+    const config = Object.assign({}, window.EditorConfig, { fileSystemAccess: false, autosaveDelay: 40, standalone: true }, extra || {});
     const ed = new MarkdownEditor(config);
     ed.initialize();
     window.__teEditor = ed;
@@ -71,6 +72,33 @@ window.teFiles = {
     return teFiles.drag(target, dt);
   },
   wait(ms) { return new Promise((r) => setTimeout(r, ms)); },
+  // A promise the test resolves when it chooses: { promise, open() }.
+  gate() {
+    let open;
+    const promise = new Promise((r) => { open = r; });
+    return { promise, open };
+  },
+  // A real origin-private file handle whose createWritable() waits for
+  // `gate` before delegating to the real handle: a browser-API shim that
+  // makes the write slow, so a test controls when it completes. The
+  // editor's code is not touched. isSameEntry() compares the real entry.
+  slowHandle(real, gate) {
+    return {
+      kind: 'file',
+      name: real.name,
+      real,
+      getFile: () => real.getFile(),
+      createWritable: async () => { await gate.promise; return real.createWritable(); },
+      isSameEntry: (other) => real.isSameEntry(other && other.real ? other.real : other),
+    };
+  },
+  async opfsFile(dir, name, text) {
+    const h = await dir.getFileHandle(name, { create: true });
+    const w = await h.createWritable();
+    await w.write(text);
+    await w.close();
+    return h;
+  },
   // The full persistence fixture as the editor saves it (the writer
   // normalises the separator before the block, so this is the canonical
   // text whose open -> save round trip is exact).

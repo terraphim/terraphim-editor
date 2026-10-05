@@ -1,6 +1,7 @@
 //! Browser tests for the dirty state and autosave drafts (issue #76): the
-//! dirty dot and title, annotation-only changes, the draft in localStorage,
-//! and the Restore / Discard notice after a simulated reload. Run with
+//! dirty dot and title, annotation-only changes, the draft in localStorage
+//! and a host's own open (the Restore / Discard notice after a simulated
+//! reload is in `web_files_restore.rs`). Run with
 //! `wasm-pack test --headless --chrome`. Real scripts, real localStorage and
 //! the real exported document API; nothing is mocked (see
 //! `tests/support/files.rs`). See `tests/web.rs` for why the browser tests
@@ -94,85 +95,6 @@ async fn test_dirty_state_follows_edits_undo_annotations_and_save() {
           document.removeEventListener('te:dirty-change', onDirty);
           document.title = title;
         }
-        return out.join('; ');
-        "##,
-    )
-    .await;
-    assert_eq!(result, "");
-}
-
-#[wasm_bindgen_test]
-async fn test_draft_is_restored_or_discarded_after_a_reload() {
-    let _document = fresh_files_editor();
-    let result = js_async(
-        r##"
-        const out = [];
-        let ed = teFiles.reinit();
-        const key = ed.persistence.key;
-        if (!key.startsWith('h:')) out.push('welcome key ' + key);
-        const stored = () => JSON.parse(localStorage.getItem(window.TE_DRAFT_PREFIX + key) || 'null');
-        // Type and reload before the autosave delay: destroy keeps the draft.
-        teFiles.type(ed, ' Keep me.');
-        const want = ed.persistence.serialise();
-        teFiles.resetToWelcome();
-        if (!stored() || stored().text !== want) return 'draft not kept on teardown';
-        const focusBefore = document.activeElement;
-        ed = teFiles.reinit({}, { keepDrafts: true });
-        if (ed.persistence.key !== key) out.push('key changed across the reload');
-        if (ed.surface.getText() !== teFiles.welcome()) out.push('reload did not show the welcome text');
-        const notice = document.querySelector('.te-files-notice');
-        if (!teTest.visible(notice)) return out.concat('no restore notice').join('; ');
-        if (notice.getAttribute('role') !== 'region' || !notice.getAttribute('aria-label')) out.push('notice role');
-        if (notice.querySelector('[aria-live="polite"]') === null) out.push('notice not live');
-        if (!notice.textContent.startsWith('Unsaved draft from ')) out.push('notice text ' + JSON.stringify(notice.textContent));
-        const actions = Array.from(notice.querySelectorAll('button')).map((b) => b.dataset.action).join(',');
-        if (actions !== 'restore,discard') out.push('actions ' + actions);
-        if (notice.contains(document.activeElement)) out.push('notice took focus');
-        if (document.activeElement !== focusBefore && document.activeElement !== document.body) out.push('focus moved');
-        if (ed.persistence.dirty) out.push('dirty before restoring');
-        // A clean tick while the notice is up leaves the stored draft alone.
-        ed.persistence.schedule();
-        await teFiles.wait(120);
-        if (!stored() || stored().text !== want) out.push('clean tick replaced the pending draft');
-        // Restore.
-        notice.querySelector('[data-action="restore"]').click();
-        if (ed.persistence.serialise() !== want) out.push('restored text differs');
-        if (!ed.surface.getText().endsWith(' Keep me.')) out.push('restored body ' + JSON.stringify(ed.surface.getText().slice(-20)));
-        if (!ed.persistence.dirty) out.push('restored draft not dirty');
-        if (!notice.hidden) out.push('notice still shown');
-        if (ed.persistence.key !== key) out.push('restore changed the key');
-        // Undo after a restore does not go back past it.
-        // Discard after another reload: the draft goes, the welcome text stays.
-        teFiles.resetToWelcome();
-        ed = teFiles.reinit({}, { keepDrafts: true });
-        const n2 = document.querySelector('.te-files-notice');
-        if (!teTest.visible(n2)) return out.concat('no notice the second time').join('; ');
-        n2.querySelector('[data-action="discard"]').click();
-        if (stored() !== null) out.push('discard kept the draft');
-        if (!n2.hidden) out.push('notice after discard');
-        if (ed.surface.getText() !== teFiles.welcome()) out.push('discard changed the text');
-        teFiles.resetToWelcome();
-        ed = teFiles.reinit({}, { keepDrafts: true });
-        if (teTest.visible(document.querySelector('.te-files-notice'))) out.push('notice after discarding');
-        // A file newer than its draft is not offered the draft; an older one is.
-        ed.persistence.load(teFixtures.plain.md, 'dated.md');
-        teFiles.type(ed, ' Draft words.');
-        await teFiles.wait(120);
-        const d = JSON.parse(localStorage.getItem(window.TE_DRAFT_PREFIX + 'dated.md') || 'null');
-        if (!d) return out.concat('no draft for dated.md').join('; ');
-        ed.persistence.load(teFixtures.plain.md, 'dated.md', null, d.savedAt + 1000);
-        if (teTest.visible(document.querySelector('.te-files-notice'))) out.push('offered a draft older than the file');
-        ed.persistence.load(teFixtures.plain.md, 'dated.md', null, d.savedAt - 1000);
-        if (!teTest.visible(document.querySelector('.te-files-notice'))) out.push('no offer for a draft newer than the file');
-        // The same text as the file is never offered.
-        localStorage.setItem(window.TE_DRAFT_PREFIX + 'same.md', JSON.stringify({ v: 1, text: teFixtures.plain.md, savedAt: Date.now() }));
-        ed.persistence.load(teFixtures.plain.md, 'same.md', null, 0);
-        if (teTest.visible(document.querySelector('.te-files-notice'))) out.push('offered an identical draft');
-        // Broken storage content is ignored.
-        localStorage.setItem(window.TE_DRAFT_PREFIX + 'bad.md', '{not json');
-        ed.persistence.load(teFixtures.plain.md, 'bad.md');
-        if (teTest.visible(document.querySelector('.te-files-notice'))) out.push('offered a broken draft');
-        teTest.resetDrafts();
         return out.join('; ');
         "##,
     )

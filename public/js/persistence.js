@@ -10,7 +10,9 @@
  * docs/design/persistence.md.
  *
  * Entry points (the Write_On corner controls, the plain toolbar's File
- * group and the keyboard all go through these):
+ * group and the keyboard all go through these; the keys act anywhere on the
+ * page when `config.standalone` is true, as on index.html, and otherwise
+ * only while focus is in the editor, its chrome, panels or dialogs):
  *
  *   save()          Ctrl+S / Cmd+S, floppy   dispatches cancelable te:save
  *   open()          Ctrl+O / Cmd+O, folder   dispatches cancelable te:open
@@ -58,8 +60,11 @@
  *
  * Drafts. On that same tick, on save and on pagehide, the serialised
  * document is kept in localStorage under
- *   terraphim-editor:draft:<document key>
- * as JSON {v: 1, text, savedAt, name}. When an editor starts, or a file is
+ *   terraphim-editor:draft:<draft id>
+ * as JSON {v: 1, text, savedAt, name}. The draft id is `fs:<id>` for a file
+ * handle (an id kept with the handle in IndexedDB), `file:<name>|<size>|
+ * <lastModified>` for a file opened without a handle, and the document key
+ * otherwise, so two files with the same name never share a draft. When an editor starts, or a file is
  * opened, and a draft for its key differs from the opened text (and, for a
  * file, is newer than the file's lastModified), a non-blocking notice offers
  * Restore / Discard. While the notice is up the stored draft is only
@@ -139,6 +144,52 @@ function teDraftHash(text) {
   return h.toString(16).padStart(8, '0');
 }
 
+/*
+ * File handle ids for draft keys: handles are structured-cloneable, so each
+ * one is kept in IndexedDB (database terraphim-editor-files, store handles)
+ * with a random id, and found again with isSameEntry(). Rejects when
+ * IndexedDB is unavailable; the caller then falls back to name, size and
+ * modification time.
+ */
+let teHandleDb = null;
+
+function teIdb(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function teOpenHandleDb() {
+  if (!teHandleDb) {
+    const req = window.indexedDB.open('terraphim-editor-files', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles', { keyPath: 'id' });
+    teHandleDb = teIdb(req).catch((err) => {
+      teHandleDb = null;
+      throw err;
+    });
+  }
+  return teHandleDb;
+}
+
+async function teHandleId(handle) {
+  if (!window.indexedDB || !handle || typeof handle.isSameEntry !== 'function') throw new Error('no handle store');
+  const db = await teOpenHandleDb();
+  const all = await teIdb(db.transaction('handles').objectStore('handles').getAll());
+  for (const rec of all) {
+    try {
+      if (rec.handle && (await rec.handle.isSameEntry(handle))) return rec.id;
+    } catch (err) {
+      // A stale or foreign entry: skip it.
+    }
+  }
+  const id = window.crypto && typeof window.crypto.randomUUID === 'function'
+    ? window.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  await teIdb(db.transaction('handles', 'readwrite').objectStore('handles').put({ id, handle }));
+  return id;
+}
+
 class TePersistence {
   constructor(editor, options = {}) {
     this.editor = editor;
@@ -152,6 +203,18 @@ class TePersistence {
     this.destroyed = false;
     this.handle = null;
     this.fileName = null;
+    // Bumped whenever a different document is opened (load, a host's
+    // openDocument); late save and open completions check it so they never
+    // touch the document that replaced theirs.
+    this.generation = 0;
+    this.openSeq = 0;
+    // Where drafts are stored (see draftIdentity()); null while a file
+    // handle's id is being looked up.
+    this.draftId = null;
+    this.identityReady = Promise.resolve();
+    // Ctrl/Cmd+S and Ctrl/Cmd+O everywhere on the page only when the editor
+    // is the page (index.html sets it); embedded, only with focus inside.
+    this.standalone = config.standalone === true;
     this.dirty = false;
     this.timer = null;
     this.quiet = 0;
@@ -167,6 +230,7 @@ class TePersistence {
 
     const text = editor.surface ? editor.surface.getText() : '';
     this.key = this.initialKey(text);
+    this.draftId = this.key;
     this.cleanText = this.serialise();
     this.checkDraft(null);
   }
@@ -392,11 +456,14 @@ class TePersistence {
   // ---------------------------------------------------------------------
 
   listen() {
-    // Ctrl+S / Cmd+S saves and Ctrl+O / Cmd+O opens, anywhere on the page;
-    // the browser's own Save page and Open file are prevented.
+    // Ctrl+S / Cmd+S saves and Ctrl+O / Cmd+O opens, and the browser's own
+    // Save page and Open file are prevented: anywhere on a standalone page,
+    // but in an embedding page only while focus is in the editor, its chrome,
+    // panels or dialogs, so the host's own shortcuts keep working.
     this.on(document, 'keydown', (e) => {
       if (this.destroyed || e.defaultPrevented || e.isComposing) return;
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (!this.standalone && !this.ownsFocus(e.target)) return;
       const key = (e.key || '').toLowerCase();
       if (key === 's') {
         e.preventDefault();
@@ -421,6 +488,18 @@ class TePersistence {
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     });
     this.on(document, 'drop', (e) => this.onDrop(e));
+  }
+
+  /** Whether `target` is inside the editor, its chrome, panels or dialogs. */
+  ownsFocus(target) {
+    if (!(target instanceof Node)) return false;
+    const el = target.nodeType === 1 ? target : target.parentElement;
+    if (!el) return false;
+    const container = this.editor.input && (this.editor.input.closest('.editor-container') || this.editor.input);
+    if (container && container.contains(el)) return true;
+    return !!el.closest(
+      '.te-chrome, .te-overflow, .te-alt-panel, .te-blocks, .te-selection-menu, .te-files-dialog, .te-files-notice',
+    );
   }
 
   isFileDrag(e) {
@@ -570,11 +649,14 @@ class TePersistence {
    */
   documentChanged(name) {
     if (this.destroyed || this.quiet > 0) return;
+    this.generation += 1;
     this.cancelTick();
     this.handle = null;
     this.fileName = typeof name === 'string' && name ? name : null;
     const key = this.editor.documentKey;
     if (typeof key === 'string' && key) this.key = key;
+    this.draftId = this.key;
+    this.identityReady = Promise.resolve();
     this.cleanText = this.serialise();
     this.setDirty(false);
     this.checkDraft(null);
@@ -598,11 +680,12 @@ class TePersistence {
     }
   }
 
-  draftKey(key = this.key) {
+  draftKey(key = this.draftId) {
     return TE_DRAFT_PREFIX + key;
   }
 
-  readDraft(key = this.key) {
+  readDraft(key = this.draftId) {
+    if (key === null) return null;
     try {
       const raw = window.localStorage.getItem(this.draftKey(key));
       if (!raw) return null;
@@ -614,6 +697,7 @@ class TePersistence {
   }
 
   writeDraft(text) {
+    if (this.draftId === null) return; // the file's identity is still being looked up
     try {
       window.localStorage.setItem(this.draftKey(), JSON.stringify({
         v: 1, text, savedAt: Date.now(), name: this.fileName,
@@ -623,7 +707,8 @@ class TePersistence {
     }
   }
 
-  removeDraft(key = this.key) {
+  removeDraft(key = this.draftId) {
+    if (key === null) return;
     try {
       window.localStorage.removeItem(this.draftKey(key));
     } catch (err) {
@@ -651,7 +736,8 @@ class TePersistence {
     const stamp = when
       ? when.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
       : 'an earlier session';
-    this.showNotice(`Unsaved draft from ${stamp} found.`, [
+    const whose = draft.name ? draft.name : 'this document';
+    this.showNotice(`Unsaved draft of ${whose} from ${stamp} found.`, [
       { name: 'restore', label: 'Restore', onClick: () => this.restoreDraft() },
       { name: 'discard', label: 'Discard', onClick: () => this.discardDraft() },
     ], 'draft');
@@ -695,24 +781,62 @@ class TePersistence {
   /** Re-key to `name` after a save-as, carrying the Write_On mode with it. */
   rekey(name) {
     if (!name || name === this.key) return;
-    const old = this.key;
     this.key = name;
     this.editor.documentKey = name;
-    // The draft moves with the document.
-    const draft = this.readDraft(old);
-    if (draft) {
-      try {
-        window.localStorage.setItem(this.draftKey(name), JSON.stringify(Object.assign(draft, { name })));
-      } catch (err) {
-        // Storage unavailable: nothing to move.
-      }
-    }
-    this.removeDraft(old);
     const chrome = this.editor.chrome;
     if (chrome && !chrome.destroyed && typeof chrome.setMode === 'function') {
       chrome.key = name;
       chrome.setMode(chrome.mode);
     }
+  }
+
+  /** Move the stored draft from one draft id to another. */
+  moveDraft(from, to) {
+    if (from === null || to === null || from === to) return;
+    const draft = this.readDraft(from);
+    if (draft) {
+      try {
+        window.localStorage.setItem(this.draftKey(to), JSON.stringify(Object.assign(draft, { name: this.fileName })));
+      } catch (err) {
+        // Storage unavailable: nothing to move.
+      }
+    }
+    this.removeDraft(from);
+  }
+
+  /**
+   * Where a document's drafts are stored, so two files with the same name
+   * never share one:
+   *   - a File System Access handle: `fs:<id>`, an id kept with the handle
+   *     in IndexedDB and found again with isSameEntry();
+   *   - a file without a handle (file input, drop outside Chromium):
+   *     `file:<name>|<size>|<lastModified>` as read at open;
+   *   - otherwise (unnamed documents, a host's openDocument, downloads):
+   *     the document key, as before.
+   * Sets `draftId` (null until a handle's id is known; drafts are not
+   * written meanwhile) and returns `identityReady`, which resolves once it
+   * is set. Only applies if no other document was opened in the meantime.
+   */
+  setDraftIdentity({ handle = null, name = null, size = null, lastModified = null } = {}, onReady = null) {
+    const gen = this.generation;
+    const fileKey = name && Number.isFinite(lastModified)
+      ? `file:${name}|${Number.isFinite(size) ? size : ''}|${lastModified}`
+      : null;
+    const fallback = fileKey || this.key;
+    if (!handle) {
+      this.draftId = fallback;
+      this.identityReady = Promise.resolve();
+      if (onReady) onReady();
+      return this.identityReady;
+    }
+    this.draftId = null;
+    this.identityReady = teHandleId(handle).then((id) => `fs:${id}`, () => fallback).then((key) => {
+      if (this.destroyed || gen !== this.generation) return;
+      this.draftId = key;
+      if (onReady) onReady();
+      if (this.dirty) this.tick();
+    });
+    return this.identityReady;
   }
 
   // ---------------------------------------------------------------------
@@ -737,9 +861,17 @@ class TePersistence {
     }
     this.cancelTick();
     this.writeDraft(text);
-    const write = this.writeFile(text, this.suggestedName(), { keepHandle: true });
+    // The document this save belongs to: if another is opened before the
+    // write completes, the write still finishes (to the old file) but the
+    // new document's handle, key and clean state are left alone.
+    const gen = this.generation;
+    const write = this.writeFile(text, this.suggestedName(), { keepHandle: true, generation: gen });
     this.lastWrite = write.then((result) => {
       if (!result || this.destroyed) return false;
+      if (gen !== this.generation) {
+        this.emit('te:written', { name: result.name, method: result.method, text, stale: true });
+        return true;
+      }
       this.cleanText = text;
       const now = this.serialise();
       this.setDirty(now !== null && now !== text);
@@ -755,7 +887,7 @@ class TePersistence {
    * The picker is requested synchronously so the click or key press that
    * started the save still counts as user activation.
    */
-  writeFile(text, name, { keepHandle = false } = {}) {
+  writeFile(text, name, { keepHandle = false, generation = this.generation } = {}) {
     if (!this.fsAccess) return Promise.resolve(this.download(text, name));
     let handlePromise;
     if (keepHandle && this.handle) {
@@ -778,10 +910,13 @@ class TePersistence {
           this.showNotice(`Could not write ${handle.name}: ${err.message || err.name}.`, [], 'error');
           return null;
         }
-        if (keepHandle) {
+        if (keepHandle && generation === this.generation && !this.destroyed && handle !== this.handle) {
+          // A first save-as: the chosen file becomes the document.
+          const oldDraft = this.draftId;
           this.handle = handle;
           this.fileName = handle.name;
           this.rekey(handle.name);
+          this.setDraftIdentity({ handle }, () => this.moveDraft(oldDraft, this.draftId));
         }
         return { name: handle.name, method: 'file' };
       },
@@ -853,6 +988,11 @@ class TePersistence {
    */
   async openFile(file, handle = null) {
     if (this.destroyed) return false;
+    // Only the latest open may load, and only into the document it started
+    // from (a slower earlier read must not replace a later one).
+    const seq = ++this.openSeq;
+    const gen = this.generation;
+    const current = () => !this.destroyed && seq === this.openSeq && gen === this.generation;
     if (!teIsOpenableFile(file)) {
       this.showNotice(`${file && file.name ? file.name : 'That file'} is not a Markdown or text file.`, [], 'error');
       return false;
@@ -864,21 +1004,22 @@ class TePersistence {
       this.showNotice(`Could not read ${file.name}.`, [], 'error');
       return false;
     }
-    if (this.destroyed) return false;
+    if (!current()) return false;
     if (this.isDirty()) {
       const choice = await this.askReplace(file.name);
-      if (choice === 'cancel' || this.destroyed) return false;
+      if (choice === 'cancel' || !current()) return false;
       if (choice === 'save') {
         const saved = this.save();
-        if (saved === null || !(await this.lastWrite)) return false;
+        if (saved === null || !(await this.lastWrite) || !current()) return false;
       }
     }
-    this.load(text, file.name, handle, file.lastModified);
+    this.load(text, file.name, handle, file.lastModified, file.size);
     return true;
   }
 
   /** Put `text` in the editor as the document `name` (no questions asked). */
-  load(text, name, handle = null, lastModified = null) {
+  load(text, name, handle = null, lastModified = null, size = null) {
+    this.generation += 1;
     this.quiet += 1;
     try {
       this.editor.openDocument(text, name);
@@ -891,7 +1032,10 @@ class TePersistence {
     if (name) this.key = name;
     this.cleanText = this.serialise();
     this.setDirty(false);
-    this.checkDraft(Number.isFinite(lastModified) ? { lastModified } : null);
+    this.showNotice(null);
+    this.pendingDraft = null;
+    const file = Number.isFinite(lastModified) ? { lastModified } : null;
+    this.setDraftIdentity({ handle, name, size, lastModified }, () => this.checkDraft(file));
     this.emit('te:opened', { name, text });
   }
 
