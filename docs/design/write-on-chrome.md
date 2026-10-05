@@ -15,16 +15,16 @@ Spec note: R-7.1 and R-2.1 describe plain mode as text plus counter only, withou
 |---|---|---|
 | top-left | `N words M chars` | `te:mode-change` `{mode}` |
 | top-centre | `●●●` (lavender) | `te:open-panel` `{panel: 'alternatives'}` |
-| top-centre | `M↓` (boxed) | `te:markdown` |
+| top-centre | `M↓` (boxed) | `te:markdown` (cancelable); if not cancelled, the Markdown export dialog (issue #73) |
 | top-right | keyboard (FontAwesome `fa-keyboard`) | opens the shortcut reference, then `te:shortcuts` |
-| bottom-left | save (`fa-floppy-disk`, lavender) | `te:save` (cancelable); if not cancelled, calls `editor.saveDocument()` when it exists |
-| bottom-left | open (`fa-folder-open`) | `te:open` |
+| bottom-left | save (`fa-floppy-disk`, lavender) | `te:save` (cancelable); if not cancelled, `editor.saveDocument()` and the file is written (issue #76) |
+| bottom-left | open (`fa-folder-open`) | `te:open` (cancelable); if not cancelled, a file is picked and opened (issue #76) |
 | bottom-centre | `LAB` dashed pill | `te:lab` |
 | bottom-right | `XYZ` tag | `te:overflow` |
 
 Every event has `detail.editor`, the `MarkdownEditor`. The X and LinkedIn buttons are out of scope. Features that arrive later (alternatives panel, Markdown view, Lab, Overflow) should listen for their event.
 
-`te:open` has no payload because `editor.openDocument(text)` needs the text. The open flow (issue #6) reads the file, calls `editor.openDocument(text)` and then `editor.chrome.documentChanged()`.
+The default actions of `te:save`, `te:open` and `te:markdown` belong to `editor.persistence` (`public/js/persistence.js`, issues #76 and #73; see `docs/design/persistence.md`), which dispatches the events from the chrome root itself. A host page that stores documents calls `preventDefault()` and does its own thing: for example it reads a file, calls `editor.openDocument(text, name)` (which calls `editor.chrome.documentChanged()`), and writes the `text` of `te:saved`. The shortcut reference's Editor section adds Ctrl+S (save) and Ctrl+O (open) when `persistence.js` is loaded.
 
 ## Counter
 

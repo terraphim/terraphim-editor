@@ -8,11 +8,19 @@ Trunk is the build system. Styles come from [Shoelace](https://shoelace.style/) 
 
 ## Features
 
-- **Plain mode.** A Markdown source pane with a live preview (debounced), a formatting toolbar and a `/` command palette.
+- **Plain mode.** A Markdown source pane with a live preview (debounced), a formatting toolbar with Open, Save and Markdown export buttons, and a `/` command palette.
 
   ![Plain mode](docs/images/plain.png)
 
-- **Write_On mode.** A full-window writing surface with corner controls: the word and character counter (click it to switch modes), `●●●` alternatives panel, `M↓` (sends a `te:markdown` event for a host page to show or export the Markdown; the editor has no built-in view for it yet), the keyboard reference, save and open, the **LAB** pill and the **XYZ** Overflow panel.
+- **Write_On mode.** A full-window writing surface with corner controls: the word and character counter (click it to switch modes), `●●●` alternatives panel, `M↓` (the Markdown export view), the keyboard reference, save and open, the **LAB** pill and the **XYZ** Overflow panel.
+
+- **Save and open real files.** Ctrl+S (or the floppy) saves the document, alternatives, ghosts and overflow included, as a `.md` file: in Chrome and Edge the first save asks where and later saves write to the same file; in Firefox and Safari the file is downloaded. Ctrl+O (or the folder), or dropping a `.md` file on the editor, opens one and restores everything. A dot on the save button and a `•` in the tab title show unsaved changes, opening another file over them asks first, and an autosaved draft survives a reload: the editor offers to restore it.
+
+  ![Restore draft notice](docs/images/restore-draft.png)
+
+- **Markdown export.** `M↓` (or the toolbar's Markdown button) shows the clean Markdown, with the active alternatives and without ghosted text, the overflow or the annotation block, ready to copy or download.
+
+  ![Markdown export](docs/images/markdown-export.png)
 
 - **Alternatives and inline indicators.** A word, sentence or paragraph can hold several alternatives. Text with alternatives shows a row of dots under it (one per alternative, the active one lit); hover it and press Up or Down to cycle in place. "a" and "an" before the word are corrected as you cycle. Alternatives are stored in a trailing `terraphim-alternatives` block in the Markdown file, so the file stays plain Markdown.
 
@@ -46,7 +54,7 @@ Trunk is the build system. Styles come from [Shoelace](https://shoelace.style/) 
 
 ## Keyboard shortcuts
 
-The keyboard glyph in Write_On mode opens the same reference. Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, redo and Ctrl+Enter also accept Cmd.
+The keyboard glyph in Write_On mode opens the same reference. Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, redo, save, open and Ctrl+Enter also accept Cmd.
 
 ### Writing
 
@@ -59,6 +67,8 @@ The keyboard glyph in Write_On mode opens the same reference. Formatting and sel
 | Ctrl+H | Heading |
 | `/` | Command palette (headings, bold, italic, underline) |
 | Ctrl+Z / Ctrl+Y (or Cmd) | Undo / redo |
+| Ctrl+S (or Cmd) | Save (replaces the browser's Save page) |
+| Ctrl+O (or Cmd) | Open a `.md`, `.markdown` or `.txt` file (replaces the browser's Open file) |
 
 ### Selection (Write_On mode)
 
@@ -113,6 +123,12 @@ The keyboard glyph in Write_On mode opens the same reference. Formatting and sel
 | Alt+Up / Alt+Down | Move the block up or down |
 | Ctrl+Enter (while editing) | Commit the edit |
 | Escape (while editing) | Close; typed text is kept in the drafts notice |
+
+## Saving, opening and host pages
+
+Save and open work in the standalone page with no host code. Saved files are plain Markdown with a trailing `terraphim-alternatives` block that holds alternatives, ghosts and the overflow; opening the file again restores them. The `M↓` export leaves the block out. Unsaved work is also kept as a draft in the browser's local storage, keyed by file name (or by the starting text for an unnamed document). Design notes: `docs/design/persistence.md`.
+
+A page that embeds the editor and stores documents itself can take over: `te:save`, `te:open` and `te:markdown` bubble to `document` and are cancelable, so `preventDefault()` stops the built-in action. `te:saved` carries the serialised document (`detail.text`) whenever the editor saves; `editor.openDocument(text, name)` loads one. `te:written`, `te:opened`, `te:dirty-change`, `te:mode-change` and `te:blocks-drafts` report what happened. Set `fileSystemAccess: false` in the editor config to always download instead of using the browser's file picker.
 
 ## Prerequisites
 
@@ -172,7 +188,7 @@ This runs `trunk build --release --dist dist` and adds the embeddable bundle (`t
 | `src/` | The WebAssembly entry point, Markdown rendering, the document bridge (`document.rs`), the Lab bridge (`lab.rs`) and knowledge-graph alternatives (`kg.rs`) |
 | `crates/terraphim_alternatives` | The span model: alternatives, ghosts, overflow, the annotation block, re-anchoring, moves and the shared word count |
 | `crates/terraphim_lab` | The Lab engine: mark actions and the trim engine |
-| `public/js/` | The editor surface and its features: chrome, indicators, selection menu, Lab, trim, Blocks view, alternatives panel, Overflow panel |
+| `public/js/` | The editor surface and its features: chrome, indicators, selection menu, Lab, trim, Blocks view, alternatives panel, Overflow panel, save, open and export |
 | `public/css/` | Design tokens and feature styles |
 | `docs/requirements/`, `docs/design/` | Specification and per-feature design notes |
 | `tests/` | Native tests and the browser test binaries (`web_*.rs`) |
