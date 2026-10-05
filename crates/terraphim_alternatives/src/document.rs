@@ -10,7 +10,10 @@
 use thiserror::Error;
 
 use crate::article::{article_for, preceding_article, respell};
-use crate::model::{Alternative, Anchor, Annotations, Ghost, Source, Span, SpanKind};
+use crate::context;
+use crate::model::{
+    Alternative, Anchor, Annotations, CONTEXT_UNITS, Ghost, Source, Span, SpanKind,
+};
 use crate::offset::{utf16_len, utf16_to_byte};
 
 /// A Markdown body with its annotations.
@@ -45,6 +48,17 @@ use crate::offset::{utf16_len, utf16_to_byte};
 ///
 ///   A resized ghost's `anchor.text` is refreshed from the body. Edits never
 ///   merge ghosts that come to touch; touching ghosts are valid state.
+///
+/// # Context
+///
+/// Every anchor created here ([`Document::add_span`], [`Document::ghost`],
+/// merges, splits and resized ghosts) stores the body text around it
+/// ([`Anchor::before`], [`Anchor::after`]; decision 2026-10-05: context
+/// re-anchoring). Every body change made through these operations refreshes
+/// the context of the anchors near it, and a successful
+/// [`Document::reanchor`] refreshes every placed anchor, so the context of an
+/// anchor that matches the body is always current. Detached spans returned by
+/// [`Document::apply_edit`] and unresolved items keep their old context.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Document {
     /// Markdown text without the annotation block. Holds the active
@@ -150,14 +164,11 @@ impl Document {
         }
         let text = self.body[byte_start..byte_end].to_string();
         let id = self.next_id('s');
+        let anchor = self.anchor_over(start, end, byte_start, byte_end);
         self.annotations.spans.push(Span {
             id: id.clone(),
             kind,
-            anchor: Anchor {
-                start,
-                end,
-                text: text.clone(),
-            },
+            anchor,
             active: 0,
             alts: vec![Alternative::new(text, Source::Original)],
         });
@@ -223,6 +234,10 @@ impl Document {
         span.active = index;
         span.anchor.end = span.anchor.start + utf16_len(&new_text);
         span.anchor.text = new_text.clone();
+        let (start, end) = (span.anchor.start, span.anchor.end);
+        // The splice skipped this span (its anchor was not yet updated), so
+        // its own context is refreshed now; the a/an fix-up refreshes again.
+        self.refresh_context_near(start, end, (start, byte_start));
 
         self.fix_article(span_index, byte_start, &new_text);
         Ok(())
@@ -463,6 +478,21 @@ impl Document {
         out
     }
 
+    /// Stores the current context ([`Anchor::before`], [`Anchor::after`]) on
+    /// every span and ghost whose text is still at its offsets; a stale anchor
+    /// keeps the context it has, so a later [`Document::reanchor`] can still
+    /// use it.
+    ///
+    /// The other operations already keep context current, and [`write()`]
+    /// refreshes it on the way out, so this is only needed after changing
+    /// `body` or `annotations` directly, for example to make an in-memory
+    /// document equal to what [`write()`] saves for it.
+    ///
+    /// [`write()`]: crate::write
+    pub fn refresh_context(&mut self) {
+        context::refresh_all(&self.body, &mut self.annotations);
+    }
+
     /// Word and character counts of the body, ghosted text included
     /// (decision 3). The annotation block is never part of the body.
     pub fn counts(&self) -> Counts {
@@ -500,11 +530,44 @@ impl Document {
             .expect("ghost range lies on character boundaries");
         Ghost {
             id,
-            anchor: Anchor {
-                start,
-                end,
-                text: self.body[byte_start..byte_end].to_string(),
-            },
+            anchor: self.anchor_over(start, end, byte_start, byte_end),
+        }
+    }
+
+    /// An anchor over the UTF-16 range `start..end` (bytes
+    /// `byte_start..byte_end`), with its text and current context read from
+    /// the body.
+    fn anchor_over(&self, start: usize, end: usize, byte_start: usize, byte_end: usize) -> Anchor {
+        let (before, after) = context::capture(&self.body, byte_start, byte_end);
+        Anchor {
+            start,
+            end,
+            text: self.body[byte_start..byte_end].to_string(),
+            before: Some(before),
+            after: Some(after),
+        }
+    }
+
+    /// Refreshes the stored context of every anchor close enough to the
+    /// UTF-16 range `start..end` (in the current body) for an edit there to
+    /// have changed it. Stale anchors keep their context. `reference` is a
+    /// `(UTF-16, byte)` character boundary near the range, from which offsets
+    /// are converted without walking the whole body.
+    fn refresh_context_near(&mut self, start: usize, end: usize, reference: (usize, usize)) {
+        // The window spans CONTEXT_UNITS, and trimming looks at one character
+        // (at most two units) beyond it.
+        let reach = CONTEXT_UNITS + 2;
+        let body = self.body.as_str();
+        let anchors = self
+            .annotations
+            .spans
+            .iter_mut()
+            .map(|s| &mut s.anchor)
+            .chain(self.annotations.ghosts.iter_mut().map(|g| &mut g.anchor));
+        for anchor in anchors {
+            if anchor.start <= end + reach && start <= anchor.end + reach {
+                context::refresh_anchor_near(body, anchor, reference);
+            }
         }
     }
 
@@ -550,8 +613,7 @@ impl Document {
 
     /// Byte range of an anchor that still matches the body.
     fn located(&self, anchor: &Anchor) -> Option<(usize, usize)> {
-        let (start, end) = self.byte_range(anchor.start, anchor.end).ok()?;
-        (self.body[start..end] == anchor.text).then_some((start, end))
+        context::locate(&self.body, anchor)
     }
 
     fn locate(&self, span_index: usize) -> Result<(usize, usize), EditError> {
@@ -597,6 +659,11 @@ impl Document {
             }
             self.annotations.ghosts.push(ghost);
         }
+        self.refresh_context_near(
+            edit_start,
+            edit_start + added_units,
+            (edit_start, byte_start),
+        );
     }
 
     /// Errors with [`EditError::StaleAnchor`] when the a/an fix-up that
