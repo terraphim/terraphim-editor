@@ -39,12 +39,26 @@
  *     the other cards are re-rendered around it;
  *   - an edit that overlaps the block, or replaces the whole document
  *     (openDocument, setText), closes the editor and keeps the draft in a
- *     visible, non-blocking notice above the view with "Apply my edit"
- *     (best effort: replaces the block now at that position, or inserts a
- *     new paragraph there; one undo step) and "Discard".
+ *     visible, non-blocking notice above the view, with the block text as
+ *     it was when editing began (`originalText`). The notice offers
+ *     "Replace block" when the block at the draft's position still holds
+ *     exactly `originalText`, and "Insert as new paragraph" otherwise (it
+ *     then goes after that block, or at the block index after a
+ *     whole-document replacement), so unrelated text is never replaced. The
+ *     label is recomputed on every change. Either is one undo step.
+ *     "Discard" drops the draft.
  * A commit also checks that the block's original text is still at the mapped
  * range; if not, the draft goes to the notice instead of being applied.
  * Kept drafts follow later edits and stay available in both views.
+ *
+ * Teardown never mutates the document (the host may already have saved):
+ * destroy() collects the open editor's draft (if it differs from the block's
+ * text) and every kept draft, dispatches one bubbling `te:blocks-drafts`
+ * CustomEvent from the surface root with
+ *   detail: { editor, drafts: [{ value, originalText, anchor, index, isNew }] }
+ * before removing its DOM, and returns the same array (MarkdownEditor.destroy
+ * returns it too). With nothing pending there is no event and the array is
+ * empty. pendingDrafts() returns the same list without tearing down.
  *
  * Controls
  * --------
@@ -631,6 +645,7 @@ class BlocksView {
     }
     const hadFocus = this.container.contains(document.activeElement);
     if (overlapped) this.keepDraft(overlapped, edit, whole);
+    else if (edit && this.drafts.length) this.renderDrafts();
     if (!this.isActive()) return;
     if (this.applying) {
       this.dirty = true;
@@ -690,6 +705,8 @@ class BlocksView {
     const draft = {
       id: this.nextDraftId++,
       value,
+      // The block text when editing began; Apply replaces only this.
+      originalText: ed.isNew ? '' : ed.original,
       isNew: !!ed.isNew,
       index: ed.index,
       // Where to re-apply: an offset in the body, or the block index when
@@ -732,7 +749,9 @@ class BlocksView {
         b.textContent = label;
         actions.appendChild(b);
       };
-      button('apply', 'Apply my edit');
+      const target = this.draftTarget(d);
+      button('apply', target.mode === 'replace' ? 'Replace block' : 'Insert as new paragraph');
+      actions.querySelector('[data-draft-action="apply"]').dataset.draftMode = target.mode;
       button('discard', 'Discard');
       item.append(msg, pre, actions);
       el.appendChild(item);
@@ -745,37 +764,74 @@ class BlocksView {
   }
 
   /**
-   * Re-apply a kept draft, best effort: it replaces the block now at the
-   * draft's position (or inserts a new paragraph there for a new block).
-   * One undo step. Returns true when applied.
+   * Every unapplied draft, read-only copies: the kept drafts (oldest first)
+   * then the open editor's draft if it differs from the block's text (or is
+   * a non-blank new paragraph). Each is { value, originalText, anchor,
+   * index, isNew }; `anchor` is a body offset, or null after a
+   * whole-document replacement (use `index`).
+   */
+  pendingDrafts() {
+    const out = this.drafts.map((d) => ({
+      value: d.value,
+      originalText: d.originalText,
+      anchor: d.anchor,
+      index: d.index,
+      isNew: d.isNew,
+    }));
+    const ed = this.editing;
+    if (ed) {
+      const value = window.EditorSurface.normaliseNewlines(ed.textarea.value);
+      if (ed.isNew ? value.trim() !== '' : value !== ed.original) {
+        out.push({ value, originalText: ed.isNew ? '' : ed.original, anchor: ed.start, index: ed.index, isNew: !!ed.isNew });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Where a kept draft would go now: { mode: 'replace', block } when the
+   * block at the draft's position still holds exactly the draft's
+   * originalText, otherwise { mode: 'insert', at } with the offset where it
+   * would be inserted as a new paragraph (after the block at its position,
+   * or at the block index after a whole-document replacement).
+   */
+  draftTarget(draft, text = this.surface.getText()) {
+    const model = BlocksView.parse(text);
+    const blocks = model.blocks;
+    if (blocks.length === 0) return { mode: 'insert', at: text.length };
+    if (draft.anchor === null) {
+      const b = blocks[Math.min(draft.index, blocks.length - 1)];
+      if (!draft.isNew && draft.index < blocks.length && b.text === draft.originalText) return { mode: 'replace', block: b };
+      return { mode: 'insert', at: draft.index < blocks.length ? blocks[draft.index].start : blocks[blocks.length - 1].end };
+    }
+    const at = Math.min(draft.anchor, text.length);
+    if (draft.isNew) {
+      const inside = blocks.find((b) => b.start < at && at < b.end);
+      return { mode: 'insert', at: inside ? inside.end : at };
+    }
+    const b = blocks[BlocksView.indexIn(model, at)];
+    if (b.text === draft.originalText) return { mode: 'replace', block: b };
+    return { mode: 'insert', at: b.end };
+  }
+
+  /**
+   * Re-apply a kept draft (see draftTarget): replace the block if it still
+   * holds the draft's original text, otherwise insert the draft as a new
+   * paragraph. Never replaces unrelated text. One undo step. Returns
+   * 'replace' or 'insert', or null when there is no such draft.
    */
   applyDraft(id) {
     const draft = this.drafts.find((d) => d.id === id);
-    if (!draft) return false;
+    if (!draft) return null;
     if (this.editing) this.commitEdit({ rerender: false });
     this.drafts = this.drafts.filter((d) => d !== draft);
     this.renderDrafts();
-    const text = this.surface.getText();
-    const model = BlocksView.parse(text);
-    const blocks = model.blocks;
+    const target = this.draftTarget(draft);
     let caret;
     this.applying = true;
     try {
-      if (draft.isNew || blocks.length === 0) {
-        let at;
-        if (draft.anchor === null) {
-          at = draft.index < blocks.length ? blocks[draft.index].start : blocks.length ? blocks[blocks.length - 1].end : text.length;
-        } else {
-          at = Math.min(draft.anchor, text.length);
-          const inside = blocks.find((b) => b.start < at && at < b.end);
-          if (inside) at = inside.end;
-        }
-        caret = this.insertParagraph(at, draft.value);
-      } else {
-        const i = draft.anchor === null
-          ? Math.min(draft.index, blocks.length - 1)
-          : BlocksView.indexIn(model, Math.min(draft.anchor, text.length));
-        const b = blocks[i];
+      if (target.mode === 'replace') {
+        const b = target.block;
         const d = window.EditorSurface.diff(b.text, draft.value);
         caret = b.start;
         if (d) {
@@ -784,6 +840,8 @@ class BlocksView {
             selectStart: b.start,
           });
         }
+      } else {
+        caret = this.insertParagraph(target.at, draft.value);
       }
     } finally {
       this.applying = false;
@@ -792,7 +850,7 @@ class BlocksView {
       this.render(false);
       this.setCurrent(this.blockIndexAt(caret), true);
     }
-    return true;
+    return target.mode;
   }
 
   /** Drop a kept draft. */
@@ -1101,9 +1159,22 @@ class BlocksView {
   // Lifecycle
   // ---------------------------------------------------------------------
 
-  /** Remove the view's DOM and subscription and show the surface again. */
+  /**
+   * Remove the view's DOM and subscription and show the surface again. The
+   * document is never changed here: pending drafts (see pendingDrafts) are
+   * reported in one bubbling `te:blocks-drafts` event from the surface root,
+   * dispatched before the DOM goes, and returned. No event when there are
+   * none; the return value is then []. A second call returns [].
+   */
   destroy() {
-    if (this.destroyed) return;
+    if (this.destroyed) return [];
+    const drafts = this.pendingDrafts();
+    if (drafts.length && this.surface.root) {
+      this.surface.root.dispatchEvent(new CustomEvent('te:blocks-drafts', {
+        bubbles: true,
+        detail: { editor: this.editor, drafts: drafts.map((d) => ({ ...d })) },
+      }));
+    }
     this.destroyed = true;
     this.editing = null;
     this.offChange();
@@ -1112,6 +1183,8 @@ class BlocksView {
     this.draftsElement.remove();
     if (this.toggleGroup) this.toggleGroup.remove();
     if (this.toggleDivider) this.toggleDivider.remove();
+    this.drafts = [];
+    return drafts;
   }
 }
 

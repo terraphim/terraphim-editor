@@ -119,8 +119,9 @@ async fn test_open_block_draft_survives_outside_changes() {
           bv.commitEdit();
           if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('commit after outside edits ' + JSON.stringify(s.getText()));
         "##,
-        // 2. An overlapping edit keeps the draft in the notice; Apply works
-        //    and undo afterwards is one step per change.
+        // 2. An overlapping edit that rewrote the block keeps the draft in the
+        //    notice; Apply inserts it as a new paragraph and leaves the
+        //    rewritten block intact. Undo is one step per change.
         r##"
           const notice = bv.draftsElement;
           const ta = bv.editBlock(1);
@@ -128,11 +129,13 @@ async fn test_open_block_draft_survives_outside_changes() {
           s.replaceRange(5, 9, 'PARA');
           if (bv.editing || bv.list.querySelector('textarea')) out.push('editor still open after overlap');
           const kept = bv.keptDrafts();
-          if (kept.length !== 1 || kept[0].value !== 'para ONE draft' || kept[0].reason !== 'changed') out.push('draft not kept ' + JSON.stringify(kept));
+          if (kept.length !== 1 || kept[0].value !== 'para ONE draft' || kept[0].originalText !== 'para one' || kept[0].reason !== 'changed') out.push('draft not kept ' + JSON.stringify(kept));
           if (!teTest.visible(notice) || !notice.textContent.includes('para ONE draft')) out.push('notice not visible with the draft');
           if (s.getText() !== '# A\n\nPARA one\n\npara two edited\n\nTail.\n') out.push('outside edit not applied');
-          notice.querySelector('[data-draft-action="apply"]').click();
-          if (s.getText() !== '# A\n\npara ONE draft\n\npara two edited\n\nTail.\n') out.push('apply ' + JSON.stringify(s.getText()));
+          const apply = notice.querySelector('[data-draft-action="apply"]');
+          if (apply.textContent !== 'Insert as new paragraph' || apply.dataset.draftMode !== 'insert') out.push('label for a rewritten block: ' + apply.textContent);
+          apply.click();
+          if (s.getText() !== '# A\n\nPARA one\n\npara ONE draft\n\npara two edited\n\nTail.\n') out.push('apply insert ' + JSON.stringify(s.getText()));
           if (!notice.hidden || bv.keptDrafts().length) out.push('notice not cleared after apply');
           if (window.wasmBindings.document_body() !== s.getText()) out.push('model body differs after apply');
           s.undo();
@@ -141,23 +144,51 @@ async fn test_open_block_draft_survives_outside_changes() {
           if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('undo outside edit ' + JSON.stringify(s.getText()));
           if (bv.cards().length !== 4) out.push('cards after undo');
         "##,
-        // 3. openDocument during an edit keeps the draft; Discard works.
+        // 3. When undo restores the block's original text the label turns to
+        //    "Replace block" and Apply replaces it.
         r##"
           const notice = bv.draftsElement;
-          const ta = bv.editBlock(0);
+          const ta = bv.editBlock(1);
+          ta.value = 'para ONE draft';
+          s.replaceRange(5, 9, 'PARA');
+          const apply = () => notice.querySelector('[data-draft-action="apply"]');
+          if (apply().textContent !== 'Insert as new paragraph') out.push('label before undo: ' + apply().textContent);
+          s.undo();
+          if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('undo ' + JSON.stringify(s.getText()));
+          if (apply().textContent !== 'Replace block' || apply().dataset.draftMode !== 'replace') out.push('label after undo: ' + apply().textContent);
+          if (bv.applyDraft(bv.keptDrafts()[0].id) !== 'replace') out.push('apply did not replace');
+          if (s.getText() !== '# A\n\npara ONE draft\n\npara two edited\n\nTail.\n') out.push('apply replace ' + JSON.stringify(s.getText()));
+          s.undo();
+          if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('undo replace ' + JSON.stringify(s.getText()));
+        "##,
+        // 4. openDocument with different content during an edit keeps the
+        //    draft; Apply inserts it at the block index without touching the
+        //    opened text or its annotations; Discard drops another draft.
+        r##"
+          const notice = bv.draftsElement;
+          let ta = bv.editBlock(0);
           ta.value = '# Draft heading';
           ed.openDocument(teBlockFixtures.full);
+          const body = s.getText();
           const k2 = bv.keptDrafts();
-          if (k2.length !== 1 || k2[0].reason !== 'replaced' || k2[0].value !== '# Draft heading') out.push('open: draft ' + JSON.stringify(k2));
+          if (k2.length !== 1 || k2[0].reason !== 'replaced' || k2[0].value !== '# Draft heading' || k2[0].anchor !== null) out.push('open: draft ' + JSON.stringify(k2));
           if (!notice.textContent.includes('replaced')) out.push('open: notice text');
+          const apply = notice.querySelector('[data-draft-action="apply"]');
+          if (apply.textContent !== 'Insert as new paragraph') out.push('open: label ' + apply.textContent);
+          apply.click();
+          if (s.getText() !== '# Draft heading\n\n' + body) out.push('open: apply ' + JSON.stringify(s.getText().slice(0, 60)));
+          const ann = ed.annotations();
+          if (ann.spans.length !== 3 || ann.ghosts.length !== 2 || ed.setAsideCount !== 0) out.push('open: annotations after apply');
+          ta = bv.editBlock(1);
+          ta.value = 'Throwaway draft';
+          ed.openDocument(teBlockFixtures.full);
           const saved = ed.saveDocument();
-          if (ed.annotations().spans.length !== 3) out.push('open: spans');
           notice.querySelector('[data-draft-action="discard"]').click();
           if (bv.keptDrafts().length || !notice.hidden) out.push('discard');
           if (ed.saveDocument() !== saved) out.push('discard changed the document');
         "##,
-        // 4. A kept draft follows typing (execCommand) in the text view and
-        //    applies there.
+        // 5. A kept draft follows typing (execCommand) in the text view and
+        //    applies there (after the rewritten block).
         r##"
           const notice = bv.draftsElement;
           s.setText('# A\n\npara one\n');
@@ -171,7 +202,7 @@ async fn test_open_block_draft_survives_outside_changes() {
           if (!document.execCommand('insertText', false, 'Top ')) out.push('execCommand failed');
           if (bv.keptDrafts()[0].anchor !== 9) out.push('anchor not mapped: ' + bv.keptDrafts()[0].anchor);
           notice.querySelector('[data-draft-action="apply"]').click();
-          if (s.getText() !== 'Top # A\n\npara 1\n') out.push('apply in text view ' + JSON.stringify(s.getText()));
+          if (s.getText() !== 'Top # A\n\nPara one\n\npara 1\n') out.push('apply in text view ' + JSON.stringify(s.getText()));
           if (!teTest.canonical()) out.push('surface not canonical');
         "##,
     ])

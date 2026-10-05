@@ -83,7 +83,9 @@ blocks sensibly:
 `model` (the last parse), `cards()`, `editBlock(index)` (returns the
 textarea), `commitEdit()`, `cancelEdit()`, `insertBlockAfter(index)`
 (index -1 inserts at the top), `deleteBlock(index)`, `undo()`, `redo()`,
-`keptDrafts()`, `applyDraft(id)`, `discardDraft(id)`, `destroy()`, and the
+`keptDrafts()`, `pendingDrafts()`, `draftTarget(draft)`, `applyDraft(id)`
+(returns `'replace'` or `'insert'`), `discardDraft(id)`, `destroy()`
+(returns the unapplied drafts), and the
 static helpers `BlocksView.parse`, `BlocksView.serialise` and
 `BlocksView.indexIn`.
 
@@ -109,14 +111,22 @@ range `[start, start + original.length)` is mapped through it.
   visible, non-blocking notice (`.te-blocks-drafts`, `role="region"`,
   `aria-live="polite"`). The notice sits above the surface and the blocks,
   so it shows in both views. If the textarea had focus, focus moves to the
-  notice. Each kept draft offers:
-  - **Apply my edit**, best effort, one undo step. An existing block's draft
-    replaces the block now at the draft's position (with the minimal diff,
-    so annotations outside the changed text survive). A new paragraph's
-    draft is inserted there as a paragraph. The position is the start of
-    the overlapping edit, mapped through every later edit, or the block
-    index when the whole document was replaced.
-  - **Discard**, which removes the draft.
+  notice. Each kept draft stores its `originalText` (the block text when
+  editing began) and a position: the start of the overlapping edit, mapped
+  through every later edit, or the block index when the whole document was
+  replaced. Each draft offers two buttons:
+  - **Replace block**, shown when the block at the draft's position still
+    holds exactly `originalText` (for example after undo restored it). It
+    replaces that block using the minimal diff, so annotations outside the
+    changed text survive.
+  - **Insert as new paragraph**, shown otherwise. It inserts the draft as a
+    new paragraph after the block at the draft's position, or at the block
+    index after a whole-document replacement. Unrelated text is never
+    replaced.
+
+  The label is recomputed after every body change, so it always says what
+  the button will do. Either action is one undo step. **Discard** removes
+  the draft.
 
   A draft identical to the block's text (nothing typed) is not kept, since
   nothing would be lost.
@@ -124,8 +134,28 @@ range `[start, start + original.length)` is mapped through it.
   the mapped range. If it is not, the draft goes to the notice instead of
   being applied.
 
-Kept drafts are UI state for the current editor session. They are not
-written to storage, and `destroy()` (an explicit teardown) removes them.
+Kept drafts are UI state for the current editor session and are never
+written to storage.
+
+### Teardown reports drafts and never edits
+
+`BlocksView.destroy()`, which `MarkdownEditor.destroy()` calls, does not
+change the document, because the host may already have saved it. It:
+
+1. collects the pending drafts, which is the same list `pendingDrafts()`
+   returns: every kept draft (oldest first), then the open editor's draft if
+   it differs from the block's text (or is a non-blank new paragraph). Each
+   is `{ value, originalText, anchor, index, isNew }`, where `anchor` is a
+   body offset, or `null` after a whole-document replacement (use `index`);
+2. if there are any, dispatches one bubbling `te:blocks-drafts` CustomEvent
+   from the surface root, with `detail: { editor, drafts }`, before any DOM
+   is removed;
+3. removes its DOM and returns the array. `MarkdownEditor.destroy()` returns
+   it too.
+
+With nothing pending there is no event and the returned array is empty. A
+second `destroy()` returns `[]`. A host can call `editor.blocks.pendingDrafts()`
+(a read-only copy) to check before tearing down.
 
 ## Caret and selection
 

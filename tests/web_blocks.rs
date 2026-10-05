@@ -1,5 +1,6 @@
 //! Browser tests for the Blocks view (issue #19): round trip, view toggle,
-//! block edits with annotations, keyboard navigation and caret mapping. Run
+//! block edits with annotations, keyboard navigation, caret mapping and
+//! teardown reporting unapplied drafts. Run
 //! with `wasm-pack test --headless --chrome`. Real scripts
 //! (`public/js/blocks.js` with the real editor and chrome), the real exported
 //! document API and real fixtures; nothing is mocked.
@@ -288,6 +289,66 @@ async fn test_keyboard_navigation_focus_and_caret_across_views() {
           if (s.getText() !== '# A\n\npara one\n\npara 2\n') out.push('undo across views ' + JSON.stringify(s.getText()));
           s.undo();
           if (s.getText() !== T.doc) out.push('second undo ' + JSON.stringify(s.getText()));
+        "##,
+    ])
+    .await;
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_destroy_reports_drafts_and_never_edits() {
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    let result = run_steps(&[
+        // An open, changed block plus a kept draft: one te:blocks-drafts
+        // event with both, the same array returned, the document unchanged.
+        r##"
+          s.setText('# A\n\npara one\n\npara two\n');
+          bv.setView('blocks');
+          let ta = bv.editBlock(1);
+          ta.value = 'kept draft';
+          s.replaceRange(5, 6, 'P');
+          ta = bv.editBlock(2);
+          ta.value = 'open draft';
+          const pending = bv.pendingDrafts();
+          if (pending.length !== 2) out.push('pendingDrafts ' + JSON.stringify(pending));
+          pending.length = 0;
+          if (bv.pendingDrafts().length !== 2) out.push('pendingDrafts is not a copy');
+          const text = s.getText();
+          const model = window.wasmBindings.document_body();
+          const events = [];
+          const on = (e) => events.push(e.detail.drafts);
+          document.addEventListener('te:blocks-drafts', on);
+          const ret = ed.destroy();
+          document.removeEventListener('te:blocks-drafts', on);
+          if (events.length !== 1) out.push('events ' + events.length);
+          const want = [
+            { value: 'kept draft', originalText: 'para one', anchor: 5, index: 1, isNew: false },
+            { value: 'open draft', originalText: 'para two', anchor: 15, index: 2, isNew: false },
+          ];
+          if (JSON.stringify(ret) !== JSON.stringify(want)) out.push('returned ' + JSON.stringify(ret));
+          if (events.length && JSON.stringify(events[0]) !== JSON.stringify(want)) out.push('event detail ' + JSON.stringify(events[0]));
+          if (s.getText() !== text || window.wasmBindings.document_body() !== model) out.push('teardown changed the document');
+          if (document.querySelector('.te-blocks, .te-blocks-drafts, textarea.te-block-editor')) out.push('DOM left behind');
+          if (JSON.stringify(ed.destroy()) !== '[]') out.push('second destroy');
+        "##,
+        // Nothing typed: no event and an empty list.
+        r##"
+          const fresh = new MarkdownEditor(window.EditorConfig);
+          fresh.initialize();
+          window.__teEditor = fresh;
+          fresh.surface.setText('# A\n\npara one\n');
+          fresh.blocks.setView('blocks');
+          fresh.blocks.editBlock(1);
+          if (fresh.blocks.pendingDrafts().length !== 0) out.push('pending with nothing typed');
+          let fired = 0;
+          const on = () => { fired += 1; };
+          document.addEventListener('te:blocks-drafts', on);
+          const ret = fresh.destroy();
+          document.removeEventListener('te:blocks-drafts', on);
+          if (fired !== 0) out.push('event fired with nothing typed');
+          if (!Array.isArray(ret) || ret.length !== 0) out.push('returned ' + JSON.stringify(ret));
+          teTest.resetBlocks();
         "##,
     ])
     .await;
