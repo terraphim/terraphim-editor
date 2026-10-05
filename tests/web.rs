@@ -1703,23 +1703,20 @@ fn test_shortcut_reference_lists_every_shortcut() {
 }
 
 #[wasm_bindgen_test]
-fn test_counts_adapter_prefers_editor_counts() {
+fn test_counts_adapter_falls_back_to_surface_text() {
     let _document = fresh_full_editor();
     let result = js_string(
         r##"(() => {
           const out = [];
           const ed = window.__teEditor;
+          // Without editor.counts() (issue #6 adds it, and tests it against
+          // the real counts there) countsFor reads the surface text.
+          if (typeof ed.counts === 'function') out.push('unexpected editor.counts');
           ed.surface.setText('three short words');
-          const fallback = countsFor(ed);
-          if (fallback.words !== 3 || fallback.chars !== 17) out.push('fallback ' + JSON.stringify(fallback));
-          // The persistence API (issue #6) provides counts(), which include
-          // ghosted text; the adapter uses it when present.
-          ed.counts = () => ({ words: 535, chars: 3115 });
-          ed.chrome.refresh();
+          const c = countsFor(ed);
+          if (c.words !== 3 || c.chars !== 17) out.push('counts ' + JSON.stringify(c));
           const text = document.querySelector('.te-chrome-counter').textContent.trim();
-          if (!text.startsWith('535 words 3115 chars')) out.push('counter ' + JSON.stringify(text));
-          delete ed.counts;
-          ed.chrome.refresh();
+          if (!text.startsWith('3 words 17 chars')) out.push('counter ' + JSON.stringify(text));
           return out.join('; ');
         })()"##,
     );
