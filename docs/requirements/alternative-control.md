@@ -138,7 +138,8 @@ Menu is a dark rounded panel, monospace labels left, dim shortcut text right, ho
   "version": 1,
   "spans": [
     { "id": "s1", "kind": "word|sentence|paragraph",
-      "anchor": { "start": 123, "end": 130, "text": "tension" },
+      "anchor": { "start": 123, "end": 130, "text": "tension",
+                  "before": "…the ", "after": " between us…" },
       "active": 4,
       "alts": [
         { "text": "tension",  "source": "original" },
@@ -154,6 +155,7 @@ Menu is a dark rounded panel, monospace labels left, dim shortcut text right, ho
 ```
 Spans carry no `ghost` field; ghosting lives in the separate `ghosts` list of non-overlapping ranges, which may overlap spans **(decision 2026-10-04: ghost layer)**.
 Anchors must survive edits elsewhere in the document: store `text` and re-anchor by search on load, with `start/end` as a hint. **Inferred.**
+Each anchor (span or ghost) also stores optional `before`/`after` context: up to 32 UTF-16 units of body text on each side, trimmed to a word boundary, `""` at a document edge, refreshed on every edit and on save. When the text is not at its hint, re-anchoring accepts another occurrence only if it is the single best match for that context and at least one side agrees (at least half of the stored context and at least 8 units, or the same distance from the same document edge); otherwise the item is reported missing or ambiguous and set aside, never attached to identical text elsewhere. Anchors without context (older files) keep the previous rule **(decision 2026-10-05: context re-anchoring)**.
 
 **R-9.3 Export.** Plain export emits only the active alternatives, drops ghosted text, i.e. every ghost range including any spans inside it **(decision 2026-10-04: ghost layer)**, **(inferred — ask: should ghosted text export?)**, and omits overflow.
 
