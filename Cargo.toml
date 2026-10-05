@@ -38,5 +38,5 @@ name = "markdown_bench"
 harness = false
 
 [workspace]
-members = [".", "crates/terraphim_alternatives"]
+members = [".", "crates/terraphim_alternatives", "crates/terraphim_lab"]
 resolver = "2"

@@ -1,0 +1,31 @@
+[package]
+name = "terraphim_lab"
+version = "0.1.0"
+edition = "2024"
+description = "Deterministic Lab mark engine: typos and punctuation, weakest, long and convoluted sentences, off-tone words, hedges and filler. No DOM; builds native and wasm32."
+license = "MIT"
+publish = false
+
+[dependencies]
+# KG matching (Aho-Corasick, LeftmostLongest, ASCII case-insensitive,
+# word-boundary filtered) and KG markdown parsing. Default features only:
+# no tokio, no reqwest, builds for wasm32-unknown-unknown.
+terraphim_automata = { version = "2.1", registry = "terraphim" }
+# Thesaurus, NormalizedTerm and the rolegraph Node/Edge data structures.
+terraphim_types = { version = "1.22.2", registry = "terraphim" }
+ahash = { version = "0.8", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# criterion pulls in rayon, and terraphim_rolegraph pulls in tokio "full";
+# neither compiles for wasm32, so both are native-only dev-dependencies.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = "0.5"
+# Conformance only: rebuilds the fixture rolegraph with the real RoleGraph and
+# checks the committed JSON the engine consumes is what upstream produces.
+terraphim_rolegraph = { version = "2.0", registry = "terraphim" }
+
+[[bench]]
+name = "lab_bench"
+harness = false

@@ -1,0 +1,237 @@
+{
+  "data": {
+    "accomodate": {
+      "id": 2,
+      "nterm": "accommodate"
+    },
+    "acheive": {
+      "id": 3,
+      "nterm": "achieve"
+    },
+    "adn": {
+      "id": 4,
+      "nterm": "and"
+    },
+    "alot": {
+      "id": 1,
+      "nterm": "a lot"
+    },
+    "arguement": {
+      "id": 5,
+      "nterm": "argument"
+    },
+    "begining": {
+      "id": 6,
+      "nterm": "beginning"
+    },
+    "beleive": {
+      "id": 7,
+      "nterm": "believe"
+    },
+    "calender": {
+      "id": 8,
+      "nterm": "calendar"
+    },
+    "commited": {
+      "id": 9,
+      "nterm": "committed"
+    },
+    "concious": {
+      "id": 10,
+      "nterm": "conscious"
+    },
+    "definately": {
+      "id": 11,
+      "nterm": "definitely"
+    },
+    "didnt": {
+      "id": 12,
+      "nterm": "didn't"
+    },
+    "doesnt": {
+      "id": 13,
+      "nterm": "doesn't"
+    },
+    "dont": {
+      "id": 14,
+      "nterm": "don't"
+    },
+    "embarass": {
+      "id": 15,
+      "nterm": "embarrass"
+    },
+    "enviroment": {
+      "id": 16,
+      "nterm": "environment"
+    },
+    "existance": {
+      "id": 17,
+      "nterm": "existence"
+    },
+    "foriegn": {
+      "id": 18,
+      "nterm": "foreign"
+    },
+    "goverment": {
+      "id": 19,
+      "nterm": "government"
+    },
+    "grammer": {
+      "id": 20,
+      "nterm": "grammar"
+    },
+    "harrass": {
+      "id": 21,
+      "nterm": "harass"
+    },
+    "hte": {
+      "id": 47,
+      "nterm": "the"
+    },
+    "immediatly": {
+      "id": 22,
+      "nterm": "immediately"
+    },
+    "independant": {
+      "id": 23,
+      "nterm": "independent"
+    },
+    "isnt": {
+      "id": 24,
+      "nterm": "isn't"
+    },
+    "knowlege": {
+      "id": 25,
+      "nterm": "knowledge"
+    },
+    "libary": {
+      "id": 26,
+      "nterm": "library"
+    },
+    "neccessary": {
+      "id": 27,
+      "nterm": "necessary"
+    },
+    "necesary": {
+      "id": 27,
+      "nterm": "necessary"
+    },
+    "noticable": {
+      "id": 28,
+      "nterm": "noticeable"
+    },
+    "occassion": {
+      "id": 29,
+      "nterm": "occasion"
+    },
+    "occured": {
+      "id": 30,
+      "nterm": "occurred"
+    },
+    "occurence": {
+      "id": 31,
+      "nterm": "occurrence"
+    },
+    "persistant": {
+      "id": 32,
+      "nterm": "persistent"
+    },
+    "posession": {
+      "id": 33,
+      "nterm": "possession"
+    },
+    "prefered": {
+      "id": 34,
+      "nterm": "preferred"
+    },
+    "publically": {
+      "id": 35,
+      "nterm": "publicly"
+    },
+    "recieve": {
+      "id": 36,
+      "nterm": "receive"
+    },
+    "recieved": {
+      "id": 37,
+      "nterm": "received"
+    },
+    "recomend": {
+      "id": 38,
+      "nterm": "recommend"
+    },
+    "refered": {
+      "id": 39,
+      "nterm": "referred"
+    },
+    "relevent": {
+      "id": 40,
+      "nterm": "relevant"
+    },
+    "rythm": {
+      "id": 41,
+      "nterm": "rhythm"
+    },
+    "seperate": {
+      "id": 42,
+      "nterm": "separate"
+    },
+    "seperately": {
+      "id": 43,
+      "nterm": "separately"
+    },
+    "succesful": {
+      "id": 45,
+      "nterm": "successful"
+    },
+    "sucess": {
+      "id": 44,
+      "nterm": "success"
+    },
+    "supercede": {
+      "id": 46,
+      "nterm": "supersede"
+    },
+    "teh": {
+      "id": 47,
+      "nterm": "the"
+    },
+    "thier": {
+      "id": 48,
+      "nterm": "their"
+    },
+    "threshhold": {
+      "id": 49,
+      "nterm": "threshold"
+    },
+    "tommorow": {
+      "id": 50,
+      "nterm": "tomorrow"
+    },
+    "truely": {
+      "id": 51,
+      "nterm": "truly"
+    },
+    "untill": {
+      "id": 52,
+      "nterm": "until"
+    },
+    "whereever": {
+      "id": 54,
+      "nterm": "wherever"
+    },
+    "wich": {
+      "id": 55,
+      "nterm": "which"
+    },
+    "wierd": {
+      "id": 53,
+      "nterm": "weird"
+    },
+    "writting": {
+      "id": 56,
+      "nterm": "writing"
+    }
+  },
+  "name": "Lab typos (default)"
+}
