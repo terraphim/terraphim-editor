@@ -8,13 +8,12 @@
 //! Interaction is simulated with real DOM events and native editing commands
 //! (`document.execCommand`); nothing is mocked.
 //!
-//! The browser tests are split across several test binaries (`web.rs`,
-//! `web_surface.rs`, `web_commands.rs`, `web_chrome.rs`, `web_persistence.rs`,
-//! `web_persistence_chrome.rs`, `web_bench.rs`, `web_bench_logged.rs`, sharing
-//! `tests/support`), because wasm-bindgen-test-runner gives each binary one
-//! fixed wall-clock budget (about 20 s) to print its result; a binary that
-//! overruns it on a loaded host fails with "Failed to detect test as having
-//! been run". Keep each binary's harness `finished in` well inside it.
+//! The browser tests are split across several test binaries
+//! (`tests/web*.rs`, sharing `tests/support`), because
+//! wasm-bindgen-test-runner gives each binary one fixed wall-clock budget
+//! (about 20 s) to print its result; a binary that overruns it on a loaded
+//! host fails with "Failed to detect test as having been run". Keep each
+//! binary's harness `finished in` well inside it.
 #![cfg(target_arch = "wasm32")]
 
 mod support;

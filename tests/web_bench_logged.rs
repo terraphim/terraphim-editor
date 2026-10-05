@@ -15,9 +15,10 @@
 //!
 //! Same 5,043-word document, textarea baseline and keystroke timer as the
 //! asserted binary (shared through `tests/support/mod.rs`), but fewer
-//! keystrokes per round (one 5-keystroke warm-up, then three rounds of 10)
-//! because the synchronous surface costs several times the baseline per
-//! keystroke. The correctness checks (every keystroke landed, canonical
+//! keystrokes (three rounds of 10, no separate warm-up: the median of three
+//! discards a cold first round, and the log line carries the per-round
+//! totals) because the synchronous surface costs several times the baseline
+//! per keystroke. The correctness checks (every keystroke landed, canonical
 //! surface, no full DOM rebuilds, preview render count) are still asserted.
 #![cfg(target_arch = "wasm32")]
 
@@ -32,8 +33,6 @@ wasm_bindgen_test_configure!(run_in_browser);
 /// Keystrokes per measured round, per path. Medians over `ROUNDS` rounds.
 const KEYSTROKES: u32 = 10;
 const ROUNDS: u32 = 3;
-/// Keystrokes per path in the single warm-up round (not measured).
-const WARMUP_KEYSTROKES: u32 = 5;
 
 #[wasm_bindgen_test]
 async fn bench_typing_latency_logged_paths() {
@@ -83,12 +82,8 @@ async fn bench_typing_latency_logged_paths() {
     let renders_before = js_number("teTest.surface().renderCount");
     let preview_renders_before = preview_render_count();
 
-    // Warm up every path, then alternate measured rounds and take medians.
-    bench_run_textarea(&textarea, middle, 0, WARMUP_KEYSTROKES).await;
-    run_surface(false, WARMUP_KEYSTROKES).await;
-    run_surface(true, WARMUP_KEYSTROKES).await;
-    run_conversion_only(WARMUP_KEYSTROKES);
-    sleep(0).await;
+    // Alternate measured rounds and take medians; a cold first round is
+    // discarded by the median.
     let mut textarea_runs = Vec::new();
     let mut surface_runs = Vec::new();
     let mut native_runs = Vec::new();
@@ -100,15 +95,30 @@ async fn bench_typing_latency_logged_paths() {
         conversion_runs.push(run_conversion_only(KEYSTROKES));
         sleep(0).await;
     }
+    // Raw per-round totals, in run order, for the log line (the medians
+    // below sort the vectors in place).
+    let raw = |runs: &[f64]| {
+        runs.iter()
+            .map(|ms| format!("{ms:.0}"))
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let raw_rounds = format!(
+        "textarea {} ms, surface {} ms, sync bypassed {} ms, conversion {} ms",
+        raw(&textarea_runs),
+        raw(&surface_runs),
+        raw(&native_runs),
+        raw(&conversion_runs)
+    );
     let per_key = |runs: &mut Vec<f64>| median(runs) / f64::from(KEYSTROKES);
     let per_textarea = per_key(&mut textarea_runs);
     let per_surface = per_key(&mut surface_runs);
     let per_native_only = per_key(&mut native_runs);
     let per_conversion = per_key(&mut conversion_runs);
 
-    // Every path really received every keystroke (one warm-up round plus
-    // ROUNDS measured rounds; the surface ran two paths).
-    let typed = (WARMUP_KEYSTROKES + ROUNDS * KEYSTROKES) as usize;
+    // Every path really received every keystroke (ROUNDS rounds; the
+    // surface ran two paths).
+    let typed = (ROUNDS * KEYSTROKES) as usize;
     assert_eq!(textarea.value().len(), doc_text.len() + typed);
     let surface_len = js_number("teTest.surface().getText().length") as usize;
     assert_eq!(surface_len, doc_text.encode_utf16().count() + 2 * typed);
@@ -134,12 +144,12 @@ async fn bench_typing_latency_logged_paths() {
     web_sys::console::log_1(
         &format!(
             "Typing latency (logged only) on {word_count} words ({} chars), median of {ROUNDS} rounds x {KEYSTROKES} keystrokes \
-             after a {WARMUP_KEYSTROKES}-keystroke warm-up, ms per keystroke incl. Rust conversion: \
+             (no warm-up), ms per keystroke incl. Rust conversion: \
              textarea baseline (sync conversion) {per_textarea:.3}; \
              surface without debounce {per_surface:.3}; \
              surface without debounce, EditorSurface sync bypassed {per_native_only:.3}; \
              conversion + preview update alone {per_conversion:.3}; \
-             surface/textarea ratio {:.3}",
+             surface/textarea ratio {:.3}; per-round totals {raw_rounds}",
             doc_text.len(),
             per_surface / per_textarea
         )
