@@ -171,6 +171,11 @@ class EditorSurface {
     // An overflow change ({ before, after }, see MarkdownEditor.stashRange,
     // issue #12) rides the same way: undo and redo replay it in the model.
     if (options.overflow) edit.overflow = { ...options.overflow };
+    // A knowledge-graph swap ({ span, from, to }, see
+    // MarkdownEditor.swapAlternative, issue #13) is tagged for listeners
+    // only: its history step is a plain text step, replayed through
+    // apply_edit, because KG spans are derived from the text.
+    if (options.kg) edit.kg = { ...options.kg };
     this.text = old.slice(0, s) + inserted + old.slice(e);
     this.decorations = EditorSurface.mapRanges(this.decorations, edit);
     // #10: an alternatives-panel step ({ span, before, after }, see
@@ -1236,6 +1241,41 @@ class EditorSurface {
   }
 }
 
+/*
+ * Knowledge-graph alternatives (issue #13; docs/design/kg-alternatives.md).
+ * The matching, synonyms, capitalisation and a/an fix-up all run in Rust
+ * (src/kg.rs over terraphim_lsp_core); this is only the glue:
+ *
+ *   editor.loadThesaurus(json)        // -> { name, concepts, skipped }; throws on bad JSON
+ *   editor.clearThesaurus()
+ *   editor.kgLookup(start, end)       // -> { term, range, alternatives, span } | null
+ *   editor.kgAlternativesForSelection()  // Ctrl+Shift+G, R-8.6
+ *   editor.annotations().kg           // derived KG spans (never saved)
+ *   editor.swapAlternative('kg-2-0', 1)  // swaps a KG span like any other
+ */
+const TeKg = {
+  /** Derived KG span ids are `kg-<concept>-<n>`; block span ids never are. */
+  isKgSpan(id) {
+    return /^kg-\d+-\d+$/.test(String(id));
+  },
+
+  /** The R-7.3 "AI alternatives for selection" menu item (Ctrl+Shift+G). */
+  menuItem(editor) {
+    return {
+      id: 'ai-alternatives',
+      label: 'AI alternatives for selection',
+      key: 'ctrl+shift+g',
+      available: (ctx) => {
+        if (!ctx) return false;
+        if (ctx.kgTerm === undefined) ctx.kgTerm = editor.kgLookup(ctx.start, ctx.end);
+        return !!ctx.kgTerm;
+      },
+      run: (ctx) => editor.kgAlternativesForSelection(ctx),
+    };
+  },
+};
+window.TeKg = TeKg;
+
 class MarkdownEditor {
   constructor(config) {
     this.config = config;
@@ -1349,6 +1389,8 @@ class MarkdownEditor {
       }
       if (typeof window.TeSelectionMenu === 'function') {
         this.selectionMenu = new window.TeSelectionMenu(this, { signal: this.abortController.signal });
+        // Knowledge-graph alternatives for selection (issue #13).
+        this.selectionMenu.register(TeKg.menuItem(this));
       }
       // The Lab popover and its marks (public/js/lab.js, issue #14).
       if (typeof window.TeLabPopover === 'function') {
@@ -1741,15 +1783,23 @@ class MarkdownEditor {
    * span's new text. Making the active alternative active again changes and
    * records nothing. Returns the model outcome
    * ({ span, from, to, edit, range, setAside, notice, ... }).
+   *
+   * A derived knowledge-graph span (id `kg-…`, issue #13) swaps through
+   * `kg_swap_alternative` instead, which applies the core's edits
+   * (capitalisation and a/an included) to the model as one edit. Its step
+   * is a plain text step tagged `kg` (not `swap`): undo and redo mirror it
+   * through `apply_edit`, and the KG spans re-derive from the text.
    */
   swapAlternative(spanId, index) {
     const api = this.requireDocumentApi();
-    if (typeof api.set_active_alternative !== 'function') {
+    const isKg = TeKg.isKgSpan(spanId);
+    const swapFn = isKg ? api.kg_swap_alternative : api.set_active_alternative;
+    if (typeof swapFn !== 'function') {
       throw new Error('The WASM document API cannot swap alternatives');
     }
     this.alignDocumentModel(api);
     // Throws, changing nothing, if the model refuses the swap.
-    const outcome = api.set_active_alternative(String(spanId), index);
+    const outcome = swapFn(String(spanId), index);
     const edit = outcome && outcome.edit;
     if (!edit) return outcome;
     const editEnd = edit.start + edit.deletedLength;
@@ -1763,9 +1813,10 @@ class MarkdownEditor {
     const sel = this.surface.getSelectionOffsets();
     this.suppressModelSync = true;
     try {
+      const tag = { span: outcome.span, from: outcome.from, to: outcome.to };
       this.surface.replaceRange(edit.start, editEnd, edit.insertedText, {
         source: 'swap',
-        swap: { span: outcome.span, from: outcome.from, to: outcome.to },
+        ...(isKg ? { kg: tag } : { swap: tag }),
         selectStart: map(sel.start),
         selectEnd: map(sel.end),
       });
@@ -1800,6 +1851,76 @@ class MarkdownEditor {
 
   // ---------------------------------------------------------------------
   // End of in-place cycling (issue #9).
+  // ---------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------
+  // Knowledge-graph alternatives (issue #13). Kept in one block so parallel
+  // additions to this class merge cleanly; see TeKg above and
+  // docs/design/kg-alternatives.md.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Load a thesaurus (terraphim's thesaurus JSON, as text or an object) for
+   * KG alternatives, replacing the current one, and redraw the indicators.
+   * Returns { name, concepts, skipped }; throws, keeping the previous
+   * thesaurus, if it cannot be read.
+   */
+  loadThesaurus(json) {
+    const api = this.requireDocumentApi();
+    if (typeof api.kg_load_thesaurus !== 'function') {
+      throw new Error('The WASM document API has no knowledge-graph support');
+    }
+    const summary = api.kg_load_thesaurus(typeof json === 'string' ? json : JSON.stringify(json));
+    if (this.indicators) this.indicators.flush();
+    return summary;
+  }
+
+  /** Forget the thesaurus: no KG spans until the next load. */
+  clearThesaurus() {
+    const api = this.documentApi();
+    if (api && typeof api.kg_clear_thesaurus === 'function') api.kg_clear_thesaurus();
+    if (this.indicators) this.indicators.flush();
+  }
+
+  /**
+   * The KG term at the selection [start, end) (UTF-16; a caret just after a
+   * word counts) with its alternatives, or null. Read-only.
+   */
+  kgLookup(start, end) {
+    const api = this.documentApi();
+    if (!api || typeof api.kg_lookup_selection !== 'function') return null;
+    this.alignDocumentModel(api);
+    return api.kg_lookup_selection(start, end);
+  }
+
+  /**
+   * "AI alternatives for selection" (Ctrl+Shift+G, R-7.3, R-8.6): append the
+   * KG synonyms of the term at the selection to the span over that term
+   * (created when there is none), bot-marked (`source: "ai"`, `model:
+   * "kg"`) and after the writer's own alternatives. One undo step, through
+   * the #10 panel path (alternativeOp). The panel, when present and in
+   * Write_On mode, then shows the span. Returns the change, or null when
+   * there was no KG term or nothing new to add.
+   */
+  kgAlternativesForSelection(ctx = null) {
+    const sel = ctx || this.surface.getSelectionOffsets();
+    let change = null;
+    try {
+      change = this.alternativeOp('kg_append', sel.start, sel.end);
+    } catch (err) {
+      console.warn('No knowledge-graph alternatives for the selection', err);
+      return null;
+    }
+    const term = this.kgLookup(sel.start, sel.end);
+    const spanId = change ? change.span : term && term.span;
+    if (spanId && this.altPanel && typeof this.altPanel.open === 'function' && this.altPanel.isWriteOn()) {
+      this.altPanel.open({ spanId });
+    }
+    return change;
+  }
+
+  // ---------------------------------------------------------------------
+  // End of knowledge-graph alternatives (issue #13).
   // ---------------------------------------------------------------------
 
   // ---------------------------------------------------------------------

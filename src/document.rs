@@ -742,11 +742,19 @@ pub fn document_body() -> String {
     with_session(|s| s.body().to_string())
 }
 
-/// `{ spans, ghosts, overflow, setAside: { spans, ghosts }, preservedBlock }`
-/// of the current document, in UTF-16 offsets.
+/// `{ spans, ghosts, overflow, setAside: { spans, ghosts }, preservedBlock,
+/// kg }` of the current document, in UTF-16 offsets. `kg` holds the derived
+/// knowledge-graph spans (issue #13, see [`crate::kg::KgSpan::to_json`]);
+/// they are never saved.
 #[wasm_bindgen]
 pub fn document_annotations() -> JsValue {
-    to_js(&with_session(|s| s.annotations_json()))
+    to_js(&with_session(|s| {
+        let mut value = s.annotations_json();
+        if let Value::Object(map) = &mut value {
+            map.insert("kg".into(), crate::kg::kg_spans_json(s));
+        }
+        value
+    }))
 }
 
 /// An error object for JavaScript: `{ ok: false, error, kind }`, where `kind`
@@ -1584,6 +1592,85 @@ pub fn set_active_alternative(span_id: &str, index: u32) -> Result<JsValue, JsVa
 
 // ---------------------------------------------------------------------------
 // End of in-place cycling (issue #9).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Appending alternatives from a provider (issue #13, R-8.6). Kept in one
+// block, apart from the other exports, so parallel additions to this file
+// merge cleanly.
+//
+// It reuses the #10 panel's [`AltChange`] (span before and after), so the
+// editor records an append as ONE undo step and replays it with
+// [`DocumentSession::alt_restore`] like any panel operation.
+// ---------------------------------------------------------------------------
+
+impl DocumentSession {
+    /// Appends `texts` as alternatives (with `source` and `model`) to the
+    /// live span exactly over `start..end` (UTF-16), after the alternatives
+    /// it already has, creating a `kind` span there when there is none.
+    /// Texts the span already offers (its original included) are skipped,
+    /// so repeating the call adds nothing: `Ok(None)`. The active
+    /// alternative is unchanged, so the body is never edited.
+    ///
+    /// Atomic: a range that partly overlaps another span or is invalid is
+    /// refused and changes nothing.
+    pub fn append_alternatives(
+        &mut self,
+        kind: SpanKind,
+        start: usize,
+        end: usize,
+        texts: &[String],
+        source: Source,
+        model: Option<&str>,
+    ) -> Result<Option<AltChange>, String> {
+        let existing = self
+            .doc
+            .annotations
+            .spans
+            .iter()
+            .find(|s| s.anchor.start == start && s.anchor.end == end);
+        let known = existing.map(|s| s.id.clone());
+        let mut offered: HashSet<String> = match existing {
+            Some(span) => span.alts.iter().map(|a| a.text.clone()).collect(),
+            None => utf16_to_byte(&self.doc.body, start)
+                .zip(utf16_to_byte(&self.doc.body, end))
+                .map(|(a, b)| self.doc.body[a..b].to_string())
+                .into_iter()
+                .collect(),
+        };
+        let fresh: Vec<String> = texts
+            .iter()
+            .filter(|t| !t.is_empty() && offered.insert((*t).clone()))
+            .cloned()
+            .collect();
+        if fresh.is_empty() {
+            return Ok(None);
+        }
+        let model = model.map(str::to_owned);
+        self.alt_change(known.as_deref(), |s| {
+            let id = match known.clone() {
+                Some(id) => id,
+                None => s
+                    .doc
+                    .add_span(kind, start, end)
+                    .map_err(|e| e.to_string())?,
+            };
+            let mut first = None;
+            for text in fresh {
+                let index = s
+                    .doc
+                    .add_alternative(&id, text, source, model.clone())
+                    .map_err(|e| e.to_string())?;
+                first.get_or_insert(index);
+            }
+            Ok((id, first))
+        })
+        .map(Some)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// End of appending alternatives (issue #13).
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
