@@ -279,7 +279,8 @@ class EditorSurface {
    * data?, attributes? } in UTF-16 offsets; empty or out-of-range items are
    * ignored. `attributes` is a map of extra attributes (for example
    * `aria-describedby`) set on every rendered span of the decoration; where
-   * decorations overlap, the later one (by start, then end) wins.
+   * decorations overlap, the later one (by start, then end) wins. Only
+   * `aria-*`, `data-*` and `role` are accepted (see sanitiseAttributes()).
    * Overlapping ranges are allowed: each rendered span lists every covering
    * decoration id in `data-te-decoration` (space separated) and carries the
    * union of their class names. Decorations move with edits made before them
@@ -298,7 +299,7 @@ class EditorSurface {
         end: e,
         className: item.className || '',
         data: item.data,
-        attributes: item.attributes || null,
+        attributes: EditorSurface.sanitiseAttributes(item.attributes),
       });
     }
     next.sort((a, b) => a.start - b.start || a.end - b.end);
@@ -309,6 +310,34 @@ class EditorSurface {
       this.setSelectionOffsets(sel.start, sel.end, sel.direction);
     }
     return this.getDecorations();
+  }
+
+  /**
+   * The decoration attributes that may be set on rendered spans: `role`,
+   * `aria-*` and `data-*` names in plain lowercase attribute-name syntax,
+   * except `data-te-decoration`, which the surface owns. Anything else
+   * (event handlers, `style`, `href`, namespaced names, ...) is dropped with
+   * a console warning; this never throws. Returns a new map, or null when
+   * nothing is left.
+   */
+  static sanitiseAttributes(attributes, warn = true) {
+    if (!attributes || typeof attributes !== 'object') return null;
+    const out = {};
+    let any = false;
+    for (const [name, value] of Object.entries(attributes)) {
+      if (EditorSurface.isSafeAttributeName(name)) {
+        out[name] = String(value);
+        any = true;
+      } else if (warn) {
+        console.warn(`EditorSurface: decoration attribute "${name}" is not allowed and was ignored`);
+      }
+    }
+    return any ? out : null;
+  }
+
+  static isSafeAttributeName(name) {
+    if (typeof name !== 'string' || name === 'data-te-decoration') return false;
+    return name === 'role' || /^aria-[a-z]+$/.test(name) || /^data-[a-z0-9_.-]*[a-z0-9_]$/.test(name);
   }
 
   /** Current decorations (already mapped through any edits). */
@@ -1122,6 +1151,7 @@ class MarkdownEditor {
     this.createdNodes = [];
     if (this.chrome) this.chrome.destroy();
     if (this.indicators) this.indicators.destroy();
+    if (this.decorations) this.decorations.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();
   }

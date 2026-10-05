@@ -26,6 +26,10 @@
  *   layers are fine (the surface splits them and unions their classes).
  * - Decorations the registry does not own (set directly on the surface, as
  *   older code and tests do) are preserved.
+ * - Stored layer items follow every surface edit through the same
+ *   `EditorSurface.mapRanges()` the surface uses (moved by edits before
+ *   them, dropped by an edit inside them), so setting one layer never puts
+ *   another back at stale offsets.
  * - If the merged list equals what the surface already has (same ids,
  *   offsets, classes and attributes) nothing is rendered. Because the surface
  *   moves decorations with edits, a layer that recomputes the same ranges
@@ -82,6 +86,22 @@ class TeDecorationRegistry {
     this.applyListeners = new Set();
     // Number of real setDecorations calls made, for tests and diagnostics.
     this.renderCount = 0;
+    // Keep stored items in step with the surface: every surface edit is
+    // reported with the edit that moved its decorations.
+    this.offChange = surface.onChange((change) => this.mapEdit(change && change.edit));
+  }
+
+  /** Move or drop stored items exactly as the surface moves its decorations. */
+  mapEdit(edit) {
+    if (!edit) return;
+    for (const [name, items] of this.layers) {
+      if (items.length) this.layers.set(name, EditorSurface.mapRanges(items, edit));
+    }
+  }
+
+  /** Stop following surface edits. */
+  destroy() {
+    this.offChange();
   }
 
   /** Replace the items of layer `name`. Returns true if the surface re-rendered. */
@@ -95,7 +115,9 @@ class TeDecorationRegistry {
       end: item.end,
       className: item.className || '',
       data: item.data,
-      attributes: item.attributes || null,
+      // Sanitised as the surface will (warning once, here), so comparisons
+      // with the surface's decorations are like for like.
+      attributes: EditorSurface.sanitiseAttributes(item.attributes),
     })));
     return this.apply();
   }
@@ -104,7 +126,7 @@ class TeDecorationRegistry {
     return this.set(name, []);
   }
 
-  /** Items of layer `name` as registered (offsets as given). */
+  /** Items of layer `name`, with offsets moved through later edits. */
   get(name) {
     return (this.layers.get(name) || []).map((d) => ({ ...d }));
   }

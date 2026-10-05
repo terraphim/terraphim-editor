@@ -54,7 +54,7 @@ document.addEventListener('te:dot', (e) => {
 ```js
 const reg = editor.decorations;
 reg.set('ghosts', [{ id: 'g1', start, end, className: 'te-ghost', attributes: { 'data-ghost': 'g1' } }]);
-reg.get('ghosts');      // items as registered
+reg.get('ghosts');      // stored items, moved through edits like the surface's
 reg.current('ghosts');  // live offsets, moved through edits since the last render (an edit inside drops one)
 reg.clear('ghosts');    // same as set('ghosts', []); the layer stays registered
 reg.batch(() => { reg.set('ghosts', g); reg.set('menu', m); }); // one render
@@ -67,10 +67,11 @@ Rules:
 1. Layer names match `/^[a-z][a-z0-9-]*$/`. Item ids appear on the surface as `<layer>:<id>` (an item without an id gets its index), so layers never collide. Select a layer's rendered spans with `[data-te-decoration~="ghosts:g1"]`.
 2. Layers merge in registration order into one `setDecorations()` call. Overlaps between layers are fine: the surface splits the text and each rendered span carries the union of the classes and every covering id. For `attributes`, the later decoration (by start, then end) wins.
 3. Decorations the registry does not own (set directly on the surface, as older code and tests do) are kept.
-4. If the merged list equals what the surface already has (ids, offsets, classes and attributes), nothing is rendered. Recomputing a layer after typing is therefore free unless something really changed.
-5. `set()` and `clear()` return `true` when the surface re-rendered.
+4. Stored items follow every surface edit through the same `EditorSurface.mapRanges()` the surface uses: an edit before an item moves it, and an edit inside it drops it. The registry subscribes to `surface.onChange`, and every surface path that maps decorations reports the same edit there. So when one layer is set or cleared, the other layers are re-emitted at their live offsets, never at the offsets they were registered with, and a dropped item does not come back. `get(name)` and `current(name)` agree.
+5. If the merged list equals what the surface already has (ids, offsets, classes and attributes), nothing is rendered. Recomputing a layer after typing is therefore free unless something really changed.
+6. `set()` and `clear()` return `true` when the surface re-rendered.
 
-`EditorSurface` got one small extension for this: a decoration may carry an `attributes` map, set on each of its rendered spans (used here for `aria-describedby`).
+`EditorSurface` got one small extension for this: a decoration may carry an `attributes` map, set on each of its rendered spans (used here for `aria-describedby`). Only `role`, `aria-*` and `data-*` names in plain lowercase attribute-name syntax are accepted, and `data-te-decoration` is reserved for the surface. Anything else (event handlers such as `onclick`, `style`, `href`, `class`, `id`, namespaced names) is dropped with a console warning and never throws (`EditorSurface.sanitiseAttributes()`). The registry sanitises the same way when a layer is set, so its comparison with the surface is like for like.
 
 The ghost layer for issue #11 should call `reg.set('ghosts', ...)` from its own debounced model read, the same way `TeIndicatorLayer.refresh()` does, and style `.te-ghost` in Write_On scope.
 
