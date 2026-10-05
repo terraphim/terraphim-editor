@@ -11,6 +11,8 @@ const FULL: &str = include_str!("fixtures/full.md");
 const GHOST_ONLY: &str = include_str!("fixtures/ghost_only.md");
 const OVERFLOW_ONLY: &str = include_str!("fixtures/overflow_only.md");
 const PLAIN: &str = include_str!("fixtures/plain.md");
+const EXAMPLE_BLOCK_AT_END: &str = include_str!("fixtures/example_block_at_end.md");
+const TWO_EXAMPLE_BLOCKS: &str = include_str!("fixtures/two_example_blocks.md");
 
 const TRUNCATED: &str = include_str!("fixtures/malformed/truncated.md");
 const INVALID_JSON: &str = include_str!("fixtures/malformed/invalid_json.md");
@@ -20,11 +22,13 @@ const OVERLAPPING: &str = include_str!("fixtures/malformed/overlapping.md");
 const OVERLAPPING_GHOSTS: &str = include_str!("fixtures/malformed/overlapping_ghosts.md");
 const DUPLICATE_GHOST_ID: &str = include_str!("fixtures/malformed/duplicate_ghost_id.md");
 
-const FIXTURES: [(&str, &str); 4] = [
+const FIXTURES: [(&str, &str); 6] = [
     ("full", FULL),
     ("ghost_only", GHOST_ONLY),
     ("overflow_only", OVERFLOW_ONLY),
     ("plain", PLAIN),
+    ("example_block_at_end", EXAMPLE_BLOCK_AT_END),
+    ("two_example_blocks", TWO_EXAMPLE_BLOCKS),
 ];
 
 #[test]
@@ -98,6 +102,33 @@ fn plain_markdown_parses_to_empty_annotations() {
     let doc = parse(PLAIN).unwrap();
     assert_eq!(doc.body, PLAIN);
     assert!(doc.annotations.is_empty());
+}
+
+#[test]
+fn fenced_examples_of_the_format_stay_in_the_body() {
+    // Issue #26: a document describing the format ends in a valid, empty
+    // block. That block is body text, not annotations, and must not be lost.
+    for (name, source) in [
+        ("example_block_at_end", EXAMPLE_BLOCK_AT_END),
+        ("two_example_blocks", TWO_EXAMPLE_BLOCKS),
+    ] {
+        let doc = parse(source).unwrap();
+        assert_eq!(doc.body, source, "{name}: whole source is body");
+        assert!(doc.annotations.is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn annotating_a_document_with_a_trailing_example_keeps_the_example() {
+    let mut doc = parse(EXAMPLE_BLOCK_AT_END).unwrap();
+    // "# Annotation format": "format" is UTF-16 units 13..19.
+    let id = doc.add_span(SpanKind::Word, 13, 19).unwrap();
+    doc.add_alternative(&id, "layout", Source::Human, None)
+        .unwrap();
+    let written = write(&doc);
+    let reread = parse(&written).unwrap();
+    assert_eq!(reread, doc);
+    assert_eq!(reread.body, EXAMPLE_BLOCK_AT_END);
 }
 
 #[test]
