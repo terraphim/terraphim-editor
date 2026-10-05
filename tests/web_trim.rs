@@ -31,6 +31,9 @@ async fn test_each_level_card_and_preview_equal_the_engine() {
             const card = teTrim.card();
             if (card.hidden) return 'card hidden';
             if (teTrim.cardCount() !== want.card) out.push('card ' + teTrim.cardCount() + ' != ' + want.card);
+            // One word count (issue #59): the Write_On counter shows the card's words_before.
+            const counter = document.querySelector('.te-chrome-counter-text').textContent;
+            if (!counter.startsWith(want.wordsBefore + ' words ')) out.push('counter ' + counter + ' != ' + want.wordsBefore + ' words');
             const name = card.querySelector('.te-trim-card-level');
             if (name.textContent !== want.label) out.push('level ' + name.textContent);
             if (getComputedStyle(name).fontWeight < 600) out.push('level name not bold');

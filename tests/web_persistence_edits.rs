@@ -77,11 +77,13 @@ fn test_counts_include_ghosted_text_and_follow_edits() {
           const out = [];
           ed.openDocument(teFixtures.full.md);
           const text = s.getText();
-          const words = text.split(/\s+/).filter(Boolean).length;
+          // The editor's word definition (issue #59), as chrome.js mirrors it.
+          const wordRe = /[\p{Alphabetic}\p{N}_]+(?:['’\-./][\p{Alphabetic}\p{N}_]+)*/gu;
+          const words = (text.match(wordRe) || []).length;
           const chars = Array.from(text).length;
           const c = ed.counts();
           if (c.words !== words || c.chars !== chars) out.push('counts ' + JSON.stringify(c) + ' want ' + words + '/' + chars);
-          const exportWords = ed.exportDocument().split(/\s+/).filter(Boolean).length;
+          const exportWords = (ed.exportDocument().match(wordRe) || []).length;
           if (!(exportWords < c.words)) out.push('ghosted words not counted');
           s.focus();
           s.setSelectionOffsets(s.getText().length);

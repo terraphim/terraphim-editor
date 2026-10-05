@@ -38,6 +38,7 @@ pub fn expected_levels() -> String {
             level_id(*level),
             serde_json::json!({
                 "card": plan.status(*level, &[]).card_text(),
+                "wordsBefore": plan.status(*level, &[]).words_before,
                 "label": level.label(),
                 "pieces": pieces(&plan.active(*level, &[])),
             }),
