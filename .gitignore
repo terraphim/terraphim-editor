@@ -27,7 +27,13 @@ node_modules
 desktop/src-tauri/Cargo.lock
 docs/src/thesaurus.json
 docs/src/*.json
-dist/
+# dist/ is the committed release copy (scripts/release-dist.sh). Ignore stray
+# files, keep the release artefacts tracked so `git add dist` needs no -f.
+dist/*
+!dist/*.html
+!dist/*.js
+!dist/*.css
+!dist/*.wasm
 
 # Claude Code agent worktrees
 .claude/worktrees/

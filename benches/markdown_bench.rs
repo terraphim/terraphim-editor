@@ -1,6 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use markdown::Options;
-use terraphim_editor;
 
 const BENCHMARK_TEXT: &str = r#"# Heading 1
 ## Heading 2
