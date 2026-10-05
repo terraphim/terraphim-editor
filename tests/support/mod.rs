@@ -31,6 +31,10 @@ pub use terraphim_editor::{
 };
 // In-place cycling of alternatives (issue #9).
 pub use terraphim_editor::set_active_alternative;
+// Overflow panel (issue #12).
+pub use terraphim_editor::{
+    document_overflow, replay_document_overflow, set_document_overflow, stash_document_range,
+};
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
 pub const EDITOR_JS: &str = include_str!("../../public/js/editor.js");
@@ -50,6 +54,8 @@ pub const ALT_PANEL_JS: &str = include_str!("../../public/js/alternatives-panel.
 pub const ALT_PANEL_CSS: &str = include_str!("../../public/css/alternatives-panel.css");
 // The alternatives side panel (issue #10).
 pub use terraphim_editor::{alt_add, alt_create_span, alt_edit, alt_move, alt_remove, alt_restore};
+pub const OVERFLOW_JS: &str = include_str!("../../public/js/overflow.js");
+pub const OVERFLOW_CSS: &str = include_str!("../../public/css/overflow.css");
 
 /// Small helpers shared by the JavaScript snippets below.
 pub const TEST_HELPERS_JS: &str = r##"
@@ -188,7 +194,7 @@ pub fn fresh_rust_editor() -> Document {
     let document = document();
     while let Some(node) = document
         .query_selector(
-            "#app, .command-menu, .te-bench, .te-chrome, .te-selection-menu, .te-blocks, .te-alt-panel",
+            "#app, .command-menu, .te-bench, .te-chrome, .te-selection-menu, .te-blocks, .te-alt-panel, .te-overflow",
         )
         .unwrap()
     {
@@ -216,7 +222,7 @@ pub fn load_editor_scripts(document: &Document) {
     let style = document.create_element("style").unwrap();
     style.set_attribute("data-te-test", "").unwrap();
     style.set_text_content(Some(&format!(
-        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{TRIM_CSS}\n{BLOCKS_CSS}\n{ALT_PANEL_CSS}"
+        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{TRIM_CSS}\n{BLOCKS_CSS}\n{ALT_PANEL_CSS}\n{OVERFLOW_CSS}"
     )));
     document
         .document_element()
@@ -232,6 +238,7 @@ pub fn load_editor_scripts(document: &Document) {
         LAB_JS,
         BLOCKS_JS,
         ALT_PANEL_JS,
+        OVERFLOW_JS,
         EDITOR_JS,
         TEST_HELPERS_JS,
     ] {
@@ -390,6 +397,28 @@ pub fn install_document_bindings() {
         Closure::<dyn FnMut(String, u32) -> Result<JsValue, JsValue>>::new(
             |span: String, index: u32| set_active_alternative(&span, index),
         )
+        .into_js_value(),
+    );
+    // Overflow panel (issue #12).
+    install(
+        "document_overflow",
+        Closure::<dyn FnMut() -> String>::new(document_overflow).into_js_value(),
+    );
+    install(
+        "set_document_overflow",
+        Closure::<dyn FnMut(String) -> JsValue>::new(|t: String| set_document_overflow(&t))
+            .into_js_value(),
+    );
+    install(
+        "stash_document_range",
+        Closure::<dyn FnMut(u32, u32) -> Result<JsValue, JsValue>>::new(stash_document_range)
+            .into_js_value(),
+    );
+    install(
+        "replay_document_overflow",
+        Closure::<dyn FnMut(String, String) -> JsValue>::new(|from: String, to: String| {
+            replay_document_overflow(&from, &to)
+        })
         .into_js_value(),
     );
 }

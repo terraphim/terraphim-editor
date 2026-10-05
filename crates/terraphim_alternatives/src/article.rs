@@ -78,9 +78,19 @@ fn wants_an(word: &str) -> bool {
     matches!(word.chars().next(), Some('a' | 'e' | 'i' | 'o' | 'u'))
 }
 
-/// Byte range of an article immediately before `span_start` in `body`.
-pub(crate) fn preceding_article(body: &str, span_start: usize) -> Option<(usize, usize)> {
-    let before = &body[..span_start];
+/// Byte range of an article ("a", "an", "A", "An", "AN") immediately before
+/// `span_start` in `body`, separated from it by whitespace containing at most
+/// one line break. Returns `None` when there is none, or when `span_start` is
+/// out of range or not on a character boundary.
+///
+/// ```
+/// use terraphim_alternatives::preceding_article;
+/// let body = "Pass me a paperclip.";
+/// assert_eq!(preceding_article(body, 10), Some((8, 9)));
+/// assert_eq!(preceding_article(body, 5), None);
+/// ```
+pub fn preceding_article(body: &str, span_start: usize) -> Option<(usize, usize)> {
+    let before = body.get(..span_start)?;
     let article_end = before.trim_end_matches(char::is_whitespace).len();
     let gap = &before[article_end..];
     if gap.is_empty() || gap.matches('\n').count() > 1 {
@@ -97,7 +107,14 @@ pub(crate) fn preceding_article(body: &str, span_start: usize) -> Option<(usize,
 }
 
 /// Spells `wanted` in the case style of `existing` ("A" -> "An", "AN" -> "A").
-pub(crate) fn respell(existing: &str, wanted: Article) -> &'static str {
+///
+/// ```
+/// use terraphim_alternatives::{Article, respell};
+/// assert_eq!(respell("A", Article::An), "An");
+/// assert_eq!(respell("an", Article::A), "a");
+/// assert_eq!(respell("AN", Article::A), "A");
+/// ```
+pub fn respell(existing: &str, wanted: Article) -> &'static str {
     let upper = existing.starts_with(|c: char| c.is_uppercase());
     let shouting = existing.len() > 1 && existing.chars().all(char::is_uppercase);
     match (wanted, upper, shouting) {

@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2024"
 description = "Span model for non-KG alternative-control state: human alternatives, ghosting, overflow and the trailing annotation block."
 license = "MIT"
-publish = false
+repository = "https://git.terraphim.cloud/terraphim/terraphim-editor"
+readme = false
+keywords = ["markdown", "alternatives", "editor"]
+# Published to the private registry so terraphim_lsp_core (terraphim-ai) can
+# share the annotation-block parser and a/an rules (issue #66).
+publish = ["terraphim"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

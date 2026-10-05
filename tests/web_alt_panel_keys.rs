@@ -40,7 +40,8 @@ async fn test_keyboard_toggle_mode_and_destroy() {
           s.setSelectionOffsets(0, 3);
           if (!menu.open(s.getSelectionOffsets(), null)) return 'menu did not open on a selection';
           const labels = Array.from(document.querySelectorAll('.te-selection-menu [role="menuitem"] .te-selection-menu-label')).map((x) => x.textContent);
-          if (JSON.stringify(labels) !== '["Alternatives for selection","Ghost it"]') out.push('labels ' + JSON.stringify(labels));
+          // R-7.3 slot order; the Overflow panel (#12) registers its stash item too.
+          if (JSON.stringify(labels) !== '["Alternatives for selection","Ghost it","Stash this in Overflow"]') out.push('labels ' + JSON.stringify(labels));
           const row = document.querySelector('.te-selection-menu [role="menuitem"]');
           if (row.getAttribute('aria-keyshortcuts') !== 'Control+Shift+A') out.push('aria-keyshortcuts');
           row.click();
