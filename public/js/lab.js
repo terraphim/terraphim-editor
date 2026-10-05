@@ -73,7 +73,7 @@ const TE_LAB_LAYER = 'lab-marks';
 /** What each idea does: one line per action, shown for the focused action. */
 const TE_LAB_HINTS = {
   typos_and_punctuation: 'Proposes fixes for misspellings and punctuation slips. Nothing changes until you accept one.',
-  weakest_sentences: 'Marks the weakest sentences: least connected to the rest, most hedged. Paragraph openers are left alone.',
+  weakest_sentences: 'Marks the most hedged, least central sentences. Paragraph openers are left alone.',
   long_sentences: 'Marks sentences of 30 words or more.',
   convoluted_sentences: 'Marks sentences carrying many clauses, asides and breaks.',
   off_tone: 'Marks informal words that do not fit a professional register.',

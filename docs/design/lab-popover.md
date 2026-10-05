@@ -87,7 +87,7 @@ Running an action replaces the previous action's marks; running the same action 
 
 ## Performance and size
 
-- Release build, first action including the one-off `LabConfig` build: about 15 ms on the 19-paragraph fixture. A repeat run: about 1.6 ms.
+- Release build, first action including the one-off `LabConfig` build: about 15 ms on the test fixture (five prose paragraphs plus a heading, a fenced block and a list item, 166 words). A repeat run: about 1.6 ms.
 - Release `_bg.wasm` (`trunk build --release`), measured against `main` at 8a43ac8: 1,013,155 → 1,363,982 bytes (+350,827, +34.6%); gzip -9: 320,625 → 424,132 bytes (+103,507, +32.3%). Against the original base 7f7ff7f the figures were 971,919 → 1,334,390 bytes (+362,471); gzip 307,379 → 412,030 bytes (+104,651). The growth comes from the engine's dependency graph through `terraphim_automata` (`regex` with its Unicode tables, `aho-corasick`, `fst`, `bincode`, `sha2`, `terraphim-markdown-parser`). Follow-up options:
   - feature-gate those dependencies in `terraphim_automata` for the matcher-only path;
   - load the Lab as a second WASM module on first use of the LAB pill.
