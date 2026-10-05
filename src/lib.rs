@@ -13,6 +13,9 @@ pub use document::{
 // In-place cycling of alternatives (issue #9).
 pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
 
+mod lab;
+pub use lab::{lab_actions, lab_mark};
+
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!
 
 This is a simple markdown editor built with:

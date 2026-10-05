@@ -1,0 +1,361 @@
+/*
+ * The Lab popover and Lab marks (issue #14, spec R-8.1, R-8.2, section 10)
+ * ========================================================================
+ *
+ * Consumes the design tokens from tokens.css; the Lab adds only its mark
+ * hues, defined once here. Marks are transient overlays drawn with tints
+ * and underlines, never with opacity: opacity is the ghost treatment
+ * (R-5.1), and a mark must never look like text that would go.
+ *
+ *   --te-lab-wash-weak        lavender wash        weak sentences
+ *   --te-lab-amber            #d9a05b              long sentences (underline), off-tone words (dotted)
+ *   --te-lab-rose             #e8778e              typos (wavy), punctuation slips (wash)
+ *   --te-lab-teal             #6cc4b0              convoluted sentences (double), hedges (dashed)
+ *
+ * Each action shows its own marks only, so at most two styles are visible
+ * at a time. Sentence marks use background washes with
+ * box-decoration-break so wrapped lines each get the tint; word marks use
+ * text-decoration. Neither changes line height.
+ */
+
+:root {
+    --te-lab-amber: #d9a05b;
+    --te-lab-rose: #e8778e;
+    --te-lab-teal: #6cc4b0;
+    --te-lab-wash-weak: rgba(140, 134, 230, 0.2);
+    --te-lab-wash-long: rgba(217, 160, 91, 0.12);
+    --te-lab-wash-convoluted: rgba(108, 196, 176, 0.12);
+    --te-lab-wash-punctuation: rgba(232, 119, 142, 0.3);
+    --te-lab-popover-width: min(30rem, calc(100vw - 2rem));
+}
+
+/* ---- Marks ---- */
+
+.te-lab-mark {
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    border-radius: 2px;
+    text-underline-offset: 0.22em;
+}
+
+.te-lab-mark--weak-sentence {
+    background-color: var(--te-lab-wash-weak);
+}
+
+.te-lab-mark--long-sentence {
+    background-color: var(--te-lab-wash-long);
+    text-decoration: underline solid var(--te-lab-amber) 1px;
+}
+
+.te-lab-mark--convoluted-sentence {
+    background-color: var(--te-lab-wash-convoluted);
+    text-decoration: underline double var(--te-lab-teal) 1px;
+}
+
+.te-lab-mark--typo {
+    text-decoration: underline wavy var(--te-lab-rose) 1px;
+    text-decoration-skip-ink: none;
+}
+
+.te-lab-mark--punctuation {
+    background-color: var(--te-lab-wash-punctuation);
+    box-shadow: inset 0 -1px 0 var(--te-lab-rose);
+}
+
+.te-lab-mark--off-tone {
+    text-decoration: underline dotted var(--te-lab-amber) 2px;
+}
+
+.te-lab-mark--hedge {
+    text-decoration: underline dashed var(--te-lab-teal) 1px;
+}
+
+.te-lab-mark--filler {
+    text-decoration: underline dashed var(--te-color-text-dim) 1px;
+}
+
+/* ---- Popover (R-8.1) ---- */
+
+.te-lab {
+    position: fixed;
+    left: 50%;
+    bottom: 4rem;
+    z-index: 30;
+    box-sizing: border-box;
+    width: var(--te-lab-popover-width);
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    transform: translateX(-50%);
+    padding: 0.875rem 0.5rem 0.625rem;
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: var(--te-radius-popover);
+    background: var(--te-color-popover);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+    color: var(--te-color-text);
+    font-family: var(--te-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    text-align: left;
+}
+
+.te-lab[hidden],
+.te-lab-chip[hidden],
+.te-lab-results[hidden],
+.te-lab-trim[hidden],
+.te-lab-note[hidden],
+.te-lab-proposals[hidden] {
+    display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .te-lab:not([hidden]) {
+        animation: te-lab-rise 140ms ease-out;
+    }
+}
+
+@keyframes te-lab-rise {
+    from { opacity: 0; transform: translate(-50%, 6px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.te-lab-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0 0.625rem 0.5rem;
+}
+
+.te-lab-title {
+    margin: 0;
+    font-family: var(--te-font-display);
+    font-size: 1.375rem;
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--te-color-accent);
+}
+
+.te-lab-subtitle {
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+}
+
+.te-lab-actions {
+    display: flex;
+    flex-direction: column;
+}
+
+.te-lab button {
+    margin: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.te-lab button:focus-visible {
+    outline: 2px solid var(--te-color-accent);
+    outline-offset: -2px;
+    border-radius: 6px;
+}
+
+.te-lab .te-lab-action {
+    display: grid;
+    grid-template-columns: 1.25rem 1fr auto;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.45rem 0.625rem;
+    border-radius: 6px;
+    text-align: left;
+}
+
+.te-lab .te-lab-action:hover,
+.te-lab .te-lab-action:focus-visible {
+    background: var(--te-color-popover-hover);
+}
+
+.te-lab-action i {
+    color: var(--te-color-text-dim);
+    font-size: 0.8125rem;
+    text-align: center;
+}
+
+.te-lab-action[aria-checked="true"] {
+    color: var(--te-color-accent);
+}
+
+.te-lab-action[aria-checked="true"] i {
+    color: var(--te-color-accent);
+}
+
+.te-lab-action-count {
+    min-width: 1.5rem;
+    color: var(--te-color-text-dim);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.te-lab-hint {
+    min-height: 2.25em;
+    margin: 0.25rem 0.625rem 0;
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+}
+
+.te-lab-trim {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.5rem 0.625rem 0;
+}
+
+.te-lab-results {
+    margin: 0.625rem 0.625rem 0;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--te-color-panel-border);
+}
+
+.te-lab-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    color: var(--te-color-text);
+}
+
+.te-lab-legend-entry {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5ch;
+}
+
+.te-lab-swatch {
+    padding: 0 0.15em;
+    color: var(--te-color-text-dim);
+}
+
+.te-lab-proposals {
+    margin: 0.5rem 0 0;
+    padding: 0;
+    max-height: 9.5rem;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.te-lab-proposal {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.2rem 0;
+}
+
+.te-lab-from {
+    overflow: hidden;
+    color: var(--te-lab-rose);
+    text-decoration: line-through;
+    text-decoration-color: rgba(232, 119, 142, 0.6);
+    text-overflow: ellipsis;
+    white-space: pre;
+}
+
+.te-lab-to {
+    overflow: hidden;
+    color: var(--te-color-text);
+    text-overflow: ellipsis;
+    white-space: pre;
+}
+
+.te-lab-arrow {
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+}
+
+.te-lab .te-lab-accept {
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--te-color-accent-soft);
+    border-radius: 999px;
+    color: var(--te-color-accent);
+    font-size: 0.75rem;
+}
+
+.te-lab .te-lab-accept:hover {
+    border-color: var(--te-color-accent);
+}
+
+.te-lab .te-lab-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5ch;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0;
+    color: var(--te-color-text-dim);
+    font-size: 0.75rem;
+}
+
+.te-lab .te-lab-clear:hover {
+    color: var(--te-color-text);
+}
+
+.te-lab-note {
+    margin: 0.5rem 0.625rem 0;
+    color: var(--te-lab-rose);
+    font-size: 0.75rem;
+}
+
+/* ---- Closed-state chip beside the LAB pill ---- */
+
+.te-lab-chip {
+    position: fixed;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    transform: translateY(-50%);
+    color: var(--te-color-text-dim);
+    font-family: var(--te-font-mono);
+    font-size: 0.6875rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.te-lab-chip .te-lab-chip-clear {
+    margin: 0;
+    padding: 0.2rem 0;
+    border: 0;
+    background: none;
+    color: var(--te-color-accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.te-lab-chip .te-lab-chip-clear:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.te-lab-chip .te-lab-chip-clear:focus-visible {
+    outline: 2px solid var(--te-color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Screen-reader reasons referenced by the marks' aria-describedby. */
+.te-lab-descriptions {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 640px) {
+    .te-lab-subtitle { display: none; }
+    .te-lab-chip { display: none; }
+}

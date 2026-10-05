@@ -1791,6 +1791,7 @@ dependencies = [
  "rinja",
  "serde_json",
  "terraphim_alternatives",
+ "terraphim_lab",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
