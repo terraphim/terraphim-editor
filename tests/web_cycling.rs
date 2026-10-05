@@ -59,9 +59,19 @@ fn setup() {
               const sync = api.document_body() === ed.surface.getText() ? '' : ' DRIFT';
               return ed.surface.getText().split('.')[0] + ' | ' + teCyc.model() + ' | lit=' + lit + sync;
             }},
+            // The pointer is placed over the centre of the span's first
+            // rendered box, with real client coordinates: a plain arrow
+            // re-checks them against the live layout before swapping.
             hover(id) {{
               const el = ed.surface.root.querySelector('[data-te-decoration~="indicators:' + id + '"]');
-              el.dispatchEvent(new MouseEvent('mouseover', {{ bubbles: true }}));
+              const r = el.getClientRects()[0];
+              teCyc.pointAt(el, r.left + r.width / 2, r.top + r.height / 2);
+            }},
+            // Move the pointer to (x, y) within the surface, over `el`.
+            pointAt(el, x, y) {{
+              const init = {{ bubbles: true, clientX: x, clientY: y }};
+              el.dispatchEvent(new MouseEvent('mouseover', init));
+              el.dispatchEvent(new MouseEvent('mousemove', init));
             }},
             unhover() {{
               ed.surface.root.dispatchEvent(new MouseEvent('mouseleave'));
@@ -301,6 +311,78 @@ fn test_undo_to_an_ungrammatical_article_keeps_model_and_surface_equal() {
           if (ed.surface.getText() !== 'Give me a thumbtack.\n' || api.document_body() !== ed.surface.getText()) out.push('redo');
         "##,
         src = js_string_literal(&ungrammatical_fixture()),
+    );
+    assert_eq!(run(&body), "");
+}
+
+#[wasm_bindgen_test]
+fn test_stale_hover_never_swallows_plain_arrows() {
+    let body = format!(
+        r##"
+          const root = ed.surface.root;
+          ed.surface.focus();
+          ed.surface.setSelectionOffsets(3);
+          const depth = ed.surface.historyIndex;
+          // The point over the start of "Second line." (plain text, no span).
+          const second = (() => {{
+            const r = document.createRange();
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            let n;
+            while ((n = walker.nextNode())) {{
+              const i = n.data.indexOf('Second');
+              if (i >= 0) {{ r.setStart(n, i); r.setEnd(n, i + 1); break; }}
+            }}
+            const b = r.getClientRects()[0];
+            return {{ el: n.parentElement, x: b.left + b.width / 2, y: b.top + b.height / 2 }};
+          }})();
+
+          // 1. Hover, then move the pointer onto plain text: no swap.
+          teCyc.hover('s1');
+          teCyc.pointAt(second.el, second.x, second.y);
+          if (teCyc.key('ArrowDown')) out.push('moved away: arrow prevented');
+          expect('moved away', {PAPERCLIP:?});
+
+          // 2. Hover, then leave the surface: no swap.
+          teCyc.hover('s1');
+          teCyc.unhover();
+          if (teCyc.key('ArrowDown')) out.push('left: arrow prevented');
+          expect('left', {PAPERCLIP:?});
+
+          // 3. Hover, then window blur: no swap.
+          teCyc.hover('s1');
+          window.dispatchEvent(new Event('blur'));
+          if (teCyc.key('ArrowDown')) out.push('blur: arrow prevented');
+          expect('blur', {PAPERCLIP:?});
+
+          // 4. Hover, then type before the span so it shifts out from under
+          // the still pointer: the stale hover does not take the arrow.
+          teCyc.hover('s1');
+          ed.surface.replaceRange(0, 0, 'Please, if you would kindly, ');
+          ed.indicators.flush();
+          const caret = ed.surface.getSelectionOffsets().start;
+          if (teCyc.key('ArrowDown')) out.push('shifted: arrow prevented');
+          if (ed.surface.getSelectionOffsets().start !== caret) out.push('shifted: caret changed');
+          const shifted = teCyc.state();
+          if (!shifted.startsWith('Please, if you would kindly, Pass me a paperclip') || !shifted.includes('#0'))
+            out.push('shifted: ' + shifted);
+          ed.surface.undo();
+          expect('undo typing', {PAPERCLIP:?});
+          if (ed.surface.historyIndex !== depth) out.push('history ' + (ed.surface.historyIndex - depth));
+
+          // 5. Hovering again, repeated swaps still work, including when the
+          // new alternative's text no longer reaches the pointer ("an
+          // eraser" is shorter than "a paperclip"): the hover is held across
+          // a swap of the same span.
+          const el = root.querySelector('[data-te-decoration~="indicators:s1"]');
+          const r = el.getClientRects()[0];
+          teCyc.pointAt(el, r.right - 2, r.top + r.height / 2);
+          if (!teCyc.key('ArrowDown')) out.push('hover again: not prevented');
+          expect('down 1', {ERASER:?});
+          if (!teCyc.key('ArrowDown')) out.push('held: not prevented');
+          expect('down 2', {THUMBTACK:?});
+          teCyc.key('ArrowDown');
+          expect('down 3', {PAPERCLIP:?});
+        "##
     );
     assert_eq!(run(&body), "");
 }

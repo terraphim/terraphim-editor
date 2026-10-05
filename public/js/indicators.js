@@ -252,15 +252,23 @@ class TeIndicatorLayer {
       else options.signal.addEventListener('abort', () => this.destroy(), { signal });
     }
 
-    // Span id under the pointer (issue #9). Kept by id, not element: a swap
-    // re-renders the surface and no new mouseover fires until the pointer
-    // moves, but the span keeps its id.
+    // Span id under the pointer (issue #9), with the pointer's last client
+    // coordinates. A plain arrow re-checks that the pointer is still over
+    // that span's rendered text before taking the key, so a hover left
+    // stale by typing, caret moves, scrolling or re-layout never swallows
+    // caret movement. `hoverHeld` keeps the hover across the re-render of a
+    // swap of that same span (the new text may no longer be under the
+    // pointer), until the pointer moves or any other change happens.
     this.hoverSpan = null;
-    this.surface.root.addEventListener('mouseover', (e) => this.onHover(e), { signal });
-    this.surface.root.addEventListener('mouseleave', () => { this.hoverSpan = null; }, { signal });
+    this.pointer = null;
+    this.hoverHeld = false;
+    this.surface.root.addEventListener('mouseover', (e) => this.onPointer(e), { signal });
+    this.surface.root.addEventListener('mousemove', (e) => this.onPointer(e), { signal, passive: true });
+    this.surface.root.addEventListener('mouseleave', () => this.clearHover(), { signal });
+    window.addEventListener('blur', () => this.clearHover(), { signal });
     this.surface.root.addEventListener('keydown', (e) => this.onCycleKey(e), { signal });
 
-    this.offChange = this.surface.onChange(() => this.onSurfaceChange());
+    this.offChange = this.surface.onChange((change) => this.onSurfaceChange(change));
     this.offApply = this.registry.onApply(() => this.scheduleLayout());
     document.addEventListener('te:mode-change', (e) => {
       if (!e.detail || !e.detail.editor || e.detail.editor === this.editor) {
@@ -268,7 +276,10 @@ class TeIndicatorLayer {
       }
     }, { signal });
     window.addEventListener('resize', () => this.scheduleLayout(), { signal });
-    this.surface.root.addEventListener('scroll', () => this.scheduleLayout(), { signal, passive: true });
+    this.surface.root.addEventListener('scroll', () => {
+      this.hoverHeld = false;
+      this.scheduleLayout();
+    }, { signal, passive: true });
     // Observed only while active, so plain mode pays nothing per keystroke.
     if (typeof ResizeObserver === 'function') {
       this.resizeObserver = new ResizeObserver(() => this.scheduleLayout());
@@ -307,7 +318,7 @@ class TeIndicatorLayer {
       this.flush();
     } else {
       this.cancelPending();
-      this.hoverSpan = null;
+      this.clearHover();
       this.registry.clear(TeIndicatorLayer.LAYER);
       this.removeAllSpans();
       this.unmountOverlay();
@@ -377,8 +388,12 @@ class TeIndicatorLayer {
   // Scheduling
   // ---------------------------------------------------------------------
 
-  onSurfaceChange() {
+  onSurfaceChange(change) {
     if (!this.active) return;
+    // Only a swap of the hovered span itself keeps the hover held; after any
+    // other change the next plain arrow re-checks the pointer (issue #9).
+    const swap = change && change.edit && change.edit.swap;
+    this.hoverHeld = !!swap && this.hoverSpan !== null && String(swap.span) === this.hoverSpan;
     // Geometry follows the mapped decorations at once (next frame); the model
     // read waits for a pause in typing.
     this.scheduleLayout();
@@ -600,18 +615,60 @@ class TeIndicatorLayer {
   // In-place cycling (issue #9)
   // ---------------------------------------------------------------------
 
-  /** Track the indicated span under the pointer (its text, not its dots). */
-  onHover(e) {
+  /** Track the pointer and the indicated span under it (its text, not its dots). */
+  onPointer(e) {
     if (!this.active) return;
-    const el = e.target && e.target.closest ? e.target.closest('[data-te-decoration]') : null;
-    const prefix = `${TeIndicatorLayer.LAYER}:`;
-    const token = el && el.getAttribute('data-te-decoration').split(' ').find((t) => t.startsWith(prefix));
-    this.hoverSpan = token ? token.slice(prefix.length) : null;
+    this.pointer = { x: e.clientX, y: e.clientY };
+    this.hoverHeld = false;
+    this.hoverSpan = this.spanOfElement(e.target);
   }
 
-  /** The hovered span id, if it is still indicated. */
+  clearHover() {
+    this.hoverSpan = null;
+    this.pointer = null;
+    this.hoverHeld = false;
+  }
+
+  /**
+   * The indicated span whose rendered text holds `el`, or null. Walks out
+   * through nested decorations (a Lab mark inside an indicated span, say).
+   */
+  spanOfElement(el) {
+    const prefix = `${TeIndicatorLayer.LAYER}:`;
+    const root = this.surface.root;
+    let node = el && el.closest ? el.closest('[data-te-decoration]') : null;
+    while (node && root.contains(node) && node !== root) {
+      const token = (node.getAttribute('data-te-decoration') || '').split(' ').find((t) => t.startsWith(prefix));
+      if (token) return token.slice(prefix.length);
+      node = node.parentElement ? node.parentElement.closest('[data-te-decoration]') : null;
+    }
+    return null;
+  }
+
+  /** The indicated span rendered under the last pointer position, or null. */
+  spanAtPointer() {
+    if (!this.pointer || typeof document.elementsFromPoint !== 'function') return null;
+    const root = this.surface.root;
+    for (const el of document.elementsFromPoint(this.pointer.x, this.pointer.y)) {
+      if (el === root || !root.contains(el)) continue;
+      const id = this.spanOfElement(el);
+      if (id !== null) return id;
+    }
+    return null;
+  }
+
+  /**
+   * The hovered span id, if it is still indicated and the pointer is still
+   * over its rendered text (or the hover is held across a swap of it).
+   * A hover that fails the check is dropped.
+   */
   hoveredSpan() {
-    return this.hoverSpan !== null && this.spans.has(this.hoverSpan) ? this.hoverSpan : null;
+    const id = this.hoverSpan;
+    if (id === null || !this.spans.has(id)) return null;
+    if (this.hoverHeld || this.spanAtPointer() === id) return id;
+    this.hoverSpan = null;
+    this.hoverHeld = false;
+    return null;
   }
 
   /**
