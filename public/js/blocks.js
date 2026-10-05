@@ -28,6 +28,24 @@
  * committed on blur, Ctrl+Enter or when leaving the view, never per
  * keystroke.
  *
+ * Drafts are never lost
+ * ---------------------
+ * While a block editor is open the body can still change from outside (an
+ * integration calling surface.replaceRange or setText, undo from elsewhere,
+ * openDocument). Every surface change event carries the exact edit, and the
+ * open editor's range is mapped through it:
+ *   - an edit entirely before the block shifts the range; an edit entirely
+ *     after it changes nothing. The textarea stays open with its draft and
+ *     the other cards are re-rendered around it;
+ *   - an edit that overlaps the block, or replaces the whole document
+ *     (openDocument, setText), closes the editor and keeps the draft in a
+ *     visible, non-blocking notice above the view with "Apply my edit"
+ *     (best effort: replaces the block now at that position, or inserts a
+ *     new paragraph there; one undo step) and "Discard".
+ * A commit also checks that the block's original text is still at the mapped
+ * range; if not, the draft goes to the notice instead of being applied.
+ * Kept drafts follow later edits and stay available in both views.
+ *
  * Controls
  * --------
  * Plain mode: a "View" button group (Text | Blocks) in the toolbar. Write_On
@@ -38,8 +56,12 @@
  * Keyboard (the list uses a roving tabindex):
  *   ArrowUp / ArrowDown / Home / End   move between blocks
  *   Enter or F2                        edit the focused block
+ *   Shift+Enter                        add a paragraph below the block
  *   Ctrl+Enter / Escape (editing)      commit / cancel the edit
  *   Delete                             delete the block
+ *   Tab                                the focused block's action buttons
+ *                                      (edit, add below, delete); Escape
+ *                                      returns to the block
  *   Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y      undo / redo (the surface history)
  *
  * There is deliberately no "move block" command: moving text through the
@@ -57,8 +79,8 @@
  *
  * Lifecycle: MarkdownEditor creates the view after the chrome and passes its
  * AbortController signal; every listener uses it. destroy() removes the
- * container, the toolbar group and the change subscription, and shows the
- * surface again.
+ * container, the drafts notice, the toolbar group and the change
+ * subscription, and shows the surface again.
  */
 
 const BLOCKS_VIEW_STORAGE_KEY = 'terraphim-editor:view';
@@ -97,11 +119,14 @@ class BlocksView {
     // not rebuild the DOM under the textarea that is being committed.
     this.applying = false;
     this.dirty = false;
+    // Drafts kept after an outside change overlapped an open block editor.
+    this.drafts = [];
+    this.nextDraftId = 1;
     // Blocks was showing when Write_On mode took over.
     this.resumeAfterWriteOn = false;
 
     this.build();
-    this.offChange = this.surface.onChange(() => this.onSurfaceChange());
+    this.offChange = this.surface.onChange((change) => this.onSurfaceChange(change));
     this.listen(document, 'te:mode-change', (e) => this.onModeChange(e));
 
     // Restore the viewer's last view (never in Write_On mode).
@@ -239,6 +264,15 @@ class BlocksView {
     return m ? m[1] || m[2] : null;
   }
 
+  /** Index of the block in `model` that owns `offset` (text or separator). */
+  static indexIn(model, offset) {
+    const blocks = model.blocks;
+    for (let i = blocks.length - 1; i >= 0; i -= 1) {
+      if (offset >= blocks[i].start) return i;
+    }
+    return 0;
+  }
+
   /** Inverse of parse(): lead plus every block's text and separator. */
   static serialise(model) {
     let out = model.lead || '';
@@ -324,6 +358,24 @@ class BlocksView {
     this.listen(add, 'click', () => this.insertBlockAfter(this.model.blocks.length - 1));
     container.append(list, add);
     root.parentNode.insertBefore(container, root.nextSibling);
+
+    // Kept drafts: above the surface and the blocks, visible in both views.
+    const drafts = document.createElement('div');
+    drafts.className = 'te-blocks-drafts';
+    drafts.hidden = true;
+    drafts.tabIndex = -1;
+    drafts.setAttribute('role', 'region');
+    drafts.setAttribute('aria-label', 'Kept block drafts');
+    drafts.setAttribute('aria-live', 'polite');
+    root.parentNode.insertBefore(drafts, root);
+    this.draftsElement = drafts;
+    this.listen(drafts, 'click', (e) => {
+      const b = e.target.closest('[data-draft-action]');
+      if (!b) return;
+      const id = Number(b.dataset.draftId);
+      if (b.dataset.draftAction === 'apply') this.applyDraft(id);
+      else this.discardDraft(id);
+    });
     this.container = container;
     this.list = list;
     this.addButton = add;
@@ -340,14 +392,42 @@ class BlocksView {
     });
   }
 
+  /**
+   * Rebuild the cards from the body. An open block editor is kept in place
+   * (its card is never detached, so the textarea keeps focus, draft and
+   * selection) and the other cards are rebuilt around it. Callers that mean
+   * to close the editor clear `this.editing` first.
+   */
   render(focus = false) {
     this.dirty = false;
-    this.editing = null;
     this.model = BlocksView.parse(this.surface.getText());
     const blocks = this.model.blocks;
     if (this.focusIndex >= blocks.length) this.focusIndex = Math.max(0, blocks.length - 1);
+    const cards = blocks.map((b, i) => this.renderCard(b, i, blocks.length));
+    const keep = this.editing && this.editing.card.parentNode === this.list ? this.editing : null;
+    if (keep) {
+      const k = keep.isNew
+        ? blocks.filter((b) => b.start < keep.start).length
+        : BlocksView.indexIn(this.model, keep.start);
+      const kept = keep.card;
+      for (const child of Array.from(this.list.children)) {
+        if (child !== kept) child.remove();
+      }
+      cards.forEach((c, i) => {
+        if (!keep.isNew && i === k) return;
+        if (i < k) this.list.insertBefore(c, kept);
+        else this.list.appendChild(c);
+      });
+      keep.index = k;
+      kept.dataset.index = String(k);
+      if (keep.selection && document.activeElement === keep.textarea) {
+        keep.textarea.setSelectionRange(...keep.selection);
+      }
+      return;
+    }
+    this.editing = null;
     const frag = document.createDocumentFragment();
-    blocks.forEach((b, i) => frag.appendChild(this.renderCard(b, i, blocks.length)));
+    cards.forEach((c) => frag.appendChild(c));
     if (blocks.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'te-blocks-empty';
@@ -367,7 +447,11 @@ class BlocksView {
     card.dataset.type = block.type;
     card.tabIndex = index === this.focusIndex ? 0 : -1;
     const label = BLOCK_LABELS[block.type] + (block.level ? ` ${block.level}` : '');
-    card.setAttribute('aria-label', `${label}, block ${index + 1} of ${total}. Press Enter to edit.`);
+    card.setAttribute(
+      'aria-label',
+      `${label}, block ${index + 1} of ${total}. Enter to edit, Shift+Enter to add a paragraph below, Delete to remove, Tab for actions.`,
+    );
+    card.setAttribute('aria-keyshortcuts', 'Enter F2 Shift+Enter Delete');
 
     const head = document.createElement('div');
     head.className = 'te-block-head';
@@ -376,13 +460,15 @@ class BlocksView {
     tag.textContent = block.type === 'heading' ? `H${block.level}` : BLOCK_LABELS[block.type];
     const actions = document.createElement('span');
     actions.className = 'te-block-actions';
-    const action = (name, label, icon) => {
+    const action = (name, label, icon, keys) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'te-block-action';
       b.dataset.action = name;
-      b.tabIndex = -1;
+      // Roving tabindex: only the focused card's actions are in the tab order.
+      b.tabIndex = index === this.focusIndex ? 0 : -1;
       b.setAttribute('aria-label', label);
+      b.setAttribute('aria-keyshortcuts', keys);
       b.title = label;
       const i = document.createElement('i');
       i.className = icon;
@@ -390,9 +476,9 @@ class BlocksView {
       b.appendChild(i);
       actions.appendChild(b);
     };
-    action('edit', 'Edit block (Enter)', 'fa-solid fa-pen');
-    action('insert', 'Add paragraph below', 'fa-solid fa-plus');
-    action('delete', 'Delete block (Delete)', 'fa-regular fa-trash-can');
+    action('edit', 'Edit block (Enter)', 'fa-solid fa-pen', 'Enter F2');
+    action('insert', 'Add paragraph below (Shift+Enter)', 'fa-solid fa-plus', 'Shift+Enter');
+    action('delete', 'Delete block (Delete)', 'fa-regular fa-trash-can', 'Delete');
     head.append(tag, actions);
 
     const body = document.createElement('div');
@@ -433,6 +519,7 @@ class BlocksView {
     this.focusIndex = i;
     cards.forEach((c, k) => {
       c.tabIndex = k === i ? 0 : -1;
+      for (const b of c.querySelectorAll('.te-block-action')) b.tabIndex = k === i ? 0 : -1;
     });
     // Native focus scrolls the card into view only when it is off screen.
     if (focus) cards[i].focus();
@@ -516,11 +603,7 @@ class BlocksView {
 
   /** Index of the block that owns `offset` (its text or trailing separator). */
   blockIndexAt(offset) {
-    const blocks = this.model.blocks;
-    for (let i = blocks.length - 1; i >= 0; i -= 1) {
-      if (offset >= blocks[i].start) return i;
-    }
-    return 0;
+    return BlocksView.indexIn(this.model, offset);
   }
 
   onModeChange(e) {
@@ -536,16 +619,203 @@ class BlocksView {
     }
   }
 
-  onSurfaceChange() {
+  onSurfaceChange(change) {
+    const edit = change && change.edit;
+    const whole = !!edit && BlocksView.replacesWhole(change);
+    // Kept drafts follow every change, in either view.
+    if (edit && this.drafts.length) this.mapDrafts(edit, whole);
+    let overlapped = null;
+    if (this.editing && edit && !this.mapEditing(edit, whole)) {
+      overlapped = this.editing;
+      this.editing = null;
+    }
+    const hadFocus = this.container.contains(document.activeElement);
+    if (overlapped) this.keepDraft(overlapped, edit, whole);
     if (!this.isActive()) return;
     if (this.applying) {
       this.dirty = true;
       return;
     }
-    // An outside change (open, undo from elsewhere): rebuild, keeping focus
-    // in the list if it was there.
-    const hadFocus = this.container.contains(document.activeElement);
-    this.render(hadFocus);
+    // An outside change (open, undo from elsewhere): rebuild around any open
+    // editor, keeping focus in the list if it was there.
+    this.render(hadFocus && !this.editing && !overlapped);
+    if (overlapped && hadFocus) this.draftsElement.focus({ preventScroll: true });
+  }
+
+  /** Whether a surface change replaced the whole document. */
+  static replacesWhole(change) {
+    const e = change.edit;
+    const oldLength = change.text.length - e.insertedText.length + e.deletedLength;
+    return change.source === 'open' || (e.start === 0 && e.deletedLength === oldLength && oldLength > 0);
+  }
+
+  /**
+   * Map the open editor's range through `edit`. Returns false when the edit
+   * overlaps the block (or replaces the document), true when the editor can
+   * stay open.
+   */
+  mapEditing(edit, whole) {
+    if (whole) return false;
+    const ed = this.editing;
+    const a = edit.start;
+    const b = a + edit.deletedLength;
+    const s = ed.start;
+    const e = s + ed.original.length;
+    if (b <= s) {
+      ed.start = s + edit.insertedText.length - edit.deletedLength;
+      return true;
+    }
+    return a >= e;
+  }
+
+  mapDrafts(edit, whole) {
+    const a = edit.start;
+    const b = a + edit.deletedLength;
+    const delta = edit.insertedText.length - edit.deletedLength;
+    for (const d of this.drafts) {
+      if (d.anchor === null) continue;
+      if (whole) d.anchor = null;
+      else if (b <= d.anchor) d.anchor += delta;
+      else if (a < d.anchor) d.anchor = a;
+    }
+  }
+
+  /**
+   * Keep the draft of a closed editor in the notice. A draft identical to
+   * what the block held (nothing typed) is not kept: nothing is lost.
+   */
+  keepDraft(ed, edit, whole) {
+    const value = window.EditorSurface.normaliseNewlines(ed.textarea.value);
+    if (ed.isNew ? value.trim() === '' : value === ed.original) return null;
+    const draft = {
+      id: this.nextDraftId++,
+      value,
+      isNew: !!ed.isNew,
+      index: ed.index,
+      // Where to re-apply: an offset in the body, or the block index when
+      // the whole document was replaced.
+      anchor: whole ? null : edit ? edit.start : ed.start,
+      reason: whole ? 'replaced' : 'changed',
+    };
+    this.drafts.push(draft);
+    this.renderDrafts();
+    return draft;
+  }
+
+  renderDrafts() {
+    const el = this.draftsElement;
+    el.textContent = '';
+    el.hidden = this.drafts.length === 0;
+    for (const d of this.drafts) {
+      const item = document.createElement('div');
+      item.className = 'te-blocks-draft';
+      item.dataset.draftId = String(d.id);
+      const msg = document.createElement('p');
+      msg.className = 'te-blocks-draft-message';
+      const icon = document.createElement('i');
+      icon.className = 'fa-solid fa-circle-info';
+      icon.setAttribute('aria-hidden', 'true');
+      msg.append(icon, document.createTextNode(d.reason === 'replaced'
+        ? ' The document was replaced while you were editing a block. Your draft is kept here.'
+        : ' The block changed while you were editing it. Your draft is kept here.'));
+      const pre = document.createElement('pre');
+      pre.className = 'te-blocks-draft-text';
+      pre.textContent = d.value;
+      const actions = document.createElement('div');
+      actions.className = 'te-blocks-draft-actions';
+      const button = (action, label) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `te-blocks-draft-${action}`;
+        b.dataset.draftAction = action;
+        b.dataset.draftId = String(d.id);
+        b.textContent = label;
+        actions.appendChild(b);
+      };
+      button('apply', 'Apply my edit');
+      button('discard', 'Discard');
+      item.append(msg, pre, actions);
+      el.appendChild(item);
+    }
+  }
+
+  /** Kept drafts, oldest first (copies). */
+  keptDrafts() {
+    return this.drafts.map((d) => ({ ...d }));
+  }
+
+  /**
+   * Re-apply a kept draft, best effort: it replaces the block now at the
+   * draft's position (or inserts a new paragraph there for a new block).
+   * One undo step. Returns true when applied.
+   */
+  applyDraft(id) {
+    const draft = this.drafts.find((d) => d.id === id);
+    if (!draft) return false;
+    if (this.editing) this.commitEdit({ rerender: false });
+    this.drafts = this.drafts.filter((d) => d !== draft);
+    this.renderDrafts();
+    const text = this.surface.getText();
+    const model = BlocksView.parse(text);
+    const blocks = model.blocks;
+    let caret;
+    this.applying = true;
+    try {
+      if (draft.isNew || blocks.length === 0) {
+        let at;
+        if (draft.anchor === null) {
+          at = draft.index < blocks.length ? blocks[draft.index].start : blocks.length ? blocks[blocks.length - 1].end : text.length;
+        } else {
+          at = Math.min(draft.anchor, text.length);
+          const inside = blocks.find((b) => b.start < at && at < b.end);
+          if (inside) at = inside.end;
+        }
+        caret = this.insertParagraph(at, draft.value);
+      } else {
+        const i = draft.anchor === null
+          ? Math.min(draft.index, blocks.length - 1)
+          : BlocksView.indexIn(model, Math.min(draft.anchor, text.length));
+        const b = blocks[i];
+        const d = window.EditorSurface.diff(b.text, draft.value);
+        caret = b.start;
+        if (d) {
+          this.surface.replaceRange(b.start + d.start, b.start + d.start + d.deletedLength, d.insertedText, {
+            source: 'blocks',
+            selectStart: b.start,
+          });
+        }
+      }
+    } finally {
+      this.applying = false;
+    }
+    if (this.isActive()) {
+      this.render(false);
+      this.setCurrent(this.blockIndexAt(caret), true);
+    }
+    return true;
+  }
+
+  /** Drop a kept draft. */
+  discardDraft(id) {
+    const before = this.drafts.length;
+    this.drafts = this.drafts.filter((d) => d.id !== id);
+    this.renderDrafts();
+    if (this.isActive() && this.drafts.length === 0 && before) this.setCurrent(this.focusIndex, true);
+    return this.drafts.length < before;
+  }
+
+  /**
+   * Insert `value` as a paragraph at `at`, separated from its neighbours by
+   * one blank line. Returns the offset where the paragraph starts.
+   */
+  insertParagraph(at, value) {
+    const text = this.surface.getText();
+    const before = text.slice(0, at);
+    const after = text.slice(at);
+    const pre = at === 0 || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+    const post = after.trim() === '' || after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+    this.surface.replaceRange(at, at, pre + value + post, { source: 'blocks', selectStart: at + pre.length });
+    return at + pre.length;
   }
 
   // ---------------------------------------------------------------------
@@ -575,10 +845,21 @@ class BlocksView {
     if (body) body.hidden = true;
     card.classList.add('te-block-editing');
     card.appendChild(ta);
-    this.editing = { ...edit, card, textarea: ta };
+    this.editing = { ...edit, card, textarea: ta, selection: null };
     this.listen(ta, 'input', () => {
       ta.rows = Math.max(2, ta.value.split('\n').length + 1);
     });
+    // While the textarea has focus its selection is the document selection,
+    // which an outside surface edit moves; remember it so render() can put
+    // it back.
+    const remember = () => {
+      if (this.editing && this.editing.textarea === ta && document.activeElement === ta) {
+        this.editing.selection = [ta.selectionStart, ta.selectionEnd, ta.selectionDirection];
+      }
+    };
+    this.listen(document, 'selectionchange', remember);
+    this.listen(ta, 'select', remember);
+    this.listen(ta, 'keyup', remember);
     this.listen(ta, 'blur', (e) => {
       // Focus moving somewhere specific (another card, a toolbar button)
       // must not be pulled back into the list by the commit.
@@ -605,16 +886,17 @@ class BlocksView {
     let base = edit.start;
     this.applying = true;
     try {
-      if (edit.isNew) {
+      const text = this.surface.getText();
+      const stale = edit.isNew
+        ? edit.start > text.length
+        : text.slice(edit.start, edit.start + edit.original.length) !== edit.original;
+      if (stale) {
+        // The block is no longer where the editor thought: keep the draft.
+        this.keepDraft(edit, null, false);
+      } else if (edit.isNew) {
         if (value.trim() !== '') {
-          const at = edit.start;
-          const text = this.surface.getText();
-          const before = text.slice(0, at);
-          // Keep the new paragraph separated from its neighbours by one blank line.
-          const pre = at === 0 || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
-          const post = edit.beforeNext ? '\n\n' : '';
-          base = at + pre.length;
-          this.surface.replaceRange(at, at, pre + value + post, { source: 'blocks', selectStart: base + selStart, selectEnd: base + selEnd });
+          base = this.insertParagraph(edit.start, value);
+          this.surface.setSelectionOffsets(base + selStart, base + selEnd);
           this.focusIndex = edit.index;
         }
       } else if (value !== edit.original) {
@@ -669,7 +951,7 @@ class BlocksView {
     else this.list.appendChild(card);
     const empty = this.list.querySelector('.te-blocks-empty');
     if (empty) empty.remove();
-    return this.openEditor(card, { index: index + 1, start: at, original: '', isNew: true, beforeNext: index + 1 < blocks.length });
+    return this.openEditor(card, { index: index + 1, start: at, original: '', isNew: true });
   }
 
   /** Delete block `index` together with one adjoining separator. */
@@ -690,6 +972,7 @@ class BlocksView {
   }
 
   apply(from, to, insert) {
+    if (this.editing) this.commitEdit({ rerender: false });
     this.applying = true;
     try {
       this.surface.replaceRange(from, to, insert, { source: 'blocks', selectStart: from });
@@ -700,6 +983,7 @@ class BlocksView {
   }
 
   undo() {
+    if (this.editing) this.commitEdit({ rerender: false });
     this.applying = true;
     let done;
     try {
@@ -712,6 +996,7 @@ class BlocksView {
   }
 
   redo() {
+    if (this.editing) this.commitEdit({ rerender: false });
     this.applying = true;
     let done;
     try {
@@ -758,6 +1043,11 @@ class BlocksView {
       return;
     }
     const card = e.target.closest && e.target.closest('.te-block');
+    if (card && e.key === 'Escape' && e.target.classList && e.target.classList.contains('te-block-action')) {
+      e.preventDefault();
+      card.focus();
+      return;
+    }
     if (!card || e.target !== card) return;
     const index = Number(card.dataset.index);
     const key = e.key;
@@ -790,6 +1080,10 @@ class BlocksView {
         this.setCurrent(this.model.blocks.length - 1);
         break;
       case 'Enter':
+        e.preventDefault();
+        if (e.shiftKey) this.insertBlockAfter(index);
+        else this.editBlock(index);
+        break;
       case 'F2':
         e.preventDefault();
         this.editBlock(index);
@@ -815,6 +1109,7 @@ class BlocksView {
     this.offChange();
     if (this.surface.root) this.surface.root.hidden = false;
     this.container.remove();
+    this.draftsElement.remove();
     if (this.toggleGroup) this.toggleGroup.remove();
     if (this.toggleDivider) this.toggleDivider.remove();
   }

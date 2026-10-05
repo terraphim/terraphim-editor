@@ -378,3 +378,175 @@ async fn test_insert_delete_and_write_on_mode() {
     );
     assert_eq!(result, "");
 }
+
+#[wasm_bindgen_test]
+async fn test_open_block_draft_survives_outside_changes() {
+    let _document = fresh_full_editor();
+    // Yield so the webdriver poll is never starved (see tests/web.rs).
+    sleep(0).await;
+    install_fixtures();
+    let ready = js_string(
+        r##"(() => {
+          const ed = window.__teEditor;
+          ed.surface.setText('# A\n\npara one\n\npara two\n');
+          ed.blocks.setView('blocks');
+          const ta = ed.blocks.editBlock(2);
+          ta.value = 'para two edited';
+          ta.setSelectionRange(5, 8);
+          return ta === document.activeElement ? 'ok' : 'editor not focused';
+        })()"##,
+    );
+    assert_eq!(ready, "ok");
+    // Let the selectionchange for the user's selection be delivered.
+    sleep(0).await;
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const ed = window.__teEditor;
+          const bv = ed.blocks;
+          const s = ed.surface;
+          const notice = bv.draftsElement;
+
+          // 1. Edits outside the block keep the editor, its draft, focus and
+          //    selection (set in the previous task, as a user would).
+          let ta = bv.editing.textarea;
+          s.replaceRange(0, 0, 'Intro.\n\n');
+          if (!bv.editing || bv.editing.textarea !== ta || !ta.isConnected) return 'editor closed by an edit before the block';
+          if (ta.value !== 'para two edited' || document.activeElement !== ta) out.push('draft or focus lost');
+          if (ta.selectionStart !== 5 || ta.selectionEnd !== 8) out.push('textarea selection lost');
+          if (bv.editing.start !== 23) out.push('start not shifted: ' + bv.editing.start);
+          if (bv.cards().length !== 4 || bv.cards()[3] !== bv.editing.card) out.push('cards not rebuilt around the editor');
+          s.undo();
+          if (!bv.editing || bv.editing.start !== 15) out.push('undo elsewhere: ' + (bv.editing && bv.editing.start));
+          const end = s.getText().length;
+          s.replaceRange(end, end, '\nTail.\n');
+          if (!bv.editing) out.push('editor closed by an edit after the block');
+          if (!notice.hidden) out.push('notice shown without a conflict');
+          bv.commitEdit();
+          if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('commit after outside edits ' + JSON.stringify(s.getText()));
+
+          // 2. An overlapping edit keeps the draft in the notice; Apply works.
+          ta = bv.editBlock(1);
+          ta.value = 'para ONE draft';
+          s.replaceRange(5, 9, 'PARA');
+          if (bv.editing || bv.list.querySelector('textarea')) out.push('editor still open after overlap');
+          const kept = bv.keptDrafts();
+          if (kept.length !== 1 || kept[0].value !== 'para ONE draft' || kept[0].reason !== 'changed') out.push('draft not kept ' + JSON.stringify(kept));
+          if (!teTest.visible(notice) || !notice.textContent.includes('para ONE draft')) out.push('notice not visible with the draft');
+          if (s.getText() !== '# A\n\nPARA one\n\npara two edited\n\nTail.\n') out.push('outside edit not applied');
+          notice.querySelector('[data-draft-action="apply"]').click();
+          if (s.getText() !== '# A\n\npara ONE draft\n\npara two edited\n\nTail.\n') out.push('apply ' + JSON.stringify(s.getText()));
+          if (!notice.hidden || bv.keptDrafts().length) out.push('notice not cleared after apply');
+          if (window.wasmBindings.document_body() !== s.getText()) out.push('model body differs after apply');
+          s.undo();
+          if (s.getText() !== '# A\n\nPARA one\n\npara two edited\n\nTail.\n') out.push('undo apply ' + JSON.stringify(s.getText()));
+          s.undo();
+          if (s.getText() !== '# A\n\npara one\n\npara two edited\n\nTail.\n') out.push('undo outside edit ' + JSON.stringify(s.getText()));
+          if (bv.cards().length !== 4) out.push('cards after undo');
+
+          // 3. openDocument during an edit keeps the draft; Discard works.
+          ta = bv.editBlock(0);
+          ta.value = '# Draft heading';
+          ed.openDocument(teBlockFixtures.full);
+          const k2 = bv.keptDrafts();
+          if (k2.length !== 1 || k2[0].reason !== 'replaced' || k2[0].value !== '# Draft heading') out.push('open: draft ' + JSON.stringify(k2));
+          if (!notice.textContent.includes('replaced')) out.push('open: notice text');
+          const saved = ed.saveDocument();
+          if (ed.annotations().spans.length !== 3) out.push('open: spans');
+          notice.querySelector('[data-draft-action="discard"]').click();
+          if (bv.keptDrafts().length || !notice.hidden) out.push('discard');
+          if (ed.saveDocument() !== saved) out.push('discard changed the document');
+
+          // 4. A kept draft follows typing (execCommand) in the text view and
+          //    applies there.
+          s.setText('# A\n\npara one\n');
+          ta = bv.editBlock(1);
+          ta.value = 'para 1';
+          s.replaceRange(5, 6, 'P');
+          bv.setView('text');
+          if (!teTest.visible(notice)) out.push('notice hidden in the text view');
+          s.focus();
+          s.setSelectionOffsets(0);
+          if (!document.execCommand('insertText', false, 'Top ')) out.push('execCommand failed');
+          if (bv.keptDrafts()[0].anchor !== 9) out.push('anchor not mapped: ' + bv.keptDrafts()[0].anchor);
+          notice.querySelector('[data-draft-action="apply"]').click();
+          if (s.getText() !== 'Top # A\n\npara 1\n') out.push('apply in text view ' + JSON.stringify(s.getText()));
+          if (!teTest.canonical()) out.push('surface not canonical');
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_every_block_action_is_keyboard_reachable() {
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const ed = window.__teEditor;
+          const bv = ed.blocks;
+          const s = ed.surface;
+          s.setText('# A\n\npara one\n');
+          bv.setView('blocks');
+          bv.setCurrent(0);
+          const tabbable = () => Array.from(bv.container.querySelectorAll('*')).filter((el) => el.tabIndex >= 0 && (el.matches('button, textarea') || el.classList.contains('te-block')));
+          const names = (els) => els.map((el) => el.dataset.action || (el.classList.contains('te-block') ? 'card' + el.dataset.index : el.className)).join(',');
+          // Focus order: the focused card, its actions, then Add paragraph.
+          if (names(tabbable()) !== 'card0,edit,insert,delete,te-blocks-add') out.push('tab order ' + names(tabbable()));
+          for (const b of bv.cards()[0].querySelectorAll('.te-block-action')) {
+            if (!b.getAttribute('aria-keyshortcuts')) out.push('no aria-keyshortcuts on ' + b.dataset.action);
+          }
+          if (!/Shift\+Enter/.test(bv.cards()[0].getAttribute('aria-keyshortcuts'))) out.push('card keyshortcuts');
+          teTest.key(document.activeElement, 'ArrowDown');
+          if (names(tabbable()) !== 'card1,edit,insert,delete,te-blocks-add') out.push('roving actions ' + names(tabbable()));
+          const action = (name) => bv.cards()[1].querySelector('[data-action="' + name + '"]');
+
+          // Each action button takes focus; Escape returns to the block.
+          action('edit').focus();
+          if (document.activeElement !== action('edit')) out.push('edit button not focusable');
+          if (!action('edit').parentNode.matches('.te-block:focus-within .te-block-actions')) out.push('actions not revealed while focused');
+          teTest.key(action('edit'), 'Escape');
+          if (document.activeElement !== bv.cards()[1]) out.push('Escape did not return to the block');
+
+          // Edit (button activation and Enter).
+          action('edit').focus();
+          action('edit').click();
+          let ta = bv.list.querySelector('textarea');
+          if (!ta || ta.value !== 'para one') out.push('edit button');
+          teTest.key(ta, 'Escape');
+          teTest.key(document.activeElement, 'Enter');
+          ta = bv.list.querySelector('textarea');
+          if (!ta || ta.value !== 'para one') out.push('Enter edit');
+          teTest.key(ta, 'Escape');
+
+          // Insert below (button and Shift+Enter).
+          action('insert').focus();
+          action('insert').click();
+          ta = bv.list.querySelector('textarea');
+          if (!ta || ta.value !== '') return out.concat('insert button').join('; ');
+          ta.value = 'x';
+          teTest.key(ta, 'Enter', { ctrlKey: true });
+          if (s.getText() !== '# A\n\npara one\n\nx\n') out.push('insert button result ' + JSON.stringify(s.getText()));
+          bv.setCurrent(0);
+          teTest.key(document.activeElement, 'Enter', { shiftKey: true });
+          ta = bv.list.querySelector('textarea');
+          if (!ta) return out.concat('Shift+Enter did not insert').join('; ');
+          ta.value = 'y';
+          teTest.key(ta, 'Enter', { ctrlKey: true });
+          if (s.getText() !== '# A\n\ny\n\npara one\n\nx\n') out.push('Shift+Enter result ' + JSON.stringify(s.getText()));
+
+          // Delete (button and Delete key).
+          bv.setCurrent(3);
+          bv.cards()[3].querySelector('[data-action="delete"]').focus();
+          bv.cards()[3].querySelector('[data-action="delete"]').click();
+          if (s.getText() !== '# A\n\ny\n\npara one\n') out.push('delete button ' + JSON.stringify(s.getText()));
+          bv.setCurrent(1);
+          teTest.key(document.activeElement, 'Delete');
+          if (s.getText() !== '# A\n\npara one\n') out.push('Delete key ' + JSON.stringify(s.getText()));
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}

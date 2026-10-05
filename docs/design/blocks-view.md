@@ -83,8 +83,49 @@ blocks sensibly:
 `model` (the last parse), `cards()`, `editBlock(index)` (returns the
 textarea), `commitEdit()`, `cancelEdit()`, `insertBlockAfter(index)`
 (index -1 inserts at the top), `deleteBlock(index)`, `undo()`, `redo()`,
-`destroy()`, and the static helpers `BlocksView.parse` and
-`BlocksView.serialise`.
+`keptDrafts()`, `applyDraft(id)`, `discardDraft(id)`, `destroy()`, and the
+static helpers `BlocksView.parse`, `BlocksView.serialise` and
+`BlocksView.indexIn`.
+
+## Drafts are never lost
+
+The body can change while a block editor is open: an integration calling
+`surface.replaceRange` or `setText`, undo or redo from elsewhere, or
+`openDocument` from the open flow. Each surface change event carries the
+exact edit `{ start, deletedLength, insertedText }`, and the open editor's
+range `[start, start + original.length)` is mapped through it.
+
+- **Edit entirely before the block** (it ends at or before the block start):
+  the range shifts by the length change. **Edit entirely after the block:**
+  nothing changes. In both cases the textarea stays open with its draft,
+  focus and selection, and the other cards are rebuilt around it. The
+  editor's card is never detached. While the textarea has focus its
+  selection is the document selection, which the surface moves on every
+  edit, so the view remembers it on `selectionchange`, `select` and `keyup`
+  and puts it back after the rebuild.
+- **Edit that overlaps the block, or replaces the whole document**
+  (`openDocument`, whose change has source `open`, or `setText`, which
+  replaces everything): the editor closes and the draft goes into a
+  visible, non-blocking notice (`.te-blocks-drafts`, `role="region"`,
+  `aria-live="polite"`). The notice sits above the surface and the blocks,
+  so it shows in both views. If the textarea had focus, focus moves to the
+  notice. Each kept draft offers:
+  - **Apply my edit**, best effort, one undo step. An existing block's draft
+    replaces the block now at the draft's position (with the minimal diff,
+    so annotations outside the changed text survive). A new paragraph's
+    draft is inserted there as a paragraph. The position is the start of
+    the overlapping edit, mapped through every later edit, or the block
+    index when the whole document was replaced.
+  - **Discard**, which removes the draft.
+
+  A draft identical to the block's text (nothing typed) is not kept, since
+  nothing would be lost.
+- **Safety net:** a commit checks that the block's original text is still at
+  the mapped range. If it is not, the draft goes to the notice instead of
+  being applied.
+
+Kept drafts are UI state for the current editor session. They are not
+written to storage, and `destroy()` (an explicit teardown) removes them.
 
 ## Caret and selection
 
@@ -105,15 +146,23 @@ textarea), `commitEdit()`, `cancelEdit()`, `insertBlockAfter(index)`
 
 - The list has `role="list"`, each card has `role="listitem"`, and the cards
   use a roving tabindex: one card is in the tab order. Each card's
-  `aria-label` names its type and position ("Paragraph, block 2 of 5. Press
-  Enter to edit.").
+  `aria-label` names its type and position and lists the keys ("Paragraph,
+  block 2 of 5. Enter to edit, Shift+Enter to add a paragraph below, Delete
+  to remove, Tab for actions."), and `aria-keyshortcuts` lists them too.
 - Keyboard: ArrowUp and ArrowDown move between blocks, Home and End jump to
-  the first and last, Enter or F2 edits, Ctrl+Enter commits, Escape cancels,
-  and Delete removes the block (which can be undone).
+  the first and last, Enter or F2 edits, Shift+Enter adds a paragraph below,
+  Ctrl+Enter commits, Escape cancels, and Delete removes the block (which
+  can be undone).
+- Every action is reachable by Tab. The per-card action buttons (edit, add
+  below, delete) follow the roving tabindex: only the focused card's buttons
+  are in the tab order, so the order is card, edit, add below, delete, then
+  "Add paragraph". Escape on an action button returns to its card. Each
+  button carries `aria-keyshortcuts` (`Enter F2`, `Shift+Enter`, `Delete`)
+  and shows its key in its label. The buttons become visible when the card
+  is hovered or has focus inside it.
 - Focus is always visible: a focused card gets a 2px `--te-color-accent`
-  outline. Per-card action buttons (edit, add below, delete) appear on
-  hover or focus and stay out of the tab order so that the arrow keys drive
-  navigation. Their keyboard equivalents are listed above.
+  outline, and so do the action buttons and the draft notice buttons when
+  focused from the keyboard.
 - Transitions are switched off under `prefers-reduced-motion`.
 
 ## Lifecycle
@@ -123,8 +172,8 @@ the view can see the current mode, and passes the editor's AbortController
 signal. Every listener (toolbar buttons, list keydown, click, focus,
 textarea input and blur, and the document-level `te:mode-change`) uses that
 signal. `surface.onChange` returns an unsubscribe function, which
-`destroy()` calls. `destroy()` also removes the container and the toolbar
-group and shows the surface again. The constructor is cheap: it builds the
+`destroy()` calls. `destroy()` also removes the container, the drafts notice
+and the toolbar group and shows the surface again. The constructor is cheap: it builds the
 toggle and an empty hidden container, and parses only when the view is
 shown, because every editor instance (including those in other test
 binaries) creates one.
@@ -173,10 +222,5 @@ Dropped:
   together with its anchors (for example `move_range(from, to, at)` in
   `src/document.rs`), and a surface history step that replays as a move, so
   that undo does not run the deletion through `apply_edit`.
-- **Outside changes during an edit.** If the body changes from outside
-  while a block editor is open (for example `openDocument` from the open
-  flow), the cards re-render and the uncommitted textarea text is
-  discarded. This matches `openDocument` resetting the undo history. A
-  future change could commit or prompt first.
 - **Inline indicators (#8).** When the decoration registry lands, cards
   could show the alternatives and ghosts inside each block.
