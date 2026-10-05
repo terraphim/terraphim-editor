@@ -74,8 +74,14 @@ function documentModelAvailable(editor) {
  * Word and character counts for an editor. Uses editor.counts() (issue #6,
  * which includes ghosted text) when the document model is available and
  * falls back to counting the surface text otherwise, or if counts() fails.
- * Words are runs of non-whitespace; chars are Unicode code points.
+ * Chars are Unicode code points. Words follow the editor's one word
+ * definition (terraphim_alternatives::words, issue #59), which WORD_RE mirrors
+ * for the fallback: runs of letters, digits or `_`, joined by an apostrophe,
+ * hyphen, full stop or slash only between word characters. Markdown syntax,
+ * punctuation and emoji are not words.
  */
+const WORD_RE = /[\p{Alphabetic}\p{N}_]+(?:['\u2019\-./][\p{Alphabetic}\p{N}_]+)*/gu;
+
 function countsFor(editor) {
   if (documentModelAvailable(editor) && typeof editor.counts === 'function') {
     try {
@@ -88,7 +94,7 @@ function countsFor(editor) {
     }
   }
   const text = editor && editor.surface ? editor.surface.getText() : '';
-  const words = text.split(/\s+/).filter(Boolean).length;
+  const words = (text.match(WORD_RE) || []).length;
   return { words, chars: Array.from(text).length };
 }
 

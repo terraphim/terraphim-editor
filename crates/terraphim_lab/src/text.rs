@@ -52,46 +52,13 @@ pub(crate) struct Doc<'a> {
     pub words: Vec<(usize, usize)>,
 }
 
-fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
-}
-
-fn is_joiner(c: char) -> bool {
-    matches!(c, '\'' | '\u{2019}' | '-' | '.' | '/')
-}
-
-/// The one word definition used by every action (and by the status card):
-/// a maximal run of alphanumerics or `_`, where an apostrophe, hyphen, full
-/// stop or slash joins two runs only when it sits between word characters.
-/// `hadn't`, `liver-pill`, `R-8.7` and `terraphim_lsp` are one word each;
-/// Markdown syntax (`**`, backticks, `#`) is never a word.
+/// Every word in `text`, as byte spans: the editor's one word definition,
+/// [`terraphim_alternatives::words`], shared with the Write_On counter so the
+/// trim status card and the counter agree (issue #59). Used by every action
+/// and by the status card.
 pub(crate) fn word_spans(text: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::with_capacity(text.len() / 5);
-    let mut iter = text.char_indices().peekable();
-    while let Some((start, c)) = iter.next() {
-        if !is_word_char(c) {
-            continue;
-        }
-        let mut end = start + c.len_utf8();
-        while let Some(&(pos, next)) = iter.peek() {
-            if is_word_char(next) {
-                end = pos + next.len_utf8();
-                iter.next();
-            } else if is_joiner(next) {
-                // A joiner only counts when a word character follows it.
-                let after = text[pos + next.len_utf8()..].chars().next();
-                if after.is_some_and(is_word_char) {
-                    iter.next();
-                    end = pos + next.len_utf8();
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-        out.push((start, end));
-    }
+    out.extend(terraphim_alternatives::words::word_spans(text));
     out
 }
 
@@ -330,7 +297,8 @@ fn collect(
 impl<'a> Doc<'a> {
     /// Analyse `text` without copying or normalising it. Block and inline
     /// structure comes from the `markdown` crate's mdast (GFM plus front
-    /// matter); sentences and words are segmented here, on prose only.
+    /// matter); sentences are segmented here, on prose only;
+    /// words come from `terraphim_alternatives::words`, over the whole body.
     pub(crate) fn parse(text: &'a str) -> Doc<'a> {
         let mut paragraphs = Vec::new();
         let mut protected = Vec::new();

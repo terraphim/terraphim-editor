@@ -20,6 +20,9 @@ thiserror = "2"
 # Markdown structure (prose vs protected ranges) from a real CommonMark/GFM
 # parser; the same crate the editor uses for its preview.
 markdown = "1.0.0-alpha.21"
+# The editor's one word definition (issue #59), shared with the Write_On
+# counter. Its dependencies are a subset of this crate's, so it adds nothing.
+terraphim_alternatives = { path = "../terraphim_alternatives" }
 
 # criterion pulls in rayon, and terraphim_rolegraph pulls in tokio "full";
 # neither compiles for wasm32, so both are native-only dev-dependencies.

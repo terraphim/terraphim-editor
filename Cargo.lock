@@ -1857,6 +1857,7 @@ dependencies = [
  "markdown",
  "serde",
  "serde_json",
+ "terraphim_alternatives",
  "terraphim_automata",
  "terraphim_rolegraph",
  "terraphim_types",

@@ -52,15 +52,16 @@ fn test_plain_mode_shows_only_the_counter() {
           if (document.querySelector('.te-chrome-shortcuts')?.open) out.push('plain-mode click opened reference');
           // The plain editor itself is unchanged.
           if (!teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar hidden in plain mode');
-          // Counter text follows the surface: whitespace-separated words,
-          // Unicode code points for chars.
+          // Counter text follows the surface: words as the editor defines
+          // them (issue #59; an emoji is not a word), Unicode code points
+          // for chars.
           const s = teTest.surface();
           s.setText('one two  three\nfour');
           const t1 = counter.textContent.trim();
           if (!t1.startsWith('4 words 19 chars')) out.push('count ' + JSON.stringify(t1));
           s.setText('a \u{{1F600}}');
           const t2 = counter.textContent.trim();
-          if (!t2.startsWith('2 words 3 chars')) out.push('unicode count ' + JSON.stringify(t2));
+          if (!t2.startsWith('1 word 3 chars')) out.push('unicode count ' + JSON.stringify(t2));
           s.setText('');
           const t3 = counter.textContent.trim();
           if (!t3.startsWith('0 words 0 chars')) out.push('empty count ' + JSON.stringify(t3));
