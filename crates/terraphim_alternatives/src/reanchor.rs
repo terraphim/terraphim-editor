@@ -2,18 +2,53 @@
 //! model (R-9.2), for example when a file is reopened after a hand edit.
 //!
 //! Each span or ghost is found again by searching the body for its anchor
-//! text, with the stored `start` as a hint. Spans and ghosts are placed
-//! independently (a ghost may legitimately overlap spans), but within each
-//! collection no two items may claim overlapping text. The rules are applied
-//! in order and never guess:
+//! text, with the stored `start` as a hint and the stored context
+//! ([`Anchor::before`], [`Anchor::after`]) as evidence. Spans and ghosts are
+//! placed independently (a ghost may legitimately overlap spans), but within
+//! each collection no two items may claim overlapping text. The rules are
+//! applied in order and never guess:
 //!
-//! 1. An occurrence starting exactly at the hint is claimed.
-//! 2. Otherwise, if exactly one unclaimed, non-overlapping occurrence remains
-//!    and no other unresolved item of the same collection has the same text,
-//!    it is claimed.
-//! 3. Otherwise the item is unresolved: [`UnresolvedReason::Missing`] when no
+//! 1. An occurrence starting exactly at the hint is claimed, whatever its
+//!    context.
+//! 2. **Anchors with context** (decision 2026-10-05: context re-anchoring).
+//!    Every occurrence not overlapping a rule-1 claim is a candidate and is
+//!    scored against the stored context. For each side, `m` is how many
+//!    UTF-16 units of the stored context agree with the body next to the
+//!    candidate (common suffix of `before` and the text preceding it, common
+//!    prefix of `after` and the text following it), and `L` is the stored
+//!    length. A side **agrees** when `L > 0` and
+//!    `m >= max(ceil(L / 2), CONTEXT_UNITS / 4)` (at least half of the stored
+//!    context, and at least 8 units), or when `m == L` and the body on that
+//!    side is exactly the stored context (the candidate is as far from the
+//!    same document edge as the anchor was; with `L == 0`, it touches that
+//!    edge). A candidate **qualifies** when at least one side agrees. Its
+//!    score is the number of agreeing sides, then the total `m` of both
+//!    sides. The single best qualifying candidate is claimed. If no candidate
+//!    qualifies the item is [`UnresolvedReason::Missing`]; if several tie for
+//!    best it is [`UnresolvedReason::Ambiguous`] with the tied candidates;
+//!    and if two items' best candidates overlap, neither is placed and each
+//!    is [`UnresolvedReason::Ambiguous`] with its best candidate.
+//! 3. **Anchors without context** (files written before context existed):
+//!    if exactly one unclaimed, non-overlapping occurrence remains and no
+//!    other unresolved item of the same collection has the same text, it is
+//!    claimed. This is the rule that applied to every anchor before context
+//!    existed, so such files behave exactly as before.
+//! 4. Otherwise the item is unresolved: [`UnresolvedReason::Missing`] when no
 //!    usable occurrence exists, [`UnresolvedReason::Ambiguous`] when several
 //!    could match.
+//!
+//! The threshold makes the stored context, not the uniqueness of the text,
+//! decide. An edit inside a span or ghost changes its text; if the old text
+//! occurs once elsewhere, its surroundings there almost never agree with the
+//! stored context, so the item is reported instead of attached to unrelated
+//! text. An edit elsewhere in the document leaves the context intact, and an
+//! edit right next to the anchor changes only one side, so the other side
+//! still agrees. Stored context is at least `CONTEXT_UNITS / 2` units long
+//! unless a document edge cut it short (see [`Anchor`]), so the minimum of 8
+//! units only bites near an edge, where the candidate must then sit at the
+//! same distance from it.
+//!
+//! Every placed item's context is then stored afresh from the new body.
 //!
 //! Every occurrence of every distinct anchor text is found in one pass over
 //! the body by a [`terraphim_automata::CompiledMatcher`] built for that pass
@@ -23,11 +58,11 @@
 //! case that the matcher cannot be built, every item is returned unresolved
 //! with [`UnresolvedReason::SearchFailed`].
 //!
-//! Known limitation: an edit inside a span or ghost changes its text, so it is
-//! reported missing, unless the old text happens to occur exactly once
-//! elsewhere, in which case rule 2 attaches it there. Live edits should go
-//! through [`Document::apply_edit`], which tracks positions exactly (and keeps
-//! ghosts elastic).
+//! Known limitation: an anchor without context (rule 3) whose text was edited
+//! is still attached to the old text if it happens to occur exactly once
+//! elsewhere; saving the file once stores context and closes that gap. Live
+//! edits should go through [`Document::apply_edit`], which tracks positions
+//! exactly (and keeps ghosts elastic).
 
 use std::collections::HashMap;
 
@@ -36,6 +71,7 @@ use terraphim_automata::{
 };
 use terraphim_types::{NormalizedTerm, NormalizedTermValue};
 
+use crate::context::{self, Probe, Score};
 use crate::document::Document;
 use crate::model::{Anchor, Ghost, Span};
 use crate::offset::{byte_to_utf16, utf16_len};
@@ -43,8 +79,9 @@ use crate::offset::{byte_to_utf16, utf16_len};
 /// Why a span or ghost could not be re-anchored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnresolvedReason {
-    /// The anchor text no longer occurs in the body (or every occurrence is
-    /// claimed by another item of the same collection).
+    /// The anchor text no longer occurs in the body, every occurrence is
+    /// claimed by another item of the same collection, or (for an anchor with
+    /// stored context) no occurrence's surroundings agree with that context.
     Missing,
     /// Several occurrences could match. Candidate start offsets (UTF-16) are
     /// listed in body order.
@@ -116,8 +153,8 @@ impl Document {
                 let span_anchors: Vec<&Anchor> = spans.iter().map(|s| &s.anchor).collect();
                 let ghost_anchors: Vec<&Anchor> = ghosts.iter().map(|g| &g.anchor).collect();
                 (
-                    place(&span_anchors, &occurrences),
-                    place(&ghost_anchors, &occurrences),
+                    place(&span_anchors, &occurrences, &self.body),
+                    place(&ghost_anchors, &occurrences, &self.body),
                 )
             }
             Err(error) => {
@@ -145,11 +182,11 @@ impl Document {
         let mut report = ReanchorReport::default();
         for (mut span, placement) in spans.into_iter().zip(span_placements) {
             match placement {
-                Ok((start, end)) => {
-                    if span.anchor.start != start {
+                Ok(at) => {
+                    if span.anchor.start != at.start {
                         report.moved.push(span.id.clone());
                     }
-                    (span.anchor.start, span.anchor.end) = (start, end);
+                    at.apply(&self.body, &mut span.anchor);
                     self.annotations.spans.push(span);
                 }
                 Err(reason) => report.unresolved.push(Unresolved { span, reason }),
@@ -158,11 +195,11 @@ impl Document {
 
         for (mut ghost, placement) in ghosts.into_iter().zip(ghost_placements) {
             match placement {
-                Ok((start, end)) => {
-                    if ghost.anchor.start != start {
+                Ok(at) => {
+                    if ghost.anchor.start != at.start {
                         report.moved.push(ghost.id.clone());
                     }
-                    (ghost.anchor.start, ghost.anchor.end) = (start, end);
+                    at.apply(&self.body, &mut ghost.anchor);
                     self.annotations.ghosts.push(ghost);
                 }
                 Err(reason) => report
@@ -175,8 +212,28 @@ impl Document {
     }
 }
 
-/// Where one span or ghost lands (UTF-16 `start..end`), or why it cannot.
-type Placement = Result<(usize, usize), UnresolvedReason>;
+/// Where one span or ghost lands, or why it cannot.
+type Placement = Result<Landing, UnresolvedReason>;
+
+/// The occurrence a span or ghost was placed on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Landing {
+    /// UTF-16 start offset.
+    start: usize,
+    /// UTF-16 end offset.
+    end: usize,
+    /// Byte start offset, so context is captured without converting again.
+    byte_start: usize,
+}
+
+impl Landing {
+    /// Moves `anchor` here and stores its context from the new body.
+    fn apply(self, body: &str, anchor: &mut Anchor) {
+        (anchor.start, anchor.end) = (self.start, self.end);
+        let byte_end = self.byte_start + anchor.text.len();
+        context::set(body, anchor, self.byte_start, byte_end);
+    }
+}
 
 /// Every occurrence of each distinct anchor text in the body, found in one
 /// pass for the whole re-anchor run.
@@ -186,6 +243,9 @@ struct Occurrences<'a> {
     /// UTF-16 start offsets of every (possibly overlapping) occurrence of the
     /// text in each slot, in body order.
     starts: Vec<Vec<usize>>,
+    /// Byte start offsets of the same occurrences, parallel to `starts`, so
+    /// context can be compared without converting offsets again.
+    byte_starts: Vec<Vec<usize>>,
 }
 
 impl<'a> Occurrences<'a> {
@@ -213,6 +273,7 @@ impl<'a> Occurrences<'a> {
             });
         }
         let mut starts = vec![Vec::new(); distinct.len()];
+        let mut byte_starts = vec![Vec::new(); distinct.len()];
 
         let options = MatcherOptions::default()
             .with_overlap(MatchOverlap::All)
@@ -236,7 +297,11 @@ impl<'a> Occurrences<'a> {
             }
         }
         if builder.is_empty() {
-            return Ok(Self { slot, starts });
+            return Ok(Self {
+                slot,
+                starts,
+                byte_starts,
+            });
         }
         let matcher = builder.build()?;
         let mut positions: Vec<PositionedMatch> = Vec::new();
@@ -249,22 +314,75 @@ impl<'a> Occurrences<'a> {
             units += utf16_len(&body[byte..found.start]);
             byte = found.start;
             debug_assert_eq!(Some(units), byte_to_utf16(body, found.start));
-            starts[slot_of_pattern[found.pattern_index]].push(units);
+            let slot = slot_of_pattern[found.pattern_index];
+            starts[slot].push(units);
+            byte_starts[slot].push(found.start);
         }
-        Ok(Self { slot, starts })
+        Ok(Self {
+            slot,
+            starts,
+            byte_starts,
+        })
     }
 
-    /// Occurrences of `text`, which must be one of the texts passed to
+    /// The slot of `text`, which must be one of the texts passed to
     /// [`Occurrences::find`].
-    fn of(&self, text: &str) -> &[usize] {
-        &self.starts[self.slot[text]]
+    fn slot_of(&self, text: &str) -> usize {
+        self.slot[text]
     }
+
+    /// UTF-16 starts of the occurrences of `text`.
+    #[cfg(test)]
+    fn of(&self, text: &str) -> &[usize] {
+        &self.starts[self.slot_of(text)]
+    }
+}
+
+/// An anchor's text slot and stored context: items with equal keys score
+/// equally.
+type ContextKey<'a> = (usize, Option<&'a str>, Option<&'a str>);
+
+/// UTF-16 starts of the qualifying candidates that share the best context
+/// score (rule 2), in body order. `starts` and `byte_starts` are the
+/// occurrences of the anchor's text; those for which `excluded` is true are
+/// skipped.
+fn best_candidates(
+    anchor: &Anchor,
+    starts: &[usize],
+    byte_starts: &[usize],
+    body: &str,
+    excluded: impl Fn(usize) -> bool,
+) -> Vec<usize> {
+    let probe = Probe::new(anchor);
+    let mut best: Option<Score> = None;
+    let mut tied: Vec<usize> = Vec::new();
+    for (&start, &byte_start) in starts.iter().zip(byte_starts) {
+        if excluded(start) {
+            continue;
+        }
+        let Some(score) = probe.score(body, byte_start, byte_start + anchor.text.len()) else {
+            continue;
+        };
+        if best.is_none_or(|b| score > b) {
+            best = Some(score);
+            tied.clear();
+        }
+        if best == Some(score) {
+            tied.push(start);
+        }
+    }
+    tied
 }
 
 /// Places each anchor by the module rules, given every occurrence of its
 /// text. Items placed by one call never overlap each other.
-fn place(anchors: &[&Anchor], occurrences: &Occurrences<'_>) -> Vec<Placement> {
-    let occurrences: Vec<&[usize]> = anchors.iter().map(|a| occurrences.of(&a.text)).collect();
+fn place(anchors: &[&Anchor], found: &Occurrences<'_>, body: &str) -> Vec<Placement> {
+    let slots: Vec<usize> = anchors.iter().map(|a| found.slot_of(&a.text)).collect();
+    let occurrences: Vec<&[usize]> = slots.iter().map(|&slot| &found.starts[slot][..]).collect();
+    let byte_starts: Vec<&[usize]> = slots
+        .iter()
+        .map(|&slot| &found.byte_starts[slot][..])
+        .collect();
     let lengths: Vec<usize> = anchors.iter().map(|a| utf16_len(&a.text)).collect();
 
     let mut placed: Vec<Option<usize>> = vec![None; anchors.len()];
@@ -284,9 +402,77 @@ fn place(anchors: &[&Anchor], occurrences: &Occurrences<'_>) -> Vec<Placement> {
         }
     }
 
-    // Rule 2: the single remaining occurrence, if uncontested. An item placed
-    // here was the only unresolved one with its text, so counting once after
-    // rule 1 is exact.
+    // Rule 2: anchors with context take their single best-scoring candidate.
+    // Items with the same text and context see the same candidates (only
+    // rule-1 claims are excluded so far), so where several items share a
+    // text each distinct context is scored once.
+    let mut reasons: Vec<Option<UnresolvedReason>> = vec![None; anchors.len()];
+    let mut tentative: Vec<(usize, usize)> = Vec::new();
+    let needs_context = |i: usize| placed[i].is_none() && anchors[i].has_context();
+    let mut sharing = vec![0usize; found.starts.len()];
+    for i in (0..anchors.len()).filter(|&i| needs_context(i)) {
+        sharing[slots[i]] += 1;
+    }
+    let mut best_by_key: HashMap<ContextKey<'_>, Vec<usize>> = HashMap::new();
+    for (i, anchor) in anchors.iter().enumerate() {
+        if !needs_context(i) {
+            continue;
+        }
+        let score = || {
+            best_candidates(anchor, occurrences[i], byte_starts[i], body, |start| {
+                overlaps_claim(&claimed, start, lengths[i])
+            })
+        };
+        let computed;
+        let tied: &Vec<usize> = if sharing[slots[i]] > 1 {
+            let key = (slots[i], anchor.before.as_deref(), anchor.after.as_deref());
+            best_by_key.entry(key).or_insert_with(score)
+        } else {
+            computed = score();
+            &computed
+        };
+        match tied.as_slice() {
+            [] => reasons[i] = Some(UnresolvedReason::Missing),
+            [only] => tentative.push((i, *only)),
+            _ => {
+                reasons[i] = Some(UnresolvedReason::Ambiguous {
+                    candidates: tied.clone(),
+                })
+            }
+        }
+    }
+    // Two items whose best candidates overlap are both left unplaced: the
+    // context cannot say which one the text belongs to. One sweep in start
+    // order finds every overlapping pair.
+    tentative.sort_unstable_by_key(|&(i, start)| (start, i));
+    let mut conflicted = vec![false; tentative.len()];
+    let mut widest: Option<(usize, usize)> = None; // (end, index in tentative)
+    for (k, &(i, start)) in tentative.iter().enumerate() {
+        let end = start + lengths[i];
+        if let Some((widest_end, widest_k)) = widest
+            && start < widest_end
+        {
+            conflicted[k] = true;
+            conflicted[widest_k] = true;
+        }
+        if widest.is_none_or(|(widest_end, _)| end > widest_end) {
+            widest = Some((end, k));
+        }
+    }
+    for (k, &(i, start)) in tentative.iter().enumerate() {
+        if conflicted[k] {
+            reasons[i] = Some(UnresolvedReason::Ambiguous {
+                candidates: vec![start],
+            });
+        } else {
+            placed[i] = Some(start);
+            claimed.push((start, start + lengths[i]));
+        }
+    }
+
+    // Rule 3: an anchor without context takes the single remaining
+    // occurrence, if uncontested. An item placed here was the only unresolved
+    // one with its text, so counting once after rule 2 is exact.
     let mut unresolved_with_text: HashMap<&str, usize> = HashMap::new();
     for (i, anchor) in anchors.iter().enumerate() {
         if placed[i].is_none() {
@@ -295,9 +481,8 @@ fn place(anchors: &[&Anchor], occurrences: &Occurrences<'_>) -> Vec<Placement> {
                 .or_default() += 1;
         }
     }
-    let mut reasons: Vec<Option<UnresolvedReason>> = vec![None; anchors.len()];
     for (i, anchor) in anchors.iter().enumerate() {
-        if placed[i].is_some() {
+        if placed[i].is_some() || anchor.has_context() {
             continue;
         }
         let remaining: Vec<usize> = occurrences[i]
@@ -323,9 +508,19 @@ fn place(anchors: &[&Anchor], occurrences: &Occurrences<'_>) -> Vec<Placement> {
     placed
         .into_iter()
         .zip(reasons)
-        .zip(lengths)
-        .map(|((start, reason), len)| match start {
-            Some(start) => Ok((start, start + len)),
+        .enumerate()
+        .map(|(i, (start, reason))| match start {
+            Some(start) => {
+                // Every placement is one of the item's occurrences.
+                let index = occurrences[i]
+                    .binary_search(&start)
+                    .expect("placed on an occurrence");
+                Ok(Landing {
+                    start,
+                    end: start + lengths[i],
+                    byte_start: byte_starts[i][index],
+                })
+            }
             None => Err(reason.unwrap_or(UnresolvedReason::Missing)),
         })
         .collect()

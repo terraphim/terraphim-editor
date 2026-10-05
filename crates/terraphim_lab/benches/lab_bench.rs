@@ -1,9 +1,12 @@
-//! Per-action timings on a ~5,000-word document (the three fixtures repeated),
+//! Per-action and trim timings on a ~5,000-word document (the three fixtures repeated),
 //! with the fixture role (thesaurus and rolegraph) selected.
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use terraphim_automata::load_thesaurus_from_json;
-use terraphim_lab::{LabAction, LabConfig, RoleGraphData, RoleKnowledge, mark, mark_all};
+use terraphim_lab::{
+    LabAction, LabConfig, RoleGraphData, RoleKnowledge, TrimLevel, make_cuts, mark, mark_all,
+    trim_plan,
+};
 
 const FIXTURES: [&str; 3] = [
     include_str!("../tests/fixtures/three-men-ch1.md"),
@@ -63,6 +66,26 @@ fn bench(c: &mut Criterion) {
         b.iter(|| mark_all(black_box(&body), &config))
     });
     group.finish();
+
+    let mut trim = c.benchmark_group("trim_5000_words");
+    trim.bench_function("trim_plan", |b| {
+        b.iter(|| trim_plan(black_box(&body), &config))
+    });
+    let plan = trim_plan(&body, &config);
+    let cuts = plan.active(TrimLevel::Half, &[]);
+    eprintln!(
+        "trim_5000_words: {} cuts in the plan, {} at Half ({})",
+        plan.cuts().len(),
+        cuts.len(),
+        plan.status(TrimLevel::Half, &[]).card_text()
+    );
+    trim.bench_function("make_cuts_half", |b| {
+        b.iter(|| make_cuts(black_box(&body), black_box(&cuts)))
+    });
+    trim.bench_function("status_half", |b| {
+        b.iter(|| plan.status(black_box(TrimLevel::Half), &[]))
+    });
+    trim.finish();
 
     c.bench_function("config_with_role", |b| b.iter(build_config));
 }

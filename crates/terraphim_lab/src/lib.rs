@@ -53,6 +53,42 @@
 //! 0.3 * neighbour redundancy + 0.2 * function-word ratio`), and finally by
 //! position.
 //!
+//! # Trim levels
+//!
+//! [`trim_plan`] computes, once per version of the body, every span the trim
+//! levels (spec R-8.3 to R-8.5, issue #15) fade: [`TrimLevel::Slight`] ~10%,
+//! [`TrimLevel::Tighten`] ~20%, [`TrimLevel::Sharper`] ~30% and
+//! [`TrimLevel::Half`] ~50% of the words. Levels are nested, so switching
+//! level is a filter ([`TrimPlan::faded`]); "Click to keep" is a filter on
+//! top ([`TrimPlan::active`]); the status card is [`TrimPlan::status`]
+//! (`535 → 480 words · −10%`, counted with the same word definition as
+//! everything else, so the card and the text after the cuts agree). "Walk
+//! through" is the document order of `faded(level)`.
+//!
+//! Candidates are fillers and hedges, parentheticals, dash and comma asides,
+//! and whole sentences, ranked by the same rolegraph-primary weakness as
+//! "Mark the weakest sentences". Paragraph openers and short sentences are
+//! only cut at [`TrimLevel::Half`]; protected structure is never faded, and
+//! neither is any sentence or parenthetical that holds inline code. A fit
+//! step chooses the spans that land on the target; when protected text makes
+//! a target unreachable, [`TrimStatus::percent`] reports what was achieved.
+//!
+//! [`make_cuts`] deletes the active spans and tidies the joins (a stray
+//! comma, a comma after a conjunction, a new sentence's capital, a doubled
+//! space). It returns the edits on the original body's UTF-16 offsets, so the
+//! editor can apply them through its own edit path as one undo step.
+//!
+//! ```
+//! use terraphim_lab::{LabConfig, TrimLevel, make_cuts, trim_plan};
+//!
+//! let config = LabConfig::with_defaults().unwrap();
+//! let body = "The editor, which owns its DOM, is the only target here today.";
+//! let plan = trim_plan(body, &config);
+//! let cuts = plan.active(TrimLevel::Sharper, &[]);
+//! assert_eq!(make_cuts(body, &cuts).text, "The editor is the only target here today.");
+//! assert_eq!(plan.status(TrimLevel::Sharper, &[]).card_text(), "12 \u{2192} 8 words \u{b7} \u{2212}33%");
+//! ```
+//!
 //! # Example
 //!
 //! ```
@@ -76,19 +112,23 @@
 #![deny(missing_docs)]
 
 mod actions;
+mod cuts;
 mod lists;
 mod offset;
 mod rolegraph;
 mod text;
+mod trim;
 mod weak;
 
 use serde::{Deserialize, Serialize};
 
+pub use cuts::{Edit, EditKind, MadeCuts, make_cuts, make_cuts_from_ranges};
 pub use lists::{StyleCategory, StyleLists, TypoList};
 pub use rolegraph::{
     CONCEPT_CONNECTIVITY_WEIGHT, CONCEPT_PRESENCE, CONCEPT_RANK_WEIGHT, RoleGraphData,
     RoleKnowledge, edge_id,
 };
+pub use trim::{Cut, CutId, Tier, TrimLevel, TrimPlan, TrimStatus, trim_plan};
 pub use weak::{T_FUNCTION, T_LOW_CENTRALITY, T_REDUNDANCY, W_GRAPH, W_STYLE};
 
 /// Errors from building a [`LabConfig`]. Marking itself never fails.

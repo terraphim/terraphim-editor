@@ -25,9 +25,44 @@ pub(crate) fn bytes_to_utf16(text: &str, offsets: &mut [&mut usize]) {
     }
 }
 
+/// Convert UTF-16 offsets into `text` to byte offsets, in one pass. An
+/// offset past the end of `text`, or one that falls between the two halves
+/// of a surrogate pair, maps to `None`. The result is parallel to `offsets`.
+pub(crate) fn utf16_to_bytes(text: &str, offsets: &[usize]) -> Vec<Option<usize>> {
+    let mut order: Vec<usize> = (0..offsets.len()).collect();
+    order.sort_unstable_by_key(|&i| offsets[i]);
+    let mut out = vec![None; offsets.len()];
+    let mut units = 0usize;
+    let mut chars = text.char_indices().peekable();
+    for i in order {
+        let target = offsets[i];
+        while let Some(&(_, ch)) = chars.peek() {
+            if units + ch.len_utf16() > target {
+                break;
+            }
+            units += ch.len_utf16();
+            chars.next();
+        }
+        if units == target {
+            out[i] = Some(chars.peek().map_or(text.len(), |&(byte, _)| byte));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn utf16_back_to_bytes() {
+        // "é" is 2 bytes / 1 unit, "𝄞" is 4 bytes / 2 units.
+        let text = "é𝄞x";
+        assert_eq!(
+            utf16_to_bytes(text, &[4, 0, 1, 3, 2, 5]),
+            vec![Some(7), Some(0), Some(2), Some(6), None, None]
+        );
+    }
 
     #[test]
     fn multibyte_and_surrogate_pairs() {
