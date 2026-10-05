@@ -1,0 +1,369 @@
+{
+  "data": {
+    "a bit": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "a little bit": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "a lot of": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "actually": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "all of a sudden": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "almost": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "apparently": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "appear to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "appeared to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "appears to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "approximately": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "arguably": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "as a matter of fact": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "as it were": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "at all": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "awesome": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "basically": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "certainly": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "chum": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "cool": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "could be": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "deal-breaker": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "definitely": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "evidently": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "fairly": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "folks": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "generally": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "gonna": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "guys": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "i am not sure": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "i believe": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "i fancy": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "i guess": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "i mean": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "i suppose": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "i think": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "in a sense": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "in fact": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "in some ways": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "indeed": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "it seemed": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "it seems": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "it would appear": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "just": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "kind of": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "kinda": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "likely": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "literally": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "lots of": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "may be": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "maybe": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "might": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "more or less": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "nearly": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "needless to say": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "no-brainer": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "nope": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "not quite": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "of course": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "okay": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "perhaps": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "possibly": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "presumably": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "pretty much": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "probably": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "quite": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "really": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "roughly": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "seem to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "seemed to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "seemingly": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "seems to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "simply": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "so to speak": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "somehow": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "somewhat": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "sort of": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "sorta": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "stuff": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "super": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "tend to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "tends to": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "to some extent": {
+      "id": 2,
+      "nterm": "lab-hedge"
+    },
+    "tons of": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "totally": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "totally awesome": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "truly": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "unlikely": {
+      "id": 3,
+      "nterm": "lab-hedge-phrase"
+    },
+    "very": {
+      "id": 1,
+      "nterm": "lab-filler"
+    },
+    "wanna": {
+      "id": 4,
+      "nterm": "lab-tone"
+    },
+    "yeah": {
+      "id": 4,
+      "nterm": "lab-tone"
+    }
+  },
+  "name": "Lab style lists (default)"
+}
