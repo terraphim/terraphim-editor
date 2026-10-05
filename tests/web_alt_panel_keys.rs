@@ -82,6 +82,34 @@ async fn test_keyboard_toggle_mode_and_destroy() {
           if (show(t.wordAt(doc, 17)) !== 'First') out.push('word end');
           if (t.inferKind('tension') !== 'word' || t.inferKind('A whole sentence here.') !== 'sentence' || t.inferKind('One. Two.') !== 'paragraph') out.push('inferKind');
         "##,
+        // Document -> panel: typing inside a span while the panel shows it
+        // detaches the span (the panel follows), and undo brings it back.
+        r##"
+          ed.chrome.setMode('write-on');
+          s.setText('One two three.');
+          const P = teAlt.P();
+          P.open({ start: 4, end: 7, kind: 'word' }, { focus: false });
+          P.addAlternative('pair');
+          const id = P.target.spanId;
+          if (!id) return 'no span ' + JSON.stringify(P.target);
+          T.id = id;
+          s.replaceRange(5, 5, 'x');
+          P.flush();
+          if (P.target.spanId === id) out.push('panel still shows the detached span');
+          if (teAlt.spans().length !== 0) out.push('span not detached');
+          if (!P.target.pending || P.target.pending.text !== 'txwo') out.push('fallback ' + JSON.stringify(P.target));
+          if (!teAlt.inSync()) out.push('model out of step after typing');
+        "##,
+        r##"
+          const P = teAlt.P();
+          s.undo();
+          P.flush();
+          if (teAlt.spans().length !== 1) return 'span not re-attached';
+          if (P.target.spanId !== T.id) out.push('panel did not show the span again ' + JSON.stringify(P.target));
+          if (JSON.stringify(teAlt.texts()) !== '["two","pair"]') out.push('lines ' + teAlt.texts());
+          if (!teAlt.inSync()) out.push('model out of step after undo');
+          P.close({ restoreFocus: false });
+        "##,
         r##"
           // destroy() removes the panel and its listeners.
           const P = teAlt.P();
