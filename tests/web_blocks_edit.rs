@@ -57,8 +57,11 @@ async fn test_insert_delete_and_write_on_mode() {
           bv.commitEdit();
           const after = ed.annotations();
           const d = 'Inserted.\n\n'.length;
-          const moved = (a) => a.anchor.start >= 31 ? { ...a, anchor: { ...a.anchor, start: a.anchor.start + d, end: a.anchor.end + d } } : a;
-          if (JSON.stringify([after.spans, after.ghosts]) !== JSON.stringify([before.spans.map(moved), before.ghosts.map(moved)])) out.push('anchors after insert ' + JSON.stringify(after.ghosts));
+          // Anchor context (#36) legitimately changes next to the insertion;
+          // positions, texts and everything else must match exactly.
+          const plain = (a) => { const { before, after, ...anchor } = a.anchor; return { ...a, anchor }; };
+          const moved = (a) => { const p = plain(a); return p.anchor.start >= 31 ? { ...p, anchor: { ...p.anchor, start: p.anchor.start + d, end: p.anchor.end + d } } : p; };
+          if (JSON.stringify([after.spans.map(plain), after.ghosts.map(plain)]) !== JSON.stringify([before.spans.map(moved), before.ghosts.map(moved)])) out.push('anchors after insert ' + JSON.stringify(after.ghosts));
           if (ed.setAsideCount !== 0) out.push('set aside after insert');
         "##,
         // Write_On: Blocks is not shown; it resumes in plain mode.

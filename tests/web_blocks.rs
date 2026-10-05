@@ -180,10 +180,15 @@ async fn test_block_edit_updates_body_preview_and_keeps_annotations() {
           if (document.activeElement !== bv.cards()[1]) out.push('focus not back on the edited block');
           const ann0 = T.ann0;
           T.ann1 = ed.annotations();
-          const shift = (g) => ({ ...g, anchor: { ...g.anchor, start: g.anchor.start + 6, end: g.anchor.end + 6 } });
-          if (JSON.stringify(T.ann1.spans) !== JSON.stringify(ann0.spans)) out.push('spans changed ' + JSON.stringify(T.ann1.spans));
-          const wantGhosts = [ann0.ghosts[0], shift(ann0.ghosts[1])];
-          if (JSON.stringify(T.ann1.ghosts) !== JSON.stringify(wantGhosts)) out.push('ghosts ' + JSON.stringify(T.ann1.ghosts));
+          // Anchors carry before/after context (#36), which legitimately
+          // changes next to the edit; compare everything else exactly.
+          const plain = (a) => { const { before, after, ...anchor } = a.anchor; return { ...a, anchor }; };
+          const shift = (g) => { const p = plain(g); return { ...p, anchor: { ...p.anchor, start: p.anchor.start + 6, end: p.anchor.end + 6 } }; };
+          if (JSON.stringify(T.ann1.spans.map(plain)) !== JSON.stringify(ann0.spans.map(plain))) out.push('spans changed ' + JSON.stringify(T.ann1.spans));
+          const wantGhosts = [plain(ann0.ghosts[0]), shift(ann0.ghosts[1])];
+          if (JSON.stringify(T.ann1.ghosts.map(plain)) !== JSON.stringify(wantGhosts)) out.push('ghosts ' + JSON.stringify(T.ann1.ghosts));
+          // The context next to the edit now includes the new text.
+          if (!T.ann1.spans[2].anchor.after.includes('together. More.')) out.push('s3 context after ' + JSON.stringify(T.ann1.spans[2].anchor.after));
           if (T.ann1.overflow !== ann0.overflow) out.push('overflow changed');
           if (ed.setAsideCount !== 0) out.push('set aside ' + ed.setAsideCount);
         "##,
