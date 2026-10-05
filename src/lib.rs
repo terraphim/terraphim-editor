@@ -4,6 +4,13 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, Event, Window};
 
+mod document;
+pub use document::{
+    apply_edit, counts_json, document_annotations, document_body, document_counts, export_document,
+    open_document, save_document, sync_document_body, sync_json, with_session, DocumentSession,
+    Opened, SetAside, Synced,
+};
+
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!
 
 This is a simple markdown editor built with:
@@ -39,6 +46,10 @@ pub fn run() -> Result<(), JsValue> {
     let app: Element = document
         .get_element_by_id("app")
         .ok_or_else(|| JsValue::from_str("No element with id 'app' found"))?;
+
+    // The welcome text is the open document until the user opens a file, so
+    // edits to it are tracked by the span model like any other document.
+    with_session(|session| session.open(INITIAL_MARKDOWN));
 
     // The initial preview is rendered immediately, as part of the template.
     let initial_preview = render_markdown(INITIAL_MARKDOWN)?;

@@ -1040,8 +1040,11 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "criterion",
+ "js-sys",
  "markdown",
  "rinja",
+ "serde_json",
+ "terraphim_alternatives",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
