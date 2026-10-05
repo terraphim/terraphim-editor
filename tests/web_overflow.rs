@@ -163,10 +163,15 @@ async fn test_ctrl_enter_and_drop_insert_at_the_caret() {
     let _document = fresh_full_editor();
     install("Alpha beta gamma.\n");
     let r = run_steps(&[
+        // The caret is placed as a click would (a DOM selection in the
+        // surface), then focus moves to the panel.
         r#"ed.openDocument(window.__teSrc);
         ed.chrome.setMode('write-on');
+        s.setSelectionOffsets(0);
         s.focus();
-        s.setSelectionOffsets(6);
+        const point = s.offsetToPoint(6);
+        getSelection().collapse(point.node, point.offset);
+        document.dispatchEvent(new Event('selectionchange'));
         const ov = ed.overflow;
         ov.open();
         teOv.type(ov.area, 'One\nTwo words');

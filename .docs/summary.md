@@ -8,8 +8,8 @@ A WebAssembly Markdown editor (Rust compiled with Trunk, vanilla JavaScript, Sho
 ## Architecture
 - **Rust (WASM)**: `src/lib.rs` renders the template and runs a debounced Markdown preview; `src/document.rs` bridges the browser to the span model.
 - **Span model**: `crates/terraphim_alternatives` holds non-KG state (human alternatives, ghost ranges, overflow, the trailing annotation block, a/an fix-up) and re-anchors through `terraphim_automata` 2.1 from the private `terraphim` registry. KG synonyms as alternatives come later through the `terraphim_lsp` core (#13).
-- **JavaScript**: `editor.js` (contenteditable `EditorSurface` with UTF-16 offsets, decorations, undo; `MarkdownEditor` with the document API), `chrome.js` (Write_On mode and corner chrome), `blocks.js` (Blocks view: the body as editable Markdown blocks, edited through the surface; #19), `config.js` (shortcuts and commands).
-- **Styling**: `tokens.css` (design tokens), `write-on.css` (Write_On layout), `blocks.css` (Blocks view), FontAwesome with SRI.
+- **JavaScript**: `editor.js` (contenteditable `EditorSurface` with UTF-16 offsets, decorations, undo; `MarkdownEditor` with the document API), `chrome.js` (Write_On mode and corner chrome), `blocks.js` (Blocks view: the body as editable Markdown blocks, edited through the surface; #19), `overflow.js` (Overflow panel: stash as a move and one undo step, pull back as a copy, drag both ways; #12), `config.js` (shortcuts and commands).
+- **Styling**: `tokens.css` (design tokens), `write-on.css` (Write_On layout), `blocks.css` (Blocks view), `overflow.css` (Overflow panel), FontAwesome with SRI.
 - **Build and release**: Trunk builds to `target/trunk-dist`; `scripts/release-dist.sh` regenerates the committed `dist/` release copy.
 
 ## Data flow
