@@ -7,8 +7,8 @@ use web_sys::{Document, Element, Event, Window};
 mod document;
 pub use document::{
     apply_edit, counts_json, document_annotations, document_body, document_counts, export_document,
-    open_document, save_document, sync_document_body, sync_json, with_session, DocumentSession,
-    Opened, SetAside, Synced,
+    move_document_range, open_document, save_document, sync_document_body, sync_json, with_session,
+    DocumentSession, Opened, SetAside, Synced,
 };
 
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!

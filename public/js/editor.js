@@ -160,6 +160,10 @@ class EditorSurface {
       deletedText: old.slice(s, e),
       insertedText: inserted,
     };
+    // A text move ({ start, end, to }, see MarkdownEditor.moveRange) rides
+    // on the edit and its history step, so undo and redo can replay it as a
+    // move in the document model rather than a deletion plus an insertion.
+    if (options.move) edit.move = { ...options.move };
     this.text = old.slice(0, s) + inserted + old.slice(e);
     this.decorations = EditorSurface.mapRanges(this.decorations, edit);
     this.render();
@@ -659,6 +663,7 @@ class EditorSurface {
     const step = edit
       ? { start: edit.start, deletedText: edit.deletedText, insertedText: edit.insertedText }
       : null;
+    if (step && edit.move) step.move = edit.move;
     const entry = {
       text: this.text,
       start: sel ? sel.start : this.text.length,
@@ -1020,7 +1025,20 @@ class EditorSurface {
 
   /** The step that undoes `step` ({ start, deletedText, insertedText }). */
   static invertStep(step) {
-    return { start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
+    const inverse = { start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
+    if (step.move) inverse.move = EditorSurface.invertMove(step.move);
+    return inverse;
+  }
+
+  /**
+   * The move that undoes moving [start, end) to `to` (pre-move offsets):
+   * moving the text back from where it landed. Both replace the same region.
+   */
+  static invertMove({ start, end, to }) {
+    const len = end - start;
+    return to > end
+      ? { start: to - len, end: to, to: start }
+      : { start: to, end: to + len, to: end };
   }
 
   /**
@@ -1060,15 +1078,14 @@ class EditorSurface {
       const end = step.start + step.deletedText.length;
       if (step.start < 0 || end > t.length || t.slice(step.start, end) !== step.deletedText) return null;
       t = t.slice(0, step.start) + step.insertedText + t.slice(end);
-      out.push({
-        edit: {
-          start: step.start,
-          deletedLength: step.deletedText.length,
-          deletedText: step.deletedText,
-          insertedText: step.insertedText,
-        },
-        text: t,
-      });
+      const edit = {
+        start: step.start,
+        deletedLength: step.deletedText.length,
+        deletedText: step.deletedText,
+        insertedText: step.insertedText,
+      };
+      if (step.move) edit.move = step.move;
+      out.push({ edit, text: t });
     }
     return t === expected ? out : null;
   }
@@ -1459,7 +1476,11 @@ class MarkdownEditor {
     const { edit, text } = change;
     let outcome;
     try {
-      outcome = api.apply_edit(edit.start, edit.deletedLength, edit.insertedText);
+      // A recorded text move (undo or redo of moveRange) is replayed as a
+      // move, so the annotations inside the moved text travel with it.
+      outcome = edit.move && typeof api.move_document_range === 'function'
+        ? api.move_document_range(edit.move.start, edit.move.end, edit.move.to)
+        : api.apply_edit(edit.start, edit.deletedLength, edit.insertedText);
     } catch (err) {
       // The model refused the edit (for example a stale ghost): fall back to
       // replacing its body with the surface text and re-anchoring by text.
@@ -1467,6 +1488,61 @@ class MarkdownEditor {
       return;
     }
     if (outcome) this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+  }
+
+  /**
+   * Move the text [start, end) so that it is inserted at `to` (UTF-16
+   * offsets; `to` is an insertion point in the current text, outside the
+   * range), keeping the alternatives and ghosts inside it (issue #44). This
+   * is the call the Blocks view uses to move a block up or down.
+   *
+   * The document model moves first (`move_document_range`), so a move it
+   * refuses (one that would split a span or ghost, or an invalid range or
+   * destination) throws and leaves the text and the model untouched. The
+   * surface then replaces the region from min(start, to) to max(end, to)
+   * with the reordered text as ONE undo step, without mirroring it through
+   * `apply_edit` (which would detach the spans and drop the ghosts inside).
+   * The step carries the move, so undo and redo replay it in the model as
+   * the inverse move and the move again: text and annotations both return.
+   *
+   * A move that leaves the text unchanged (`to` at either end of the range,
+   * or text moved past an identical copy) is a no-op and changes nothing.
+   * Returns { moved, start, end } (the moved text's new range) plus the
+   * model outcome ({ detached, reattached, setAside, warning, notice }).
+   */
+  moveRange(start, end, to) {
+    const api = this.requireDocumentApi();
+    if (typeof api.move_document_range !== 'function') {
+      throw new Error('The WASM document API cannot move text');
+    }
+    this.alignDocumentModel(api);
+    const text = this.surface.getText();
+    const len = end - start;
+    const lo = Math.min(start, to);
+    const hi = Math.max(end, to);
+    const moved = text.slice(start, end);
+    const reordered = to > end ? text.slice(end, to) + moved : moved + text.slice(to, start);
+    const valid = [start, end, to].every(Number.isInteger) && start >= 0 && len > 0 && hi <= text.length;
+    if (valid && (to <= start || to >= end) && reordered === text.slice(lo, hi)) {
+      return { moved: false, start, end };
+    }
+    // Throws, changing nothing, if the model refuses the move.
+    const outcome = api.move_document_range(start, end, to);
+    const newStart = to > end ? to - len : to;
+    this.suppressModelSync = true;
+    try {
+      this.surface.replaceRange(lo, hi, reordered, {
+        source: 'move',
+        move: { start, end, to },
+        selectStart: newStart,
+        selectEnd: newStart + len,
+      });
+    } finally {
+      this.suppressModelSync = false;
+    }
+    if (outcome) this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+    if (this.indicators) this.indicators.flush();
+    return { ...outcome, moved: true, start: newStart, end: newStart + len };
   }
 
   /** Make sure the model body is exactly the surface text before reading it. */

@@ -12,8 +12,9 @@ pub use web_sys::{Document, HtmlElement, HtmlTextAreaElement};
 
 pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
-    flush_preview, open_document, preview_delay, preview_pending, preview_render_count,
-    save_document, set_preview_delay, sync_document_body, DEFAULT_PREVIEW_DELAY_MS,
+    flush_preview, move_document_range, open_document, preview_delay, preview_pending,
+    preview_render_count, save_document, set_preview_delay, sync_document_body,
+    DEFAULT_PREVIEW_DELAY_MS,
 };
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
@@ -247,6 +248,11 @@ pub fn install_document_bindings() {
             |start: u32, deleted: u32, inserted: String| apply_edit(start, deleted, &inserted),
         )
         .into_js_value(),
+    );
+    install(
+        "move_document_range",
+        Closure::<dyn FnMut(u32, u32, u32) -> Result<JsValue, JsValue>>::new(move_document_range)
+            .into_js_value(),
     );
 }
 

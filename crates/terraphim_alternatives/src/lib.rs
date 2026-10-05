@@ -82,7 +82,7 @@ pub mod reanchor;
 
 pub use article::{Article, article_for};
 pub use block::{BlockError, BlockErrorKind, FENCE_INFO, parse, write};
-pub use document::{Counts, Document, EditError, SpanFate};
+pub use document::{Counts, Document, EditError, MoveOutcome, SpanFate};
 pub use model::{
     Alternative, Anchor, Annotations, CONTEXT_UNITS, Ghost, SCHEMA_VERSION, Source, Span, SpanKind,
 };
