@@ -1,5 +1,6 @@
 use markdown::{to_html_with_options, Options};
 use rinja::Template;
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, Event, Window};
 
@@ -39,6 +40,7 @@ pub fn run() -> Result<(), JsValue> {
         .get_element_by_id("app")
         .ok_or_else(|| JsValue::from_str("No element with id 'app' found"))?;
 
+    // The initial preview is rendered immediately, as part of the template.
     let initial_preview = render_markdown(INITIAL_MARKDOWN)?;
 
     let template = EditorTemplate {
@@ -67,6 +69,27 @@ pub fn render_markdown(input: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Failed to convert markdown: {}", e)))
 }
 
+/// Default trailing debounce, in milliseconds, between the last `input`
+/// event and the preview render.
+pub const DEFAULT_PREVIEW_DELAY_MS: u32 = 120;
+
+/// Live preview state for the editor rendered by the most recent [`run`].
+struct PreviewState {
+    surface: Element,
+    preview: Element,
+    /// Handle of the scheduled render, if one is pending.
+    pending: Option<i32>,
+    /// Single persistent timer callback, reused for every scheduled render
+    /// so that typing does not allocate (or leak) a closure per keystroke.
+    timer: Closure<dyn FnMut()>,
+    delay_ms: u32,
+    render_count: u32,
+}
+
+thread_local! {
+    static PREVIEW: RefCell<Option<PreviewState>> = const { RefCell::new(None) };
+}
+
 /// Wire the editing surface's `input` event to the Rust Markdown preview.
 ///
 /// The surface is a `contenteditable` element driven by `EditorSurface` in
@@ -75,7 +98,12 @@ pub fn render_markdown(input: &str) -> Result<String, JsValue> {
 /// listener runs the element only contains text nodes, decoration spans and
 /// an optional trailing placeholder `<br>`, with newlines stored as literal
 /// `\n` characters. Therefore `textContent` is exactly the plain-text
-/// document, and that is what is converted here.
+/// document, and that is what is converted.
+///
+/// Conversion is debounced: each `input` cancels any pending render and
+/// schedules a new one [`preview_delay`] milliseconds later (trailing edge).
+/// `textContent` is read when the render fires, so the preview always shows
+/// the latest text. A delay of `0` renders synchronously inside the handler.
 fn setup_markdown_conversion(document: &Document) -> Result<(), JsValue> {
     let surface = document
         .query_selector(".markdown-input")?
@@ -84,19 +112,140 @@ fn setup_markdown_conversion(document: &Document) -> Result<(), JsValue> {
         .query_selector(".markdown-preview")?
         .ok_or_else(|| JsValue::from_str("No preview div found"))?;
 
-    let source = surface.clone();
-    let handler = Closure::wrap(Box::new(move |_event: Event| {
-        let input = source.text_content().unwrap_or_default();
-        match render_markdown(&input) {
-            Ok(html) => preview.set_inner_html(&html),
-            Err(err) => web_sys::console::error_1(&err),
-        }
-    }) as Box<dyn FnMut(_)>);
+    // Replace the state of any editor from a previous `run()`, cancelling its
+    // pending render so a stale timer can never fire against removed nodes.
+    cancel_pending();
+    let timer = Closure::wrap(Box::new(render_preview_now) as Box<dyn FnMut()>);
+    PREVIEW.with(|cell| {
+        *cell.borrow_mut() = Some(PreviewState {
+            surface: surface.clone(),
+            preview,
+            pending: None,
+            timer,
+            delay_ms: DEFAULT_PREVIEW_DELAY_MS,
+            render_count: 0,
+        });
+    });
 
+    // The listener captures nothing; it works on the global state, which
+    // always describes the current editor.
+    let handler = Closure::wrap(Box::new(|_event: Event| schedule_preview()) as Box<dyn FnMut(_)>);
     surface.add_event_listener_with_callback("input", handler.as_ref().unchecked_ref())?;
     handler.forget();
 
     Ok(())
+}
+
+/// Cancel any pending render, returning whether one was pending.
+fn cancel_pending() -> bool {
+    let handle = PREVIEW.with(|cell| cell.borrow_mut().as_mut().and_then(|s| s.pending.take()));
+    match handle {
+        Some(handle) => {
+            if let Some(window) = web_sys::window() {
+                window.clear_timeout_with_handle(handle);
+            }
+            true
+        }
+        None => false,
+    }
+}
+
+/// Debounce entry point, called on every `input` event.
+fn schedule_preview() {
+    cancel_pending();
+    let delay = preview_delay();
+    if delay == 0 {
+        render_preview_now();
+        return;
+    }
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    PREVIEW.with(|cell| {
+        if let Some(state) = cell.borrow_mut().as_mut() {
+            match window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                state.timer.as_ref().unchecked_ref(),
+                i32::try_from(delay).unwrap_or(i32::MAX),
+            ) {
+                Ok(handle) => state.pending = Some(handle),
+                Err(err) => web_sys::console::error_1(&err),
+            }
+        }
+    });
+}
+
+/// Convert the surface text and update the preview now.
+///
+/// The `RefCell` borrow is released before touching the DOM.
+fn render_preview_now() {
+    let elements = PREVIEW.with(|cell| {
+        cell.borrow_mut().as_mut().map(|state| {
+            state.pending = None;
+            state.render_count = state.render_count.wrapping_add(1);
+            (state.surface.clone(), state.preview.clone())
+        })
+    });
+    let Some((surface, preview)) = elements else {
+        return;
+    };
+    let input = surface.text_content().unwrap_or_default();
+    match render_markdown(&input) {
+        Ok(html) => preview.set_inner_html(&html),
+        Err(err) => web_sys::console::error_1(&err),
+    }
+}
+
+/// Render a pending (debounced) preview immediately.
+///
+/// Call this before reading the preview for save, export or tests. Returns
+/// `true` if a render was pending and has now run, `false` if the preview was
+/// already up to date (or no editor is initialised). From JavaScript in the
+/// Trunk build this is `window.wasmBindings.flush_preview()`.
+#[wasm_bindgen]
+pub fn flush_preview() -> bool {
+    if cancel_pending() {
+        render_preview_now();
+        true
+    } else {
+        false
+    }
+}
+
+/// Set the preview debounce delay in milliseconds; `0` renders synchronously
+/// on every `input`. Applies to renders scheduled after the call; a render
+/// already pending keeps its original deadline. [`run`] resets the delay to
+/// [`DEFAULT_PREVIEW_DELAY_MS`]. Does nothing if no editor is initialised.
+#[wasm_bindgen]
+pub fn set_preview_delay(ms: u32) {
+    PREVIEW.with(|cell| {
+        if let Some(state) = cell.borrow_mut().as_mut() {
+            state.delay_ms = ms;
+        }
+    });
+}
+
+/// Current preview debounce delay in milliseconds.
+#[wasm_bindgen]
+pub fn preview_delay() -> u32 {
+    PREVIEW.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map_or(DEFAULT_PREVIEW_DELAY_MS, |s| s.delay_ms)
+    })
+}
+
+/// Whether a debounced preview render is scheduled but has not yet run.
+#[wasm_bindgen]
+pub fn preview_pending() -> bool {
+    PREVIEW.with(|cell| cell.borrow().as_ref().is_some_and(|s| s.pending.is_some()))
+}
+
+/// Number of preview renders triggered by edits since the last [`run`].
+/// The initial render on load is part of the template and is not counted.
+/// Intended for diagnostics and tests.
+#[wasm_bindgen]
+pub fn preview_render_count() -> u32 {
+    PREVIEW.with(|cell| cell.borrow().as_ref().map_or(0, |s| s.render_count))
 }
 
 #[cfg(test)]
@@ -122,6 +271,16 @@ mod tests {
             to_html_with_options(input, &Options::default()).unwrap()
         );
         assert!(html.contains("<strong>bold</strong>"));
+    }
+
+    #[test]
+    fn test_preview_api_without_editor_is_inert() {
+        // No editor initialised natively: the API must be safe no-ops.
+        assert!(!flush_preview());
+        assert!(!preview_pending());
+        assert_eq!(preview_render_count(), 0);
+        set_preview_delay(5);
+        assert_eq!(preview_delay(), DEFAULT_PREVIEW_DELAY_MS);
     }
 
     #[test]

@@ -595,6 +595,7 @@ dependencies = [
  "markdown",
  "rinja",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
 ]
