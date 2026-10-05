@@ -114,10 +114,15 @@ fn test_open_edit_save_reopen_restores_alternatives_ghosts_and_overflow() {
           const reopened = ed.openDocument(saved);
           if (reopened.body !== s.getText()) out.push('reopened body');
           const after = ed.annotations();
-          const shift = (a) => ({ ...a, anchor: { ...a.anchor, start: a.anchor.start + 7, end: a.anchor.end + 7 } });
+          // Anchors carry before/after context (#36), which legitimately
+          // changes next to the two edits; compare everything else exactly.
+          const plain = (a) => { const { before, after, ...anchor } = a.anchor; return { ...a, anchor }; };
+          const shift = (a) => { const p = plain(a); return { ...p, anchor: { ...p.anchor, start: p.anchor.start + 7, end: p.anchor.end + 7 } }; };
           const want = JSON.stringify({ spans: before.spans.map(shift), ghosts: before.ghosts.map(shift), overflow: before.overflow });
-          const got = JSON.stringify({ spans: after.spans, ghosts: after.ghosts, overflow: after.overflow });
+          const got = JSON.stringify({ spans: after.spans.map(plain), ghosts: after.ghosts.map(plain), overflow: after.overflow });
           if (got !== want) out.push('annotations differ: ' + got);
+          // The context next to the inserted prefix now includes it.
+          if (after.spans[0].anchor.before !== 'Draft: # ') out.push('s1 context before ' + JSON.stringify(after.spans[0].anchor.before));
           if (after.spans.map((x) => x.active).join() !== '1,3,1') out.push('active indices ' + after.spans.map((x) => x.active));
           if (after.ghosts.length !== 2) out.push('ghosts ' + after.ghosts.length);
           if (!after.overflow.includes('Stashed idea.')) out.push('overflow lost');

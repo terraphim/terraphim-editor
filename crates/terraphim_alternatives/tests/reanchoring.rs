@@ -2,6 +2,9 @@
 //! span, duplicate anchor text, and a deleted anchor. Each case edits the
 //! body directly, as an outside editor would, then calls `reanchor`.
 
+mod common;
+
+use common::strip_context;
 use terraphim_alternatives::{Document, Source, SpanKind, UnresolvedReason, utf16_len};
 
 /// "The tension rises. Then 𝄞 the end." with a span on "tension".
@@ -113,6 +116,7 @@ fn duplicate_text_away_from_the_hint_is_ambiguous_not_guessed() {
     let id = doc.add_span(SpanKind::Word, 16, 19).unwrap();
     doc.add_alternative(&id, "dog", Source::Human, None)
         .unwrap();
+    strip_context(&mut doc);
     doc.body.insert_str(0, "Oh, ");
     let report = doc.reanchor();
     assert_eq!(
@@ -125,6 +129,21 @@ fn duplicate_text_away_from_the_hint_is_ambiguous_not_guessed() {
 }
 
 #[test]
+fn duplicate_text_away_from_the_hint_is_settled_by_context() {
+    // Same edit as above, with context: only the second "cat" follows
+    // "the cat and the " and ends the document.
+    let mut doc = Document::new("the cat and the cat");
+    let id = doc.add_span(SpanKind::Word, 16, 19).unwrap();
+    doc.add_alternative(&id, "dog", Source::Human, None)
+        .unwrap();
+    doc.body.insert_str(0, "Oh, ");
+    let report = doc.reanchor();
+    assert!(report.is_clean(), "{report:?}");
+    assert_eq!(report.moved, vec![id]);
+    assert_eq!(anchor(&doc), (20, 23));
+}
+
+#[test]
 fn two_spans_sharing_text_do_not_collapse_onto_one_survivor() {
     let mut doc = Document::new("the cat and the cat");
     for start in [4, 16] {
@@ -132,6 +151,8 @@ fn two_spans_sharing_text_do_not_collapse_onto_one_survivor() {
         doc.add_alternative(&id, "dog", Source::Human, None)
             .unwrap();
     }
+    let with_context = doc.clone();
+    strip_context(&mut doc);
     // Delete the first "cat" and shift the survivor away from both hints.
     doc.body = "Oh no, the and the cat".to_string();
     let report = doc.reanchor();
@@ -144,6 +165,17 @@ fn two_spans_sharing_text_do_not_collapse_onto_one_survivor() {
             }
         );
     }
+
+    // With context the survivor ends the document after " and the ", like
+    // the second span; the first span's "the " + " and the cat" is gone.
+    let mut doc = with_context;
+    doc.body = "Oh no, the and the cat".to_string();
+    let report = doc.reanchor();
+    assert_eq!(report.unresolved.len(), 1);
+    assert_eq!(report.unresolved[0].span.id, "s1");
+    assert_eq!(report.unresolved[0].reason, UnresolvedReason::Missing);
+    assert_eq!(doc.annotations.spans[0].id, "s2");
+    assert_eq!(anchor(&doc), (19, 22));
 }
 
 #[test]
@@ -169,11 +201,25 @@ fn spans_with_different_text_reanchor_independently() {
         let id = doc.add_span(SpanKind::Word, start, end).unwrap();
         doc.add_alternative(&id, "x", Source::Human, None).unwrap();
     }
+    let with_context = doc.clone();
+    strip_context(&mut doc);
     doc.body = "Intro. Alpha and beta and gamma.".to_string();
     let report = doc.reanchor();
     assert!(report.is_clean());
     assert_eq!(doc.annotations.spans[0].anchor.start, 7);
     assert_eq!(doc.annotations.spans[1].anchor.start, 26);
+
+    // With context, "Alpha" had the document start before it and " beta
+    // gamma." after it; both sides were rewritten, so it is reported. "gamma"
+    // still ends the document followed by ".", so it is placed.
+    let mut doc = with_context;
+    doc.body = "Intro. Alpha and beta and gamma.".to_string();
+    let report = doc.reanchor();
+    assert_eq!(report.unresolved.len(), 1);
+    assert_eq!(report.unresolved[0].span.id, "s1");
+    assert_eq!(report.unresolved[0].reason, UnresolvedReason::Missing);
+    assert_eq!(doc.annotations.spans[0].id, "s2");
+    assert_eq!(doc.annotations.spans[0].anchor.start, 26);
 }
 
 #[test]

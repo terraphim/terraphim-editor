@@ -54,6 +54,60 @@ pub fn byte_to_utf16(text: &str, byte: usize) -> Option<usize> {
     Some(utf16_len(&text[..byte]))
 }
 
+/// Converts many UTF-16 offsets, sorted ascending, to byte offsets in one walk
+/// of `text`. Each result is `None` exactly when [`utf16_to_byte`] would
+/// return `None` for that offset.
+pub(crate) fn utf16_to_bytes_sorted(text: &str, offsets: &[usize]) -> Vec<Option<usize>> {
+    debug_assert!(offsets.is_sorted(), "offsets must be sorted");
+    let mut out = Vec::with_capacity(offsets.len());
+    let mut chars = text.char_indices();
+    let (mut byte, mut units) = (0usize, 0usize);
+    let mut next = chars.next();
+    for &wanted in offsets {
+        while units < wanted {
+            match next {
+                Some((_, ch)) => {
+                    units += ch.len_utf16();
+                    next = chars.next();
+                    byte = next.map_or(text.len(), |(index, _)| index);
+                }
+                None => break,
+            }
+        }
+        out.push((units == wanted).then_some(byte));
+    }
+    out
+}
+
+/// Converts the UTF-16 offset `target` to a byte offset by walking from a
+/// known point: byte `from_byte`, a character boundary at UTF-16 offset
+/// `from_units`. The cost is proportional to the distance walked, not to the
+/// length of `text`. `None` exactly when [`utf16_to_byte`] would be `None`.
+pub(crate) fn utf16_to_byte_from(
+    text: &str,
+    (from_units, from_byte): (usize, usize),
+    target: usize,
+) -> Option<usize> {
+    let mut units = from_units;
+    if target >= from_units {
+        for (index, ch) in text[from_byte..].char_indices() {
+            if units >= target {
+                return (units == target).then_some(from_byte + index);
+            }
+            units += ch.len_utf16();
+        }
+        (units == target).then_some(text.len())
+    } else {
+        for (index, ch) in text[..from_byte].char_indices().rev() {
+            units -= ch.len_utf16();
+            if units <= target {
+                return (units == target).then_some(index);
+            }
+        }
+        None
+    }
+}
+
 /// Length of `text` in UTF-16 code units.
 pub fn utf16_len(text: &str) -> usize {
     text.chars().map(char::len_utf16).sum()
@@ -88,6 +142,32 @@ mod tests {
         assert_eq!(utf16_to_byte(MIXED, 4), None, "mid surrogate pair");
         assert_eq!(byte_to_utf16(MIXED, 2), None, "mid two-byte char");
         assert_eq!(utf16_to_byte("𝄞", 1), None, "mid pair at end of text");
+    }
+
+    #[test]
+    fn sorted_conversion_agrees_with_single_conversion() {
+        let offsets: Vec<usize> = vec![0, 0, 1, 2, 3, 4, 5, 6, 7, 9];
+        let expected: Vec<Option<usize>> =
+            offsets.iter().map(|&o| utf16_to_byte(MIXED, o)).collect();
+        assert_eq!(utf16_to_bytes_sorted(MIXED, &offsets), expected);
+        assert_eq!(utf16_to_bytes_sorted("", &[0, 1]), vec![Some(0), None]);
+        assert!(utf16_to_bytes_sorted("abc", &[]).is_empty());
+    }
+
+    #[test]
+    fn conversion_from_a_known_point_agrees_with_single_conversion() {
+        // Every character boundary of MIXED as a starting point, every offset
+        // (including mid-pair and past the end) as a target.
+        let points = [(0, 0), (1, 1), (2, 3), (3, 6), (5, 10), (6, 11)];
+        for point in points {
+            for target in 0..=8 {
+                assert_eq!(
+                    utf16_to_byte_from(MIXED, point, target),
+                    utf16_to_byte(MIXED, target),
+                    "from {point:?} to {target}"
+                );
+            }
+        }
     }
 
     #[test]
