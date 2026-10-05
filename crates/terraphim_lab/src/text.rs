@@ -236,7 +236,8 @@ fn collect(
         | Node::Toml(_)
         | Node::Math(_)
         | Node::InlineMath(_)
-        | Node::FootnoteReference(_) => {
+        | Node::FootnoteReference(_)
+        | Node::FootnoteDefinition(_) => {
             if let Some(r) = span(node) {
                 protected.push(r);
             }
@@ -668,6 +669,20 @@ mod tests {
             sentences(text),
             vec!["Mail <https://example.org/teh> or see [the docs][ref] today."]
         );
+    }
+
+    #[test]
+    fn footnote_definitions_are_protected() {
+        let single = "Before it.\n\n[^x]: teh footnote content.\n\nAfter it.";
+        assert!(fully_protected(single, "[^x]: teh footnote content."));
+        assert_eq!(sentences(single), vec!["Before it.", "After it."]);
+
+        let multi = "Body with a note.[^n]\n\n[^n]: teh first line\n    and a teh second line.\n\nAfter it.";
+        assert!(fully_protected(
+            multi,
+            "[^n]: teh first line\n    and a teh second line."
+        ));
+        assert_eq!(sentences(multi), vec!["Body with a note.[^n]", "After it."]);
     }
 
     #[test]
