@@ -16,6 +16,11 @@ pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
 
 mod lab;
 pub use lab::{lab_actions, lab_mark, trim_make_cuts, trim_plan_json, trim_status};
+// The alternatives side panel (issue #10).
+pub use document::{
+    alt_add, alt_create_span, alt_edit, alt_move, alt_remove, alt_restore, body_edit, AltChange,
+    AltEdit,
+};
 
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!
 

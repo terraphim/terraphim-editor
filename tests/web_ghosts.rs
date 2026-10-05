@@ -91,6 +91,12 @@ fn install_helpers() {
 fn setup() {
     let _document = fresh_full_editor();
     install_helpers();
+    // These tests cover the ghost item (and plug-in items) on their own; the
+    // "Alternatives for selection" item (#10) is covered in web_alt_panel.rs.
+    assert_eq!(
+        js_string("window.__teEditor.selectionMenu.unregister('alternatives'); 'ok'"),
+        "ok"
+    );
 }
 
 fn problems(src: &str) {

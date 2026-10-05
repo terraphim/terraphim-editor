@@ -8,3 +8,4 @@ WASM bridge between the browser editor and `terraphim_alternatives` (#6).
 - wasm-bindgen exports: `open_document`, `save_document`, `export_document`, `document_counts`, `apply_edit`, `sync_document_body`, `document_body`, `document_annotations`. Offsets are UTF-16.
 - Malformed annotation block: body opens, one warning, raw block saved back verbatim.
 - Nothing is dropped: spans detached by an edit and items that cannot be re-placed go to `SetAside` and are still saved; they re-attach when their text returns (e.g. after undo).
+- #10 block (alternatives panel): `alt_create_span`, `alt_add`, `alt_edit`, `alt_remove`, `alt_move` run atomically (session snapshot restored on error) and return `AltChange` { span, index, before, after, edit } with the single body edit (`body_edit`); `alt_restore` replays a recorded step (span out, edit applied as an ordinary edit, snapshot back, context refreshed) for undo/redo.

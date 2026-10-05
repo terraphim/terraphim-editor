@@ -170,6 +170,10 @@ class EditorSurface {
     if (options.swap) edit.swap = { ...options.swap };
     this.text = old.slice(0, s) + inserted + old.slice(e);
     this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+    // #10: an alternatives-panel step ({ span, before, after }, see
+    // MarkdownEditor.applyAltChange) rides on the edit and its history step;
+    // undo and redo replay it as alt_restore in the model.
+    if (options.alt) edit.alt = { ...options.alt };
     this.render();
     const selStart = options.selectStart === undefined ? s + inserted.length : options.selectStart;
     const selEnd = options.selectEnd === undefined ? selStart : options.selectEnd;
@@ -731,6 +735,17 @@ class EditorSurface {
       time: now,
       edits: step ? [step] : null,
     };
+    // #10: an alternatives-panel step always gets its own entry, even when
+    // the text is unchanged (adding, editing, moving or removing an inactive
+    // alternative changes only the annotations), and never coalesces.
+    if (step && edit.alt) {
+      step.alt = edit.alt;
+      this.history.length = this.historyIndex + 1;
+      this.history.push(entry);
+      if (this.history.length > this.historyLimit) this.history.shift();
+      this.historyIndex = this.history.length - 1;
+      return;
+    }
     const top = this.history[this.historyIndex];
     // A text move always gets its own entry, even when the text is unchanged
     // (text moved past an identical copy): the move it carries still changes
@@ -1088,6 +1103,8 @@ class EditorSurface {
   /** The step that undoes `step` ({ start, deletedText, insertedText }). */
   static invertStep(step) {
     const inverse = { start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
+    // #10: undoing a panel step restores the span as it was before.
+    if (step.alt) inverse.alt = { span: step.alt.span, before: step.alt.after, after: step.alt.before };
     if (step.move) inverse.move = EditorSurface.invertMove(step.move);
     if (step.swap) inverse.swap = { span: step.swap.span, from: step.swap.to, to: step.swap.from };
     return inverse;
@@ -1147,6 +1164,7 @@ class EditorSurface {
         deletedText: step.deletedText,
         insertedText: step.insertedText,
       };
+      if (step.alt) edit.alt = step.alt; // #10
       if (step.move) edit.move = step.move;
       if (step.swap) edit.swap = step.swap;
       out.push({ edit, text: t });
@@ -1174,6 +1192,8 @@ class EditorSurface {
    */
   static mapRanges(ranges, edit) {
     if (!edit || ranges.length === 0) return ranges;
+    // #10: an annotation-only step (no text change) keeps every range.
+    if (edit.deletedLength === 0 && edit.insertedText === '') return ranges;
     const editStart = edit.start;
     const editEnd = edit.start + edit.deletedLength;
     const delta = edit.insertedText.length - edit.deletedLength;
@@ -1238,6 +1258,7 @@ class MarkdownEditor {
     if (this.ghosts) this.ghosts.destroy();
     if (this.indicators) this.indicators.destroy();
     if (this.lab) this.lab.destroy();
+    if (this.altPanel) this.altPanel.destroy(); // #10
     if (this.decorations) this.decorations.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();
@@ -1294,6 +1315,10 @@ class MarkdownEditor {
       // The Lab popover and its marks (public/js/lab.js, issue #14).
       if (typeof window.TeLabPopover === 'function') {
         this.lab = new window.TeLabPopover(this, { signal: this.abortController.signal });
+      }
+      // #10 The alternatives side panel (public/js/alternatives-panel.js).
+      if (typeof window.TeAlternativesPanel === 'function') {
+        this.altPanel = new window.TeAlternativesPanel(this, { signal: this.abortController.signal });
       }
     }
 
@@ -1562,6 +1587,10 @@ class MarkdownEditor {
     if (this.suppressModelSync) return;
     const api = this.documentApi();
     if (!api) return;
+    if (change.edit && change.edit.alt && typeof api.alt_restore === 'function') {
+      this.mirrorAltStep(api, change.edit, change.text); // #10
+      return;
+    }
     const { edit, text } = change;
     if (edit.swap && typeof api.set_active_alternative === 'function') {
       this.mirrorSwap(api, edit.swap, text);
@@ -1847,6 +1876,108 @@ class MarkdownEditor {
     this.alignDocumentModel(api);
     return api.document_annotations();
   }
+
+  // ---------------------------------------------------------------------
+  // #10 The alternatives side panel (public/js/alternatives-panel.js).
+  // Kept in one block so parallel additions to this class merge cleanly;
+  // design notes in docs/design/alternatives-panel.md.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Run a panel operation model first: `name` is one of 'create_span',
+   * 'add', 'edit', 'remove', 'move' and `args` are passed to
+   * the WASM export `alt_<name>`. A refused operation throws and changes
+   * nothing, on either side. Otherwise the change is applied to the surface
+   * as ONE undo step (applyAltChange). Returns the model's change
+   * ({ span, index, before, after, edit, ... }), or null when nothing
+   * changed (an alternative that already exists, an unchanged line).
+   * Making an alternative active is swapAlternative (issue #9).
+   */
+  alternativeOp(name, ...args) {
+    const api = this.requireDocumentApi();
+    const fn = api[`alt_${name}`];
+    if (typeof fn !== 'function') throw new Error(`The WASM document API has no alt_${name}`);
+    this.alignDocumentModel(api);
+    const change = fn(...args);
+    if (!change) return null;
+    this.applyAltChange(change);
+    return change;
+  }
+
+  /**
+   * Apply a change the model has already made: its body edit (when the
+   * active alternative's text changed) or an empty edit at the span start
+   * (annotations only), recorded as one undo step that carries
+   * { span, before, after } and is not mirrored through apply_edit. Undo
+   * and redo replay it with alt_restore (mirrorAltStep). The selection
+   * stays where it was, moved with the text after the edit.
+   */
+  applyAltChange(change) {
+    const alt = { span: change.span, before: change.before || null, after: change.after || null };
+    const edit = change.edit;
+    const sel = this.surface.getSelectionOffsets();
+    let start;
+    let end;
+    let insert;
+    let map = (o) => o;
+    if (edit) {
+      start = edit.start;
+      end = edit.start + edit.deletedLength;
+      insert = edit.insertedText;
+      const delta = insert.length - edit.deletedLength;
+      map = (o) => (o <= start ? o : o >= end ? o + delta : Math.min(o, start + insert.length));
+    } else {
+      const snap = alt.after || alt.before;
+      start = snap && snap.anchor ? Math.min(snap.anchor.start, this.surface.getText().length) : 0;
+      end = start;
+      insert = '';
+    }
+    this.suppressModelSync = true;
+    try {
+      this.surface.replaceRange(start, end, insert, {
+        source: 'alternatives',
+        alt,
+        selectStart: map(sel.start),
+        selectEnd: map(sel.end),
+      });
+    } finally {
+      this.suppressModelSync = false;
+    }
+    this.reflectSetAside(change.setAside, change.notice, change.warning);
+    if (this.indicators) this.indicators.flush();
+  }
+
+  /**
+   * Replay a recorded panel step (undo or redo) in the model: put span
+   * `alt.span` back as `alt.after` (inverted for undo) with the step's text
+   * edit. If the model refuses, or its body does not come out equal to the
+   * surface text, the body is re-synced from the surface, so the two never
+   * diverge.
+   */
+  mirrorAltStep(api, edit, text) {
+    let outcome = null;
+    try {
+      outcome = api.alt_restore(
+        String(edit.alt.span),
+        JSON.stringify(edit.alt.after || null),
+        edit.start,
+        edit.deletedLength,
+        edit.insertedText,
+      );
+    } catch (err) {
+      outcome = null;
+    }
+    if (!outcome || api.document_body() !== text) {
+      this.reflectSync(api.sync_document_body(text));
+    } else {
+      this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+    }
+    if (this.altPanel) this.altPanel.scheduleRefresh();
+  }
+
+  // ---------------------------------------------------------------------
+  // End of #10 (alternatives side panel).
+  // ---------------------------------------------------------------------
 
   /**
    * Subscribe to document warnings. The callback receives the message, or
