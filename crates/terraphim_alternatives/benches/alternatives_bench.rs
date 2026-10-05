@@ -68,7 +68,11 @@ fn benches(c: &mut Criterion) {
                 d.body.insert_str(0, "Inserted heading.\n\n");
                 d
             },
-            |mut d| d.reanchor(),
+            // Returned, so dropping the document is not timed.
+            |mut d| {
+                let report = d.reanchor();
+                (d, report)
+            },
             criterion::BatchSize::SmallInput,
         )
     });
@@ -89,7 +93,11 @@ fn benches(c: &mut Criterion) {
                 d.body.insert_str(0, "Inserted heading.\n\n");
                 d
             },
-            |mut d| d.reanchor(),
+            // Returned, so dropping the document is not timed.
+            |mut d| {
+                let report = d.reanchor();
+                (d, report)
+            },
             criterion::BatchSize::SmallInput,
         )
     });
@@ -97,7 +105,24 @@ fn benches(c: &mut Criterion) {
     c.bench_function("set_active_first_span", |b| {
         b.iter_batched(
             || doc.clone(),
-            |mut d| d.set_active("s1", 1).unwrap(),
+            |mut d| {
+                d.set_active("s1", 1).unwrap();
+                d
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+
+    // A keystroke just before a span in the middle of the document: later
+    // anchors shift and the context of the anchors near it is refreshed.
+    c.bench_function("apply_edit_keystroke_near_span", |b| {
+        let at = doc.span("s110").unwrap().anchor.start - 1;
+        b.iter_batched(
+            || doc.clone(),
+            |mut d| {
+                d.apply_edit(at, at, "x").unwrap();
+                d
+            },
             criterion::BatchSize::SmallInput,
         )
     });

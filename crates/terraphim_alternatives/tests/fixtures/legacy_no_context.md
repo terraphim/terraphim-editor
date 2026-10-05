@@ -15,9 +15,7 @@ This whole paragraph might go. It hedges and repeats itself.
       "anchor": {
         "start": 2,
         "end": 31,
-        "text": "Why isn't everything obvious?",
-        "before": "# ",
-        "after": "\n\nThe struggle in a café draft "
+        "text": "Why isn't everything obvious?"
       },
       "active": 1,
       "alts": [
@@ -42,9 +40,7 @@ This whole paragraph might go. It hedges and repeats itself.
       "anchor": {
         "start": 37,
         "end": 45,
-        "text": "struggle",
-        "before": " isn't everything obvious?\n\nThe ",
-        "after": " in a café draft 𝄞 is an eraser"
+        "text": "struggle"
       },
       "active": 3,
       "alts": [
@@ -78,9 +74,7 @@ This whole paragraph might go. It hedges and repeats itself.
       "anchor": {
         "start": 71,
         "end": 77,
-        "text": "eraser",
-        "before": " in a café draft 𝄞 is an ",
-        "after": " holding \u0060code\u0060 together.\n\nThis "
+        "text": "eraser"
       },
       "active": 1,
       "alts": [
@@ -105,9 +99,7 @@ This whole paragraph might go. It hedges and repeats itself.
       "anchor": {
         "start": 56,
         "end": 77,
-        "text": "draft 𝄞 is an eraser",
-        "before": "\n\nThe struggle in a café ",
-        "after": " holding \u0060code\u0060 together.\n\nThis "
+        "text": "draft 𝄞 is an eraser"
       }
     },
     {
@@ -115,9 +107,7 @@ This whole paragraph might go. It hedges and repeats itself.
       "anchor": {
         "start": 104,
         "end": 164,
-        "text": "This whole paragraph might go. It hedges and repeats itself.",
-        "before": " holding \u0060code\u0060 together.\n\n",
-        "after": "\n"
+        "text": "This whole paragraph might go. It hedges and repeats itself."
       }
     }
   ],

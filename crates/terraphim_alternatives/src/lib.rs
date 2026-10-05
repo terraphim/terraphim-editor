@@ -24,7 +24,9 @@
 //!   malformed block yields a [`BlockError`] that keeps the body and the raw
 //!   block.
 //! * [`Document::reanchor`] re-finds spans and ghosts after outside edits and
-//!   reports missing or ambiguous anchors instead of guessing.
+//!   reports missing or ambiguous anchors instead of guessing. Anchors store
+//!   the text around them ([`Anchor::before`], [`Anchor::after`]), so
+//!   identical text elsewhere is not mistaken for an edited anchor.
 //! * [`Document::set_active`] / [`Document::cycle_active`] swap the visible
 //!   alternative with the `a`/`an` fix-up.
 //! * [`Document::remove_alternative`] and [`Document::clear_alternatives`]
@@ -72,6 +74,7 @@
 
 mod article;
 mod block;
+mod context;
 mod document;
 mod model;
 pub mod offset;
@@ -80,6 +83,8 @@ pub mod reanchor;
 pub use article::{Article, article_for};
 pub use block::{BlockError, BlockErrorKind, FENCE_INFO, parse, write};
 pub use document::{Counts, Document, EditError, SpanFate};
-pub use model::{Alternative, Anchor, Annotations, Ghost, SCHEMA_VERSION, Source, Span, SpanKind};
+pub use model::{
+    Alternative, Anchor, Annotations, CONTEXT_UNITS, Ghost, SCHEMA_VERSION, Source, Span, SpanKind,
+};
 pub use offset::{byte_to_utf16, utf16_len, utf16_to_byte};
 pub use reanchor::{ReanchorReport, Unresolved, UnresolvedGhost, UnresolvedReason};

@@ -72,6 +72,16 @@ impl Alternative {
 /// [`crate::offset`]). They are a hint: after the body is edited elsewhere,
 /// [`Document::reanchor`](crate::Document::reanchor) finds the span again by
 /// searching for `text`.
+///
+/// `before` and `after` hold the body text around the anchor (decision
+/// 2026-10-05: context re-anchoring): up to [`CONTEXT_UNITS`] UTF-16 code
+/// units on each side, trimmed to a word boundary. Re-anchoring uses them to
+/// tell the anchor's own text from identical text elsewhere. `None` means no
+/// context is stored (a file written before context existed); `Some("")`
+/// means the anchor touched that edge of the document. The
+/// [`Document`](crate::Document) operations keep context current for every
+/// anchor that still matches the body, and [`write`](crate::write) refreshes
+/// it, so saved files always carry the context of the body they hold.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Anchor {
@@ -81,7 +91,17 @@ pub struct Anchor {
     pub end: usize,
     /// The body text covered (for a span, its active alternative).
     pub text: String,
+    /// Body text immediately before the anchor, if context is stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    /// Body text immediately after the anchor, if context is stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
 }
+
+/// Maximum length, in UTF-16 code units, of the context stored on each side
+/// of an anchor ([`Anchor::before`], [`Anchor::after`]).
+pub const CONTEXT_UNITS: usize = 32;
 
 /// A contiguous piece of body text carrying alternatives.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,6 +172,22 @@ impl Span {
 }
 
 impl Anchor {
+    /// An anchor over `start..end` covering `text`, with no stored context.
+    pub fn new(start: usize, end: usize, text: impl Into<String>) -> Self {
+        Self {
+            start,
+            end,
+            text: text.into(),
+            before: None,
+            after: None,
+        }
+    }
+
+    /// True when context is stored on at least one side.
+    pub fn has_context(&self) -> bool {
+        self.before.is_some() || self.after.is_some()
+    }
+
     /// True when the UTF-16 range `start..end` intersects this anchor's range
     /// (touching ranges do not intersect).
     pub(crate) fn overlaps(&self, start: usize, end: usize) -> bool {
@@ -243,11 +279,7 @@ mod tests {
         Span {
             id: "s1".into(),
             kind: SpanKind::Word,
-            anchor: Anchor {
-                start: 0,
-                end: utf16_len(&text),
-                text,
-            },
+            anchor: Anchor::new(0, utf16_len(&text), text),
             active,
             alts,
         }
@@ -314,11 +346,7 @@ mod tests {
     fn ghost_validation_checks_id_text_and_length() {
         let ghost = |id: &str, start, end, text: &str| Ghost {
             id: id.into(),
-            anchor: Anchor {
-                start,
-                end,
-                text: text.into(),
-            },
+            anchor: Anchor::new(start, end, text),
         };
         assert_eq!(ghost("g1", 3, 6, "中𝄞").validate(), Ok(()));
         assert!(ghost("", 0, 1, "x").validate().unwrap_err().contains("id"));

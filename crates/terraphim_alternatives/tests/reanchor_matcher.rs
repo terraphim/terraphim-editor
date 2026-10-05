@@ -3,7 +3,14 @@
 //! case sensitivity, single-character and blank anchors, astral and CJK
 //! offsets, and many spans sharing one text. Each case edits the body directly,
 //! as an outside editor would, then calls `reanchor`.
+//!
+//! Cases about which occurrences are *found* drop the stored context first
+//! ([`strip_context`]), so the candidate list is reported in full by the
+//! context-free rule; their twins with context show what context decides.
 
+mod common;
+
+use common::strip_context;
 use terraphim_alternatives::{
     Document, Source, SpanKind, UnresolvedReason, utf16_len, utf16_to_byte,
 };
@@ -30,6 +37,7 @@ fn located(doc: &Document, id: &str) -> (usize, usize, String) {
 fn overlapping_occurrences_of_one_anchor_are_all_candidates() {
     let mut doc = Document::new("aa");
     span(&mut doc, 0, 2);
+    strip_context(&mut doc);
     doc.body = "baaa".to_string();
     let report = doc.reanchor();
     assert_eq!(
@@ -39,6 +47,14 @@ fn overlapping_occurrences_of_one_anchor_are_all_candidates() {
         },
         "`aa` occurs twice, overlapping, in `aaa`"
     );
+
+    // With context: the span was the whole document, so its `after` is empty
+    // and only the occurrence ending the document agrees.
+    let mut doc = Document::new("aa");
+    let id = span(&mut doc, 0, 2);
+    doc.body = "baaa".to_string();
+    assert!(doc.reanchor().is_clean());
+    assert_eq!(located(&doc, &id), (2, 4, "aa".to_string()));
 }
 
 #[test]
@@ -70,6 +86,7 @@ fn anchor_inside_another_anchors_occurrence_is_found_and_skipped_once_claimed() 
 fn occurrence_inside_a_longer_word_counts_as_a_candidate() {
     let mut doc = Document::new("cat");
     span(&mut doc, 0, 3);
+    strip_context(&mut doc);
     doc.body = "a concatenated cat".to_string();
     let report = doc.reanchor();
     assert_eq!(
@@ -79,6 +96,14 @@ fn occurrence_inside_a_longer_word_counts_as_a_candidate() {
         },
         "matching ignores word boundaries"
     );
+
+    // With context, the occurrence that ends the document, as the span did,
+    // is the one that agrees.
+    let mut doc = Document::new("cat");
+    let id = span(&mut doc, 0, 3);
+    doc.body = "a concatenated cat".to_string();
+    assert!(doc.reanchor().is_clean());
+    assert_eq!(located(&doc, &id).0, 15);
 }
 
 #[test]
@@ -115,6 +140,7 @@ fn single_character_anchors_reanchor() {
 
     let mut doc = Document::new("b");
     span(&mut doc, 0, 1);
+    strip_context(&mut doc);
     doc.body = "abcb".to_string();
     let report = doc.reanchor();
     assert_eq!(
@@ -171,8 +197,11 @@ fn many_spans_sharing_text_are_never_guessed() {
     let report = doc.clone().reanchor();
     assert!(report.is_clean() && report.moved.is_empty());
 
-    doc.body.insert_str(0, "Heading. ");
-    let report = doc.reanchor();
+    // Without context every occurrence is a candidate for every span.
+    let mut legacy = doc.clone();
+    strip_context(&mut legacy);
+    legacy.body.insert_str(0, "Heading. ");
+    let report = legacy.reanchor();
     assert_eq!(report.unresolved.len(), 50);
     let expected: Vec<usize> = (0..50).map(|i| 9 + i * units + 4).collect();
     for unresolved in &report.unresolved {
@@ -182,6 +211,22 @@ fn many_spans_sharing_text_are_never_guessed() {
                 candidates: expected.clone()
             }
         );
+    }
+    assert!(legacy.annotations.spans.is_empty());
+
+    // With context the repeated sentences give identical surroundings, so
+    // every span ties between several candidates and none is guessed.
+    doc.body.insert_str(0, "Heading. ");
+    let report = doc.reanchor();
+    assert_eq!(report.unresolved.len(), 50);
+    for unresolved in &report.unresolved {
+        match &unresolved.reason {
+            UnresolvedReason::Ambiguous { candidates } => {
+                assert!(candidates.len() > 1, "{candidates:?}");
+                assert!(candidates.iter().all(|c| expected.contains(c)));
+            }
+            other => panic!("expected Ambiguous, got {other:?}"),
+        }
     }
     assert!(doc.annotations.spans.is_empty());
 }
@@ -209,6 +254,7 @@ fn blank_ghost_and_span_still_reanchor() {
 fn blank_anchor_with_several_occurrences_is_ambiguous() {
     let mut doc = Document::new("a\n\nb");
     doc.ghost(1, 3).unwrap();
+    strip_context(&mut doc);
     doc.body = "zz\n\nb\n\n\nc".to_string();
     let report = doc.reanchor();
     assert_eq!(
@@ -216,6 +262,17 @@ fn blank_anchor_with_several_occurrences_is_ambiguous() {
         UnresolvedReason::Ambiguous {
             candidates: vec![2, 5, 6]
         }
+    );
+
+    // With context ("a" before, "b" after, both cut by the document edges)
+    // no occurrence has "a" before it or ends the document after "b".
+    let mut doc = Document::new("a\n\nb");
+    doc.ghost(1, 3).unwrap();
+    doc.body = "zz\n\nb\n\n\nc".to_string();
+    let report = doc.reanchor();
+    assert_eq!(
+        report.unresolved_ghosts[0].reason,
+        UnresolvedReason::Missing
     );
 }
 
