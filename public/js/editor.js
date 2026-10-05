@@ -164,6 +164,10 @@ class EditorSurface {
     // on the edit and its history step, so undo and redo can replay it as a
     // move in the document model rather than a deletion plus an insertion.
     if (options.move) edit.move = { ...options.move };
+    // A swap of alternatives ({ span, from, to }, see
+    // MarkdownEditor.swapAlternative, issue #9) rides the same way: undo and
+    // redo replay it as set_active in the model.
+    if (options.swap) edit.swap = { ...options.swap };
     this.text = old.slice(0, s) + inserted + old.slice(e);
     this.decorations = EditorSurface.mapRanges(this.decorations, edit);
     this.render();
@@ -175,6 +179,60 @@ class EditorSurface {
     this.dispatchInput(source === 'paste' ? 'insertFromPaste' : 'insertReplacementText', inserted);
     return edit;
   }
+
+  // ---- Several edits as one undo step (issue #15, trim "Make the cuts") ----
+  /**
+   * Apply `edits` ([{ start, end, insert }] on the CURRENT text's UTF-16
+   * offsets, non-overlapping) as ONE undo step. Each edit goes through the
+   * normal edit path: decorations are mapped and change listeners notified
+   * once per edit (so the document model mirrors each one with apply_edit
+   * and spans and ghosts follow the usual rules), applied from the last to
+   * the first so earlier offsets stay valid. The surface renders once and
+   * one history entry records every step in application order, so undo
+   * replays their inverses (and the model re-attaches what they detached)
+   * and redo replays them again. Options: source (default 'api'), and
+   * selectStart/selectEnd on the final text (default: a caret at the first
+   * edit). Returns the applied edits, or [] when nothing changed.
+   */
+  replaceRanges(edits, options = {}) {
+    const source = options.source || 'api';
+    const sorted = (edits || [])
+      .map((e) => ({ start: Math.min(e.start, e.end), end: Math.max(e.start, e.end), insert: String(e.insert || '') }))
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].start < sorted[i - 1].end) throw new Error('replaceRanges: edits overlap');
+    }
+    const applied = [];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const old = this.text;
+      const s = this.snap(this.clamp(sorted[i].start), old);
+      const e = this.snap(this.clamp(sorted[i].end), old);
+      const inserted = EditorSurface.normaliseNewlines(sorted[i].insert);
+      if (s === e && inserted === '') continue;
+      if (old.slice(s, e) === inserted) continue;
+      const edit = { start: s, deletedLength: e - s, deletedText: old.slice(s, e), insertedText: inserted };
+      this.text = old.slice(0, s) + inserted + old.slice(e);
+      this.decorations = EditorSurface.mapRanges(this.decorations, edit);
+      applied.push(edit);
+      this.emitChange(edit, source);
+    }
+    if (applied.length === 0) return [];
+    this.render();
+    const first = applied[applied.length - 1];
+    const selStart = options.selectStart === undefined ? first.start + first.insertedText.length : options.selectStart;
+    const selEnd = options.selectEnd === undefined ? selStart : options.selectEnd;
+    this.setSelectionOffsets(selStart, selEnd);
+    this.record(source, this.lastSelection, applied[0]);
+    const entry = this.history[this.historyIndex];
+    if (entry && entry.text === this.text) {
+      entry.edits = applied.map((edit) => ({
+        start: edit.start, deletedText: edit.deletedText, insertedText: edit.insertedText,
+      }));
+    }
+    this.dispatchInput('insertReplacementText', null);
+    return applied;
+  }
+  // ---- end several edits as one undo step (issue #15) ----
 
   /** Replace the current selection with `insert`. */
   replaceSelection(insert, source = 'api') {
@@ -664,6 +722,7 @@ class EditorSurface {
       ? { start: edit.start, deletedText: edit.deletedText, insertedText: edit.insertedText }
       : null;
     if (step && edit.move) step.move = edit.move;
+    if (step && edit.swap) step.swap = edit.swap;
     const entry = {
       text: this.text,
       start: sel ? sel.start : this.text.length,
@@ -676,7 +735,7 @@ class EditorSurface {
     // A text move always gets its own entry, even when the text is unchanged
     // (text moved past an identical copy): the move it carries still changes
     // the annotations, and undo must replay its inverse in the model.
-    if (top && top.text === entry.text && !(step && step.move)) {
+    if (top && top.text === entry.text && !(step && (step.move || step.swap))) {
       top.start = entry.start;
       top.end = entry.end;
       return;
@@ -1030,6 +1089,7 @@ class EditorSurface {
   static invertStep(step) {
     const inverse = { start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
     if (step.move) inverse.move = EditorSurface.invertMove(step.move);
+    if (step.swap) inverse.swap = { span: step.swap.span, from: step.swap.to, to: step.swap.from };
     return inverse;
   }
 
@@ -1088,6 +1148,7 @@ class EditorSurface {
         insertedText: step.insertedText,
       };
       if (step.move) edit.move = step.move;
+      if (step.swap) edit.swap = step.swap;
       out.push({ edit, text: t });
     }
     return t === expected ? out : null;
@@ -1502,6 +1563,10 @@ class MarkdownEditor {
     const api = this.documentApi();
     if (!api) return;
     const { edit, text } = change;
+    if (edit.swap && typeof api.set_active_alternative === 'function') {
+      this.mirrorSwap(api, edit.swap, text);
+      return;
+    }
     let outcome;
     try {
       // A recorded text move (undo or redo of moveRange) is replayed as a
@@ -1574,6 +1639,91 @@ class MarkdownEditor {
     if (this.indicators) this.indicators.flush();
     return { ...outcome, moved: true, start: newStart, end: newStart + len };
   }
+
+  // ---------------------------------------------------------------------
+  // In-place cycling of alternatives (issue #9). Kept in one block so
+  // parallel additions to this class merge cleanly. The hover and keyboard
+  // controls live in public/js/indicators.js; design notes in
+  // docs/design/cycling.md.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Make alternative `index` of span `spanId` active, in place (R-2.4).
+   *
+   * The document model swaps first (`set_active_alternative`, which also
+   * fixes a preceding "a"/"an", R-2.6, and refreshes the anchors' context),
+   * so a swap it refuses (unknown span, invalid index, stale anchor) throws
+   * and leaves the text and the model untouched. The surface then applies
+   * the exact edit the model made as ONE undo step, without mirroring it
+   * through `apply_edit` (which would detach the span). The step carries
+   * { span, from, to }, so undo and redo replay `set_active` in the model:
+   * the alternative and the article both come back.
+   *
+   * The selection is kept where it was (moved with the text after the
+   * edit); a selection end inside the edited region is clamped into the
+   * span's new text. Making the active alternative active again changes and
+   * records nothing. Returns the model outcome
+   * ({ span, from, to, edit, range, setAside, notice, ... }).
+   */
+  swapAlternative(spanId, index) {
+    const api = this.requireDocumentApi();
+    if (typeof api.set_active_alternative !== 'function') {
+      throw new Error('The WASM document API cannot swap alternatives');
+    }
+    this.alignDocumentModel(api);
+    // Throws, changing nothing, if the model refuses the swap.
+    const outcome = api.set_active_alternative(String(spanId), index);
+    const edit = outcome && outcome.edit;
+    if (!edit) return outcome;
+    const editEnd = edit.start + edit.deletedLength;
+    const delta = edit.insertedText.length - edit.deletedLength;
+    const { start: spanStart, end: spanEnd } = outcome.range;
+    const map = (o) => {
+      if (o <= edit.start) return o;
+      if (o >= editEnd) return o + delta;
+      return Math.max(spanStart, Math.min(spanEnd, o));
+    };
+    const sel = this.surface.getSelectionOffsets();
+    this.suppressModelSync = true;
+    try {
+      this.surface.replaceRange(edit.start, editEnd, edit.insertedText, {
+        source: 'swap',
+        swap: { span: outcome.span, from: outcome.from, to: outcome.to },
+        selectStart: map(sel.start),
+        selectEnd: map(sel.end),
+      });
+    } finally {
+      this.suppressModelSync = false;
+    }
+    this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+    if (this.indicators) this.indicators.flush();
+    return outcome;
+  }
+
+  /**
+   * Replay a recorded swap (undo or redo of swapAlternative) in the model.
+   * If the model refuses, or its body does not come out equal to the
+   * surface text (for example undoing back to an article the author had
+   * typed against the a/an rule), the body is re-synced from the surface,
+   * so the two never diverge.
+   */
+  mirrorSwap(api, swap, text) {
+    let outcome = null;
+    try {
+      outcome = api.set_active_alternative(String(swap.span), swap.to);
+    } catch (err) {
+      outcome = null;
+    }
+    if (!outcome || api.document_body() !== text) {
+      this.reflectSync(api.sync_document_body(text));
+      return;
+    }
+    this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
+  }
+
+  // ---------------------------------------------------------------------
+  // End of in-place cycling (issue #9).
+  // ---------------------------------------------------------------------
 
   /** Make sure the model body is exactly the surface text before reading it. */
   alignDocumentModel(api) {

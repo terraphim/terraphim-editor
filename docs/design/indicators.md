@@ -37,7 +37,7 @@ The overlay itself is `aria-hidden`, and the dots are not focusable: R-3.6 calls
 
 ## Dot clicks (R-3.6)
 
-The spec only infers that clicking a dot should jump to that alternative, so the layer does not change the document. A click dispatches a bubbling, cancelable `te:dot` CustomEvent from the overlay. Listen for it on `document`:
+The spec only infers that clicking a dot should jump to that alternative. A click dispatches a bubbling, cancelable `te:dot` CustomEvent from the overlay; unless a listener calls `preventDefault()`, the default action (issue #9) makes that alternative active through `editor.swapAlternative` (see [cycling.md](cycling.md)). Clicking the lit dot does nothing. Listen for it on `document`:
 
 ```js
 document.addEventListener('te:dot', (e) => {
@@ -45,7 +45,7 @@ document.addEventListener('te:dot', (e) => {
 });
 ```
 
-`mousedown` on a dot is prevented so the caret and focus stay in the surface. Issue #9 decides whether to activate the alternative.
+`mousedown` on a dot is prevented so the caret and focus stay in the surface.
 
 ## Decoration registry
 
@@ -88,7 +88,7 @@ The layer registers every listener with its own `AbortController`, which is abor
 - `tests/indicators_fixture.rs` (native): builds `tests/fixtures/indicators/indicators.md` through `terraphim_alternatives` and checks it against the committed file (`UPDATE_GOLDENS=1` to regenerate). The fixture has a 3-alternative headline (original active), a 7-alternative word (fifth active), a 2-alternative sentence and a 3-alternative paragraph (second active).
 - `tests/web_indicators.rs` (real Chrome, real scripts and stylesheets, no mocks):
   - geometry: dot counts, lit index and colours, dot size and spacing; word row centred, headline and sentence rows right-aligned, all within 1.5px; underline style; headline weight, face and size; paragraph rule extent and dot column; the overlay does not affect layout; descriptions;
-  - `te:dot` detail, with no document change;
+  - `te:dot` detail; a cancelled `te:dot` leaves the document unchanged (the default jump is tested in `tests/web_cycling.rs`);
   - indicators follow re-anchored spans while typing with `execCommand`, both within a frame (before the debounce) and after the model refresh, with no surface re-render;
   - nothing renders in plain mode, including the toggle cycle, unowned decorations surviving it, and `destroy()`;
   - spans with only their original get no indicator;

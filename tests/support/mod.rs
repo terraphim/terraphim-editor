@@ -22,8 +22,11 @@ pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
     flush_preview, ghost_range, lab_actions, lab_mark, move_document_range, open_document,
     preview_delay, preview_pending, preview_render_count, render_markdown, revive_range,
-    save_document, set_preview_delay, sync_document_body, DEFAULT_PREVIEW_DELAY_MS,
+    save_document, set_preview_delay, sync_document_body, trim_make_cuts, trim_plan_json,
+    trim_status, DEFAULT_PREVIEW_DELAY_MS,
 };
+// In-place cycling of alternatives (issue #9).
+pub use terraphim_editor::set_active_alternative;
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
 pub const EDITOR_JS: &str = include_str!("../../public/js/editor.js");
@@ -37,6 +40,8 @@ pub const LAB_JS: &str = include_str!("../../public/js/lab.js");
 pub const BLOCKS_JS: &str = include_str!("../../public/js/blocks.js");
 pub const BLOCKS_CSS: &str = include_str!("../../public/css/blocks.css");
 pub const LAB_CSS: &str = include_str!("../../public/css/lab.css");
+pub const TRIM_JS: &str = include_str!("../../public/js/trim.js");
+pub const TRIM_CSS: &str = include_str!("../../public/css/trim.css");
 
 /// Small helpers shared by the JavaScript snippets below.
 pub const TEST_HELPERS_JS: &str = r##"
@@ -203,7 +208,7 @@ pub fn load_editor_scripts(document: &Document) {
     let style = document.create_element("style").unwrap();
     style.set_attribute("data-te-test", "").unwrap();
     style.set_text_content(Some(&format!(
-        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{BLOCKS_CSS}"
+        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{TRIM_CSS}\n{BLOCKS_CSS}"
     )));
     document
         .document_element()
@@ -215,6 +220,7 @@ pub fn load_editor_scripts(document: &Document) {
         CHROME_JS,
         INDICATORS_JS,
         SELECTION_MENU_JS,
+        TRIM_JS,
         LAB_JS,
         BLOCKS_JS,
         EDITOR_JS,
@@ -293,6 +299,24 @@ pub fn install_document_bindings() {
             .into_js_value(),
     );
     install(
+        "trim_plan_json",
+        Closure::<dyn FnMut() -> Result<JsValue, JsValue>>::new(trim_plan_json).into_js_value(),
+    );
+    install(
+        "trim_status",
+        Closure::<dyn FnMut(String, String) -> Result<JsValue, JsValue>>::new(
+            |level: String, kept: String| trim_status(&level, &kept),
+        )
+        .into_js_value(),
+    );
+    install(
+        "trim_make_cuts",
+        Closure::<dyn FnMut(String, String) -> Result<JsValue, JsValue>>::new(
+            |level: String, kept: String| trim_make_cuts(&level, &kept),
+        )
+        .into_js_value(),
+    );
+    install(
         "apply_edit",
         Closure::<dyn FnMut(u32, u32, String) -> Result<JsValue, JsValue>>::new(
             |start: u32, deleted: u32, inserted: String| apply_edit(start, deleted, &inserted),
@@ -303,6 +327,14 @@ pub fn install_document_bindings() {
         "move_document_range",
         Closure::<dyn FnMut(u32, u32, u32) -> Result<JsValue, JsValue>>::new(move_document_range)
             .into_js_value(),
+    );
+    // In-place cycling of alternatives (issue #9).
+    install(
+        "set_active_alternative",
+        Closure::<dyn FnMut(String, u32) -> Result<JsValue, JsValue>>::new(
+            |span: String, index: u32| set_active_alternative(&span, index),
+        )
+        .into_js_value(),
     );
 }
 

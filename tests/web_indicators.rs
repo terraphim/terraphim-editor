@@ -128,7 +128,7 @@ fn test_word_headline_sentence_and_paragraph_geometry() {
 }
 
 #[wasm_bindgen_test]
-fn test_dot_click_dispatches_te_dot_without_changing_the_document() {
+fn test_dot_click_dispatches_te_dot_and_cancelling_it_keeps_the_document() {
     setup();
     let result = js_string(
         r##"(() => {
@@ -137,7 +137,8 @@ fn test_dot_click_dispatches_te_dot_without_changing_the_document() {
           const ed = teInd.editor();
           const before = ed.surface.getText();
           const events = [];
-          const on = (e) => events.push(e.detail);
+          // Cancelling te:dot suppresses the default jump (issue #9).
+          const on = (e) => { e.preventDefault(); events.push(e.detail); };
           document.addEventListener('te:dot', on);
           const dot = teInd.dots('s2')[2];
           const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
@@ -150,7 +151,8 @@ fn test_dot_click_dispatches_te_dot_without_changing_the_document() {
           const [a, b] = events;
           if (a && (a.spanId !== 's2' || a.index !== 2 || a.kind !== 'word' || a.active !== false || a.editor !== ed)) out.push('word detail ' + JSON.stringify({ ...a, editor: !!a.editor }));
           if (b && (b.spanId !== 's4' || b.index !== 1 || b.kind !== 'paragraph' || b.active !== true)) out.push('paragraph detail ' + JSON.stringify({ ...b, editor: !!b.editor }));
-          // R-3.6: dots are passive; jumping is left to issue #9.
+          // A cancelled te:dot leaves the document alone (the jump itself is
+          // tested in tests/web_cycling.rs).
           if (ed.surface.getText() !== before) out.push('text changed');
           if (teInd.span('s2').active !== 4) out.push('active changed');
           return out.join('; ');
