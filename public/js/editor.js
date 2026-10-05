@@ -1088,8 +1088,12 @@ class MarkdownEditor {
     this.warningListeners = new Set();
     this.warningElement = null;
     this.warning = null;
-    // What the current warning is about: 'open' or 'detached'.
+    // What the current warning is about: 'malformed' (stays until dismissed,
+    // the raw block is still preserved), 'set-aside' or 'detached' (both
+    // clear once nothing is set aside).
     this.warningKind = null;
+    // Set-aside spans and ghosts in the model, as last reported.
+    this.setAsideCount = 0;
     this.suppressModelSync = false;
   }
 
@@ -1410,23 +1414,40 @@ class MarkdownEditor {
     } catch (err) {
       // The model refused the edit (for example a stale ghost): fall back to
       // replacing its body with the surface text and re-anchoring by text.
-      api.sync_document_body(text);
+      this.reflectSync(api.sync_document_body(text));
       return;
     }
-    if (!outcome) return;
-    if (outcome.warning) {
-      // The edit detached alternatives: they are preserved (and saved), and
-      // come back if the edit is undone.
-      this.showWarning(outcome.warning, 'detached');
-    } else if (outcome.reattached.length > 0 && outcome.setAside === 0 && this.warningKind === 'detached') {
-      // Everything detached is attached again: the notice no longer applies.
-      this.showWarning(null);
-    }
+    if (outcome) this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
   }
 
   /** Make sure the model body is exactly the surface text before reading it. */
   alignDocumentModel(api) {
-    api.sync_document_body(this.surface.getText());
+    this.reflectSync(api.sync_document_body(this.surface.getText()));
+  }
+
+  /** Surface the result of a full-body re-sync ({ changed, unresolved, notice }). */
+  reflectSync(synced) {
+    if (synced && synced.changed) this.reflectSetAside(synced.unresolved, synced.notice);
+  }
+
+  /**
+   * Keep the annotation notice in step with the model's set-aside count.
+   * A fresh detach shows its own warning; otherwise a changed count shows
+   * the current notice, and a count of zero clears an annotation warning.
+   * The malformed-block warning is never replaced or cleared here: it stays
+   * until dismissed, because the raw block is still being preserved.
+   */
+  reflectSetAside(count, notice, detachWarning = null) {
+    const previous = this.setAsideCount;
+    this.setAsideCount = count;
+    if (this.warningKind === 'malformed') return;
+    if (detachWarning) {
+      this.showWarning(detachWarning, 'detached');
+    } else if (count === 0) {
+      if (this.warningKind === 'set-aside' || this.warningKind === 'detached') this.showWarning(null);
+    } else if (count !== previous && notice) {
+      this.showWarning(notice, 'set-aside');
+    }
   }
 
   /**
@@ -1453,8 +1474,20 @@ class MarkdownEditor {
     }
     this.surface.resetHistory();
     // The surface normalises line endings; re-anchor if that changed the text.
-    this.alignDocumentModel(api);
-    this.showWarning(opened.warning || null, 'open');
+    const synced = api.sync_document_body(this.surface.getText());
+    let warning = opened.warning || null;
+    let kind = opened.kind || null;
+    if (kind !== 'malformed' && synced.changed) {
+      if (synced.unresolved === 0) {
+        warning = null;
+        kind = null;
+      } else if (synced.unresolved !== opened.unresolved) {
+        warning = synced.notice;
+        kind = 'set-aside';
+      }
+    }
+    this.setAsideCount = synced.changed ? synced.unresolved : opened.unresolved;
+    this.showWarning(warning, kind);
     if (this.chrome && typeof this.chrome.documentChanged === 'function') {
       try {
         this.chrome.documentChanged();
@@ -1465,11 +1498,23 @@ class MarkdownEditor {
     return opened;
   }
 
-  /** The document as `.md` text: body plus the trailing annotation block. */
+  /**
+   * The document as `.md` text: body plus the trailing annotation block.
+   * Returns the text and also dispatches a bubbling `te:saved` event from the
+   * surface with `detail: { editor, text, documentKey }`, so whoever owns
+   * storage (a file, localStorage, a server) can write it. Choosing where to
+   * write is out of scope here.
+   */
   saveDocument() {
     const api = this.requireDocumentApi();
     this.alignDocumentModel(api);
-    return api.save_document();
+    const text = api.save_document();
+    const target = this.input || document;
+    target.dispatchEvent(new CustomEvent('te:saved', {
+      bubbles: true,
+      detail: { editor: this, text, documentKey: this.documentKey },
+    }));
+    return text;
   }
 
   /** Clean Markdown: active alternatives, ghosted text dropped, no block. */
@@ -1509,7 +1554,8 @@ class MarkdownEditor {
    * Show (or, with null, clear) the single non-blocking document warning:
    * a `.te-warning` status element above the surface, which never takes
    * focus, plus every onWarning subscriber. `kind` records what the warning
-   * is about ('open' or 'detached'); it is exposed as `data-kind`.
+   * is about ('malformed', 'set-aside' or 'detached'); it is exposed as
+   * `data-kind`.
    */
   showWarning(message, kind = null) {
     this.warning = message || null;

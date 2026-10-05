@@ -68,6 +68,11 @@ pub struct Opened {
     /// Number of spans and ghosts whose anchor text could no longer be found
     /// in the body when the file was opened (see [`DocumentSession::open`]).
     pub unresolved: usize,
+    /// What `warning` is about: `"malformed"` (the block could not be read;
+    /// the warning stays until dismissed because the raw block is still
+    /// preserved) or `"set-aside"` (annotations out of the model; the warning
+    /// can clear once they re-attach).
+    pub kind: Option<&'static str>,
 }
 
 /// Outcome of [`DocumentSession::sync_body`].
@@ -91,6 +96,10 @@ pub struct EditOutcome {
     pub set_aside: usize,
     /// A non-blocking notice when the edit detached alternatives.
     pub warning: Option<String>,
+    /// The current set-aside notice (see
+    /// [`DocumentSession::set_aside_notice`]), `None` when nothing is set
+    /// aside.
+    pub notice: Option<String>,
 }
 
 /// One open document: the span model plus, after a malformed open, the raw
@@ -234,11 +243,40 @@ impl DocumentSession {
                 self.raw_block = Some(error.raw_block);
             }
         }
+        let kind = if self.raw_block.is_some() {
+            Some("malformed")
+        } else if self.set_aside.is_empty() {
+            None
+        } else {
+            Some("set-aside")
+        };
         Opened {
             body: self.doc.body.clone(),
             warning: self.warning.clone(),
             unresolved: self.set_aside.len(),
+            kind,
         }
+    }
+
+    /// A notice describing what is currently set aside, or `None` when
+    /// nothing is. The editor shows it when the set-aside count changes for a
+    /// reason other than an edit detaching spans (for example a full re-sync
+    /// of the body), and clears its notice once this becomes `None`.
+    pub fn set_aside_notice(&self) -> Option<String> {
+        let n = self.set_aside.len();
+        (n > 0).then(|| {
+            format!(
+                "{n} {} out of step with the text. {} preserved and saved with the document, \
+                 and {} re-attached if the text returns.",
+                plural(
+                    n,
+                    "annotation (alternatives or ghost) is",
+                    "annotations (alternatives or ghosts) are"
+                ),
+                plural(n, "It is", "They are"),
+                plural(n, "is", "are"),
+            )
+        })
     }
 
     /// The `.md` text to write to disk: the body followed by the annotation
@@ -401,6 +439,7 @@ impl DocumentSession {
             reattached,
             set_aside: self.set_aside.len(),
             warning,
+            notice: self.set_aside_notice(),
         })
     }
 
@@ -541,18 +580,20 @@ impl Opened {
             "body": self.body,
             "warning": self.warning,
             "unresolved": self.unresolved,
+            "kind": self.kind,
         })
     }
 }
 
 impl EditOutcome {
-    /// `{ detached, reattached, setAside, warning }` for JavaScript.
+    /// `{ detached, reattached, setAside, warning, notice }` for JavaScript.
     pub fn to_json(&self) -> Value {
         json!({
             "detached": self.detached,
             "reattached": self.reattached,
             "setAside": self.set_aside,
             "warning": self.warning,
+            "notice": self.notice,
         })
     }
 }
@@ -605,7 +646,7 @@ pub fn document_counts() -> JsValue {
 }
 
 /// Mirrors a surface edit (`start`, `deletedLength`, `insertedText`, UTF-16)
-/// in the model. Returns `{ detached, reattached, setAside, warning }`; throws
+/// in the model. Returns `{ detached, reattached, setAside, warning, notice }`; throws
 /// if the edit does not fit the model, in which case call
 /// [`sync_document_body`].
 #[wasm_bindgen]
@@ -616,11 +657,20 @@ pub fn apply_edit(start: u32, deleted_len: u32, inserted: &str) -> Result<JsValu
 }
 
 /// Replaces the model body with `text` if it differs and re-anchors; returns
-/// `{ changed, unresolved }`.
+/// `{ changed, unresolved, notice }` (`notice` as for [`apply_edit`]).
 #[wasm_bindgen]
 pub fn sync_document_body(text: &str) -> JsValue {
-    let synced = with_session(|s| s.sync_body(text));
-    to_js(&json!({ "changed": synced.changed, "unresolved": synced.unresolved }))
+    to_js(&with_session(|s| sync_json(s, text)))
+}
+
+/// [`DocumentSession::sync_body`] plus the current notice, as JSON.
+pub fn sync_json(session: &mut DocumentSession, text: &str) -> Value {
+    let synced = session.sync_body(text);
+    json!({
+        "changed": synced.changed,
+        "unresolved": synced.unresolved,
+        "notice": session.set_aside_notice(),
+    })
 }
 
 /// The body as the model holds it (should always equal the surface text).
@@ -919,6 +969,33 @@ mod tests {
             " Drop this sentence."
         );
         assert_eq!(parsed.annotations.overflow, "stashed");
+    }
+
+    #[test]
+    fn open_kind_and_notices_follow_the_set_aside_count() {
+        let mut session = DocumentSession::new();
+        assert_eq!(session.open(&annotated_source()).kind, None);
+        assert_eq!(session.set_aside_notice(), None);
+        let malformed = "x\n\n```terraphim-alternatives\n{\n```\n";
+        assert_eq!(session.open(malformed).kind, Some("malformed"));
+
+        // Same length, so the stored offsets still point at the fixed text.
+        let source = annotated_source().replacen("an eraser", "an erasXr", 1);
+        let opened = session.open(&source);
+        assert_eq!(opened.kind, Some("set-aside"));
+        let notice = session.set_aside_notice().expect("one item set aside");
+        assert!(notice.starts_with("1 annotation"), "{notice}");
+        let outcome = session.apply_edit(15, 1, "e").unwrap();
+        assert_eq!(outcome.reattached, vec!["s1".to_string()]);
+        assert_eq!(outcome.notice, None);
+
+        let json = sync_json(&mut session, "Pass me an eraXer. Drop this sentence.");
+        assert_eq!(json["changed"], true);
+        assert_eq!(json["unresolved"], 1);
+        assert!(json["notice"].as_str().unwrap().contains("preserved"));
+        let json = sync_json(&mut session, "Pass me an eraser. Drop this sentence.");
+        assert_eq!(json["unresolved"], 0);
+        assert!(json["notice"].is_null());
     }
 
     #[test]

@@ -278,3 +278,45 @@ body[data-mode="write-on"] .markdown-input.te-surface:empty::before {
 @media (prefers-reduced-motion: reduce) {
     .te-chrome-control { transition: none; }
 }
+
+/* ---- Document notice (issue #6): `.te-warning`, created by editor.js ----
+   Plain mode keeps the browser default; in Write_On the notice sits on a
+   panel in dim text so it reads against the dark page without shouting. */
+
+body[data-mode="write-on"] .te-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin: 0 auto 1rem;
+    max-width: var(--te-measure, 42rem);
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: var(--te-radius-popover);
+    background: var(--te-color-panel);
+    color: var(--te-color-text-dim);
+    font-family: var(--te-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+body[data-mode="write-on"] .te-warning[hidden] {
+    display: none;
+}
+
+body[data-mode="write-on"] .te-warning-text {
+    flex: 1;
+}
+
+body[data-mode="write-on"] .te-warning-dismiss {
+    padding: 0 0.25rem;
+    border: none;
+    background: transparent;
+    color: var(--te-color-text-dim);
+    font: inherit;
+    cursor: pointer;
+}
+
+body[data-mode="write-on"] .te-warning-dismiss:hover,
+body[data-mode="write-on"] .te-warning-dismiss:focus-visible {
+    color: var(--te-color-accent);
+}

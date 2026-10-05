@@ -20,7 +20,8 @@
  * Events are CustomEvents dispatched from the chrome root inside #app; they
  * bubble, so listen on `document`. `detail.editor` is the MarkdownEditor.
  * te:save is cancelable: call preventDefault() to stop the fallback call to
- * editor.saveDocument(). te:open carries no payload because
+ * editor.saveDocument(), which dispatches te:saved {text} with the saved
+ * document (save() also returns it). te:open carries no payload because
  * editor.openDocument(text) needs the text; the owner of the open flow
  * (issue #6) reads the file and then calls openDocument() followed by
  * chrome.documentChanged(). Every mode change dispatches
@@ -292,11 +293,17 @@ class WriteOnChrome {
     return ev;
   }
 
+  /**
+   * Dispatch te:save; unless it is cancelled, call editor.saveDocument() and
+   * return the saved text (null when cancelled or unavailable). The editor
+   * also dispatches te:saved with the text.
+   */
   save() {
     const ev = this.emit('te:save', {}, true);
     if (!ev.defaultPrevented && typeof this.editor.saveDocument === 'function') {
-      this.editor.saveDocument();
+      return this.editor.saveDocument();
     }
+    return null;
   }
 
   openShortcuts() {
