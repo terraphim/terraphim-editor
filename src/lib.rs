@@ -11,6 +11,9 @@ pub use document::{
     DocumentSession, Opened, SetAside, Synced,
 };
 
+mod lab;
+pub use lab::{lab_actions, lab_mark};
+
 const INITIAL_MARKDOWN: &str = r#"# Welcome to Markdown Editor!
 
 This is a simple markdown editor built with:

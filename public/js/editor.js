@@ -1171,6 +1171,7 @@ class MarkdownEditor {
     this.createdNodes = [];
     if (this.chrome) this.chrome.destroy();
     if (this.indicators) this.indicators.destroy();
+    if (this.lab) this.lab.destroy();
     if (this.decorations) this.decorations.destroy();
     if (this.surface) this.surface.destroy();
     this.warningListeners.clear();
@@ -1214,6 +1215,10 @@ class MarkdownEditor {
       this.decorations = new window.TeDecorationRegistry(this.surface);
       if (typeof window.TeIndicatorLayer === 'function') {
         this.indicators = new window.TeIndicatorLayer(this, { signal: this.abortController.signal });
+      }
+      // The Lab popover and its marks (public/js/lab.js, issue #14).
+      if (typeof window.TeLabPopover === 'function') {
+        this.lab = new window.TeLabPopover(this, { signal: this.abortController.signal });
       }
     }
   }
