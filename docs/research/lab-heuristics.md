@@ -35,7 +35,7 @@ weakness = 0.35 * hedge_filler_density      (KG lists, normalised to the doc max
 Why this pair:
 - **One score drives both features.** The weakest-sentence mark and the sentence tier of the trim use the same `weakness` score. A sentence the Lab marks as weak is therefore one of the first whole sentences a trim fades, and the two features never contradict each other. The one exception is a sentence holding inline code: it can be marked, but trim never fades it (§5.1). In `zed-plugin-fit` the third-weakest sentence is such a case.
 - **Deterministic and explainable.** Each mark and each cut has a `reason` the UI can show (`filler "quite"`, `aside "which"`, `weak sentence`).
-- **Mapped onto `terraphim_automata` already.** The lists are KG markdown files, and the matcher uses the same automaton configuration as `terraphim_automata::find_matches`. The one gap is the word-boundary filter (§3.3).
+- **Built on `terraphim_automata`.** The lists are KG markdown files, and the prototype parses and matches them with `terraphim_automata` 1.22 directly. It does not re-implement the automaton or the word-boundary rule (§3.3).
 - **The light levels behave like the demo.** At ~10% the cut is mostly faded words and asides, not whole sentences, which is what the demo shows ("Faded words would go", R-8.4). Code-dense prose is the exception: with fewer clause candidates, `zed-plugin-fit` already fades two short whole sentences at 10% (§6.4).
 
 ## 2. Constraints taken from the spec
@@ -77,20 +77,28 @@ Recommendation:
 
 ### 3.3 How the matcher maps to `terraphim_automata`
 
-`terraphim_automata` 1.21.0 (`src/matcher.rs`) builds its automaton in `find_matches` like this:
+The prototype depends on `terraphim_automata` 1.22 from the private `terraphim` registry and uses it directly. It does not re-implement any of the matching:
 
-```rust
-AhoCorasick::builder()
-    .match_kind(MatchKind::LeftmostLongest)
-    .ascii_case_insensitive(true)
-```
+| Step | `terraphim_automata` 1.22 API |
+|---|---|
+| Parse each KG file's `synonyms::` line | `parse_markdown_directives_str` |
+| Load the thesaurus the prototype emits (`out/thesaurus.json`) | `load_thesaurus_from_json` |
+| Compile once per list (Aho-Corasick, `LeftmostLongest`, ASCII case-insensitive) | `CompiledMatcher::from_thesaurus(&thesaurus, MatcherOptions::default())` |
+| Positioned, non-overlapping, whole-word matches | `CompiledMatcher::find_matches(text, true)` |
 
-It applies **no word-boundary check**, and it drops patterns shorter than 2 bytes (`MIN_FIND_PATTERN_LENGTH`). The prototype uses the same builder settings (crate `aho-corasick` 1.x, which is what `terraphim_automata` depends on) and adds two things:
+**Word boundaries.** `find_matches` already drops matches inside longer words (`is_word_boundary_match` in `src/matcher.rs`, used by `CompiledMatcher` too). Without that check `very` would match inside `every`, `just` inside `justice` and `so` inside `also`. The test `matcher_respects_word_boundaries` asserts this, now against the library. The rule treats an ASCII letter, digit or `_` as a word continuation, and any non-ASCII character as a boundary. The earlier hand-written filter in the prototype used Unicode `is_alphanumeric`, so the two differ only when a match touches a non-ASCII letter (a term next to `é`, for example). On the fixtures this changes nothing: all 128 KG hits (positions, terms and concepts, per document and per sentence) are identical before and after the switch, and every `out/*.md` is byte-identical. No upstream change is needed.
 
-1. **A word-boundary post-filter.** A match is kept only if the characters before and after it are not word characters, checked with `char` iteration rather than raw bytes, because the fixtures contain `’`, `“` and `—`. Without the filter, `very` matches inside `every`, `just` inside `justice` and `so` inside `also` (see the test `matcher_respects_word_boundaries`). When this moves to `terraphim_automata`, the Lab should call `find_matches(text, &thesaurus, true)` and filter `Matched.pos` the same way. An optional `whole_words` flag in `terraphim_automata` would be the cleaner fix upstream.
-2. **Curly-apostrophe variants.** `ascii_case_insensitive` does not treat `’` and `'` as equal, so each term containing `'` is also added with `’`. Normalising the text before matching would be the alternative.
+What stays in the prototype is data preparation, not matching:
 
-All list entries are at least 2 bytes long, so `MIN_FIND_PATTERN_LENGTH` never drops one (this is checked by a test).
+1. **Curly-apostrophe variants.** ASCII case folding does not treat `’` and `'` as equal, so each term containing `'` is also added to the thesaurus with `’` (test `matcher_handles_curly_apostrophes`). Normalising the text before matching would be the alternative.
+2. **Minimum length.** `MatcherBuilder` rejects patterns shorter than 2 bytes (`DEFAULT_MIN_PATTERN_LENGTH`) instead of skipping them, so the loader drops them first. All list entries are at least 2 bytes long, so none is dropped (this is checked by a test).
+3. **Deterministic thesaurus JSON.** Keys are sorted and a term listed under two concepts keeps the first, so `out/thesaurus.json` is stable from run to run.
+
+**WASM.** `terraphim_automata` 1.22 builds for `wasm32-unknown-unknown` with default features (checked with `cargo check --lib --target wasm32-unknown-unknown` on the prototype), so the production Lab can use it in the editor without a feature split.
+
+**Other Lab actions.** The "Fix punctuation and typos" mark should use `terraphim_automata::replace_matches` with a typo thesaurus (misspelling as the key, correction as the `nterm`, `LinkType::PlainText`), so the corrections come from KG data rather than code. Trim's "Make the cuts" is different: it deletes byte ranges chosen by position, not by matching a term, so it stays in the span model (§5.1, §7) and does not go through `replace_matches`.
+
+**Re-anchoring.** `find_matches` returns non-overlapping matches only. Re-anchoring a span after an edit (R-9.2) may need every occurrence of an anchor, including overlapping ones. That search arrives in `terraphim_automata` 2.0 as `MatchOverlap::All` (terraphim-core#79).
 
 ## 4. Weakness ranking
 
@@ -387,19 +395,20 @@ What the UI gets from this:
 
 ```bash
 # from the repository root; the crate is outside the workspace ([workspace] table in its Cargo.toml)
+# and needs the private `terraphim` registry from ~/.cargo/config.toml for terraphim_automata 1.22
 cargo test --manifest-path research/lab-heuristics/Cargo.toml   # 22 tests, no mocks
 cargo run  --manifest-path research/lab-heuristics/Cargo.toml   # prints the table, writes research/lab-heuristics/out/
 cargo run  --manifest-path research/lab-heuristics/Cargo.toml -- README.md docs/requirements/alternative-control.md
 ```
 
-Why a Rust crate rather than Python: the production code will be Rust compiled to WASM (spec §11), the matcher is the same `aho-corasick` crate that `terraphim_automata` uses, and the byte-offset and `char`-boundary handling the UI depends on is exercised exactly as it will be in production. The only dependency is `aho-corasick`.
+Why a Rust crate rather than Python: the production code will be Rust compiled to WASM (spec §11), KG parsing and matching are `terraphim_automata` itself, and the byte-offset and `char`-boundary handling the UI depends on is exercised exactly as it will be in production. The dependencies are `terraphim_automata` 1.22 (private `terraphim` registry, configured in `~/.cargo/config.toml`) and `serde_json` for the thesaurus emitter.
 
 Layout:
 
 ```
 research/lab-heuristics/
   Cargo.toml            standalone crate, empty [workspace] table
-  src/lib.rs            word definition, KG loading and matching, sentence splitting, weakness, candidates, trim
+  src/lib.rs            word definition, KG loading (matching via terraphim_automata), sentence splitting, weakness, candidates, trim
   src/main.rs           runs the fixtures and writes out/
   tests/acceptance.rs   +/-3pp acceptance, nesting, determinism, protection, word and sentence rules, KG matching
   kg/                   lab-filler, lab-hedge, lab-hedge-phrase, lab-tone (Terraphim KG markdown)
