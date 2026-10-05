@@ -49,7 +49,10 @@
  *     "Discard" drops the draft.
  * A commit also checks that the block's original text is still at the mapped
  * range; if not, the draft goes to the notice instead of being applied.
- * Kept drafts follow later edits and stay available in both views.
+ * Kept drafts follow later edits and stay available in both views; through
+ * a text move (or its undo/redo) they follow their block, mapped with the
+ * model's move rules (mapThroughMove), and an open editor stays open when
+ * its block lies wholly inside the moved text or wholly beside it.
  * Escape never discards typed text: closing an editor whose draft differs
  * from the block puts the draft in the same notice; only "Discard" there
  * drops it.
@@ -77,17 +80,45 @@
  *   Ctrl+Enter (editing)               commit the edit
  *   Escape (editing)                   close the editor; typed text is kept
  *                                      in the drafts notice, never discarded
+ *   Alt+ArrowUp / Alt+ArrowDown        move the focused block up / down
  *   Delete                             delete the block
  *   Tab                                the focused block's action buttons
- *                                      (edit, add below, delete); Escape
- *                                      returns to the block
+ *                                      (edit, move up, move down, add
+ *                                      below, delete); Escape returns to
+ *                                      the block
  *   Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y      undo / redo (the surface history)
  *
- * There is deliberately no "move block" command: moving text through the
- * edit path is a deletion plus an insertion, and the span model releases
- * ghosts inside deleted text (as it does for cut and paste), so a move would
- * lose them. Reordering needs a move operation in the model first (#44;
- * see docs/design/blocks-view.md, follow-ups).
+ * Alt+Arrow is handled on a focused card only: never inside a block editor
+ * (Option+Arrow moves the caret there on macOS) and never on the text
+ * surface, whose own Alt+Arrow keys (#9) listen on the surface root, which
+ * is hidden while the Blocks view shows.
+ *
+ * Moving blocks (#58)
+ * -------------------
+ * moveBlock(index, 'up' | 'down') swaps a block with its neighbour through
+ * MarkdownEditor.moveRange, the model-level move (#44), so the spans and
+ * ghosts inside the block travel with it; it never falls back to a deletion
+ * plus an insertion. Block i's range is its text plus its trailing
+ * separator, [start, next block start or end of text); down moves it to the
+ * start of block i + 2 (or the end of the text), up moves it to the start of
+ * block i - 1. A pure move carries each block's trailing separator with it,
+ * so when the two separators differ (the last block has no trailing blank
+ * line, or a heading is followed by a single newline) whitespace-only edits
+ * put them back in place: the gap between the pair stays between the pair
+ * and the document keeps its trailing text. A gap that would separate two
+ * blocks without a blank line becomes one blank line. The result is
+ * simulated first and must parse into the same blocks in the new order, or
+ * the move is refused. A fix-up that would edit inside a span or ghost
+ * (mapped through the move) refuses the move too, naming it, before
+ * anything changes (fixUpBlocker). The move and its fix-ups are folded into ONE undo
+ * step (EditorSurface.squashHistory), whose undo replays the move in the
+ * model as a move. A move the model refuses (it would split a span or ghost,
+ * typically a ghost across a block boundary) changes nothing and its message
+ * is shown in the Blocks notice region (role="status", aria-live). The
+ * first block has no Move up button and the last no Move down; the keys are
+ * no-ops there. An open block editor is committed first, as for every other
+ * structural action, so a draft is applied or (if its block changed) kept in
+ * the drafts notice, never lost. Focus follows the moved card.
  *
  * Events: every view change dispatches a bubbling `te:view-change`
  * { view: 'text' | 'blocks', editor } from the blocks container.
@@ -375,7 +406,41 @@ class BlocksView {
     addIcon.setAttribute('aria-hidden', 'true');
     add.append(addIcon, document.createTextNode(' Add paragraph'));
     this.listen(add, 'click', () => this.insertBlockAfter(this.model.blocks.length - 1));
-    container.append(list, add);
+    // Messages about refused actions (a move the model would not make). The
+    // live region is always rendered (a region that appears together with
+    // its text is not reliably announced); only the message box inside it
+    // is hidden when there is nothing to say.
+    const region = document.createElement('div');
+    region.className = 'te-blocks-notice-region';
+    region.setAttribute('role', 'status');
+    region.setAttribute('aria-live', 'polite');
+    const notice = document.createElement('div');
+    notice.className = 'te-blocks-notice';
+    const noticeText = document.createElement('p');
+    noticeText.className = 'te-blocks-notice-text';
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'te-blocks-notice-dismiss';
+    dismiss.setAttribute('aria-label', 'Dismiss message');
+    dismiss.title = 'Dismiss message';
+    // In the tab order only while a message shows.
+    dismiss.tabIndex = -1;
+    const dismissIcon = document.createElement('i');
+    dismissIcon.className = 'fa-solid fa-xmark';
+    dismissIcon.setAttribute('aria-hidden', 'true');
+    dismiss.appendChild(dismissIcon);
+    this.listen(dismiss, 'click', () => {
+      this.showNotice(null);
+      this.setCurrent(this.focusIndex, true);
+    });
+    notice.append(noticeText, dismiss);
+    notice.hidden = true;
+    region.appendChild(notice);
+    this.noticeRegion = region;
+    this.noticeElement = notice;
+    this.noticeText = noticeText;
+    this.noticeDismiss = dismiss;
+    container.append(region, list, add);
     root.parentNode.insertBefore(container, root.nextSibling);
 
     // Kept drafts: above the surface and the blocks, visible in both views.
@@ -400,6 +465,14 @@ class BlocksView {
     this.addButton = add;
 
     this.listen(list, 'keydown', (e) => this.onKeyDown(e));
+    // A move button pressed while a block editor is open must not blur it
+    // first: the blur would commit and rebuild the cards under the pointer,
+    // and the click would be lost. moveBlock commits the editor itself.
+    this.listen(list, 'mousedown', (e) => {
+      if (this.editing && e.target.closest('.te-block-action[data-action="up"], .te-block-action[data-action="down"]')) {
+        e.preventDefault();
+      }
+    });
     this.listen(list, 'click', (e) => this.onClick(e));
     this.listen(list, 'dblclick', (e) => {
       const card = e.target.closest('.te-block');
@@ -468,9 +541,9 @@ class BlocksView {
     const label = BLOCK_LABELS[block.type] + (block.level ? ` ${block.level}` : '');
     card.setAttribute(
       'aria-label',
-      `${label}, block ${index + 1} of ${total}. Enter to edit, Shift+Enter to add a paragraph below, Delete to remove, Tab for actions.`,
+      `${label}, block ${index + 1} of ${total}. Enter to edit, Shift+Enter to add a paragraph below, Alt+Up or Alt+Down to move, Delete to remove, Tab for actions.`,
     );
-    card.setAttribute('aria-keyshortcuts', 'Enter F2 Shift+Enter Delete');
+    card.setAttribute('aria-keyshortcuts', 'Enter F2 Shift+Enter Alt+ArrowUp Alt+ArrowDown Delete');
 
     const head = document.createElement('div');
     head.className = 'te-block-head';
@@ -479,13 +552,15 @@ class BlocksView {
     tag.textContent = block.type === 'heading' ? `H${block.level}` : BLOCK_LABELS[block.type];
     const actions = document.createElement('span');
     actions.className = 'te-block-actions';
-    const action = (name, label, icon, keys) => {
+    const action = (name, label, icon, keys, hidden = false) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'te-block-action';
       b.dataset.action = name;
+      // The first block cannot move up nor the last move down: no button.
+      b.hidden = hidden;
       // Roving tabindex: only the focused card's actions are in the tab order.
-      b.tabIndex = index === this.focusIndex ? 0 : -1;
+      b.tabIndex = index === this.focusIndex && !hidden ? 0 : -1;
       b.setAttribute('aria-label', label);
       b.setAttribute('aria-keyshortcuts', keys);
       b.title = label;
@@ -496,6 +571,8 @@ class BlocksView {
       actions.appendChild(b);
     };
     action('edit', 'Edit block (Enter)', 'fa-solid fa-pen', 'Enter F2');
+    action('up', 'Move block up (Alt+Up)', 'fa-solid fa-arrow-up', 'Alt+ArrowUp', index === 0);
+    action('down', 'Move block down (Alt+Down)', 'fa-solid fa-arrow-down', 'Alt+ArrowDown', index === total - 1);
     action('insert', 'Add paragraph below (Shift+Enter)', 'fa-solid fa-plus', 'Shift+Enter');
     action('delete', 'Delete block (Delete)', 'fa-regular fa-trash-can', 'Delete');
     head.append(tag, actions);
@@ -538,7 +615,7 @@ class BlocksView {
     this.focusIndex = i;
     cards.forEach((c, k) => {
       c.tabIndex = k === i ? 0 : -1;
-      for (const b of c.querySelectorAll('.te-block-action')) b.tabIndex = k === i ? 0 : -1;
+      for (const b of c.querySelectorAll('.te-block-action')) b.tabIndex = k === i && !b.hidden ? 0 : -1;
     });
     // Native focus scrolls the card into view only when it is off screen.
     if (focus) cards[i].focus();
@@ -666,7 +743,34 @@ class BlocksView {
   static replacesWhole(change) {
     const e = change.edit;
     const oldLength = change.text.length - e.insertedText.length + e.deletedLength;
-    return change.source === 'open' || (e.start === 0 && e.deletedLength === oldLength && oldLength > 0);
+    if (change.source === 'open') return true;
+    // A text move rewrites a region (possibly all of it) but keeps every
+    // character: it is mapped as a move, never as a replacement.
+    if (e.move) return false;
+    return e.start === 0 && e.deletedLength === oldLength && oldLength > 0;
+  }
+
+  /**
+   * Map the range [a, b) through a text move { start, end, to } (pre-move
+   * offsets) with the model's rules (crates/terraphim_alternatives
+   * document.rs, "Moves"): inside the moved range it travels with the text,
+   * between the range and the destination it shifts by the moved length,
+   * elsewhere it is unchanged. Returns [a', b'], or null when the range
+   * spans more than one of those zones. A point is the range [x, x].
+   */
+  static mapThroughMove(move, a, b) {
+    const { start, end, to } = move;
+    const len = end - start;
+    const down = to > end;
+    const lo = down ? end : to;
+    const hi = down ? to : start;
+    const inside = down ? to - end : to - start;
+    const between = down ? -len : len;
+    const inZone = (zs, ze) => a >= zs && (a === b ? a < ze : b <= ze);
+    if (inZone(start, end)) return [a + inside, b + inside];
+    if (inZone(lo, hi)) return [a + between, b + between];
+    if (b <= Math.min(start, to) || a >= Math.max(end, to)) return [a, b];
+    return null;
   }
 
   /**
@@ -677,6 +781,14 @@ class BlocksView {
   mapEditing(edit, whole) {
     if (whole) return false;
     const ed = this.editing;
+    if (edit.move) {
+      // A move (or its undo/redo) keeps the block when it lies wholly in
+      // one zone of the move; otherwise the draft is kept in the notice.
+      const mapped = BlocksView.mapThroughMove(edit.move, ed.start, ed.start + ed.original.length);
+      if (!mapped) return false;
+      ed.start = mapped[0];
+      return true;
+    }
     const a = edit.start;
     const b = a + edit.deletedLength;
     const s = ed.start;
@@ -695,6 +807,9 @@ class BlocksView {
     for (const d of this.drafts) {
       if (d.anchor === null) continue;
       if (whole) d.anchor = null;
+      // A text move (Blocks move, or its undo/redo): the anchor follows its
+      // block, as the model's annotations do.
+      else if (edit.move) d.anchor = BlocksView.mapThroughMove(edit.move, d.anchor, d.anchor)[0];
       else if (b <= d.anchor) d.anchor += delta;
       else if (a < d.anchor) d.anchor = a;
     }
@@ -1046,6 +1161,174 @@ class BlocksView {
     this.setCurrent(this.focusIndex, true);
   }
 
+  /**
+   * Plan swapping blocks j and j + 1 of `model` (parsed from `text`) by
+   * moving block `index` (j for down, j + 1 for up). Pure: returns
+   * { range: [start, end, to], fixes, text, movedStart } where `fixes` are
+   * whitespace edits [{ at, from, to }] in the post-move text (later offset
+   * first) that put the separators back in place, `text` the predicted
+   * result and `movedStart` where the moved block starts; { error } when
+   * the swapped blocks would not parse back as the same blocks; or null
+   * when there is no neighbour in that direction.
+   */
+  static planMove(model, text, index, dir) {
+    const blocks = model.blocks;
+    const j = dir < 0 ? index - 1 : index;
+    const p = blocks[j];
+    const q = blocks[j + 1];
+    if (!p || !q) return null;
+    const r = blocks[j + 2];
+    const pairEnd = r ? r.start : text.length;
+    const range = dir < 0 ? [q.start, pairEnd, p.start] : [p.start, q.start, pairEnd];
+    // A pure move gives Q.text Q.sep P.text P.sep; the separators are put
+    // back where they were: P.sep between the pair, Q.sep after it.
+    const blank = (sep) => /\n[ \t\r]*\n/.test(sep);
+    const between = blank(p.sep) ? p.sep : '\n\n';
+    const after = !r || blank(q.sep) ? q.sep : '\n\n';
+    const base = p.start;
+    const predicted = text.slice(0, base) + q.text + between + p.text + after + text.slice(pairEnd);
+    const expected = blocks.map((b) => b.text);
+    expected[j] = q.text;
+    expected[j + 1] = p.text;
+    const got = BlocksView.parse(predicted);
+    if (got.lead !== model.lead || got.blocks.length !== expected.length || got.blocks.some((b, k) => b.text !== expected[k])) {
+      return { error: 'Block not moved: it would merge with the block next to it.' };
+    }
+    const fixes = [];
+    const sepAfter = base + q.text.length + q.sep.length + p.text.length;
+    if (p.sep !== after) fixes.push({ at: sepAfter, from: p.sep, to: after });
+    if (q.sep !== between) fixes.push({ at: base + q.text.length, from: q.sep, to: between });
+    const movedStart = dir < 0 ? base : base + q.text.length + between.length;
+    return { range, fixes, text: predicted, movedStart };
+  }
+
+  /**
+   * Move block `index` one place 'up' or 'down' (see "Moving blocks" in the
+   * header). Returns true when it moved; false at the first or last block,
+   * when there is no such block, or when the move is refused (the message
+   * is then in the notice region and nothing changed). `options.focusAction`
+   * puts focus on that action button of the moved card instead of the card.
+   */
+  moveBlock(index, direction, { focusAction = null } = {}) {
+    if (this.destroyed) return false;
+    const dir = direction === 'up' || direction < 0 ? -1 : 1;
+    let i = index;
+    if (this.editing) {
+      // Apply (or keep, if its block changed) the open draft first; that
+      // can add or remove blocks before the one being moved.
+      const ed = this.editing;
+      const before = BlocksView.parse(this.surface.getText()).blocks.length;
+      this.commitEdit({ rerender: false });
+      const after = BlocksView.parse(this.surface.getText()).blocks.length;
+      if (ed.index < i || (ed.isNew && ed.index <= i)) i += after - before;
+    }
+    const text = this.surface.getText();
+    this.model = BlocksView.parse(text);
+    const count = this.model.blocks.length;
+    const target = i + dir;
+    const plan = i >= 0 && i < count ? BlocksView.planMove(this.model, text, i, dir) : null;
+    if (!plan) {
+      // First block up, last block down, or no such block: a no-op.
+      if (this.isActive()) {
+        this.render(false);
+        if (count) this.setCurrent(Math.max(0, Math.min(i, count - 1)), true);
+      }
+      return false;
+    }
+    let refused = plan.error || this.fixUpBlocker(plan);
+    if (!refused) {
+      let steps = 0;
+      this.applying = true;
+      try {
+        // The model validates first: a refusal throws and changes nothing.
+        const moved = this.editor.moveRange(...plan.range);
+        if (moved.moved) steps += 1;
+        for (const fix of plan.fixes) {
+          const d = window.EditorSurface.diff(fix.from, fix.to);
+          this.surface.replaceRange(fix.at + d.start, fix.at + d.start + d.deletedLength, d.insertedText, {
+            source: 'blocks',
+            selectStart: plan.movedStart,
+          });
+          steps += 1;
+        }
+        // The move and its separator fix-ups are one undo step.
+        if (steps > 1) this.surface.squashHistory(steps, 'move');
+        this.surface.setSelectionOffsets(plan.movedStart, plan.movedStart);
+      } catch (err) {
+        refused = 'Block not moved: ' + String(err && err.message ? err.message : err);
+        if (steps > 0) {
+          // A fix-up failed after the move: take back what was recorded.
+          if (steps > 1) this.surface.squashHistory(steps, 'move');
+          this.surface.undo();
+        }
+      } finally {
+        this.applying = false;
+      }
+    }
+    this.showNotice(refused);
+    if (this.isActive()) {
+      this.render(false);
+      const at = refused ? i : target;
+      const card = this.cards()[at];
+      const button = focusAction && card ? card.querySelector(`.te-block-action[data-action="${focusAction}"]`) : null;
+      this.setCurrent(at, !(button && !button.hidden));
+      if (button && !button.hidden) button.focus();
+    }
+    return !refused;
+  }
+
+  /**
+   * The separator fix-ups of `plan` are ordinary edits, which the model
+   * would apply to any span or ghost they touch (trimming or growing it)
+   * instead of refusing. So before anything changes, every annotation is
+   * mapped through the planned move and each fix-up is checked against it:
+   * an insertion strictly inside an item, or a deletion overlapping one,
+   * refuses the whole move. Returns the refusal message naming the item, or
+   * null. Items the move itself would split are left to moveRange, which
+   * refuses them by name.
+   */
+  fixUpBlocker(plan) {
+    if (!plan.fixes.length || typeof this.editor.annotations !== 'function') return null;
+    let annotations;
+    try {
+      annotations = this.editor.annotations();
+    } catch (err) {
+      return null;
+    }
+    const [start, end, to] = plan.range;
+    const move = { start, end, to };
+    const items = [...(annotations.spans || []), ...(annotations.ghosts || [])];
+    for (const item of items) {
+      const a = item.anchor.start;
+      const b = item.anchor.end;
+      let mapped = BlocksView.mapThroughMove(move, a, b);
+      if (!mapped) {
+        // A ghost holding both the range and the destination keeps its
+        // extent; anything else straddles and moveRange refuses it.
+        if (a <= Math.min(start, to) && b >= Math.max(end, to)) mapped = [a, b];
+        else continue;
+      }
+      const [gs, ge] = mapped;
+      for (const fix of plan.fixes) {
+        const d = window.EditorSurface.diff(fix.from, fix.to);
+        const at = fix.at + d.start;
+        const touches = d.deletedLength === 0 ? gs < at && at < ge : at < ge && at + d.deletedLength > gs;
+        if (touches) {
+          return `Block not moved: restoring the blank line between the blocks would change the text of "${item.id}"; move whole spans and ghosts only.`;
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Show `message` in the notice region, or hide it (null). */
+  showNotice(message) {
+    if (!this.noticeElement) return;
+    this.noticeElement.hidden = !message;
+    this.noticeDismiss.tabIndex = message ? 0 : -1;
+    this.noticeText.textContent = message || '';
+  }
+
   apply(from, to, insert) {
     if (this.editing) this.commitEdit({ rerender: false });
     this.applying = true;
@@ -1099,6 +1382,8 @@ class BlocksView {
     switch (button.dataset.action) {
       case 'edit': this.editBlock(index); break;
       case 'insert': this.insertBlockAfter(index); break;
+      case 'up': this.moveBlock(index, 'up', { focusAction: 'up' }); break;
+      case 'down': this.moveBlock(index, 'down', { focusAction: 'down' }); break;
       case 'delete': this.deleteBlock(index); break;
       default: break;
     }
@@ -1126,7 +1411,13 @@ class BlocksView {
     if (!card || e.target !== card) return;
     const index = Number(card.dataset.index);
     const key = e.key;
-    if (mod && !e.altKey) {
+    if (e.altKey && !mod && !e.shiftKey && (key === 'ArrowUp' || key === 'ArrowDown')) {
+      e.preventDefault();
+      this.moveBlock(index, key === 'ArrowUp' ? 'up' : 'down');
+      return;
+    }
+    if (e.altKey) return;
+    if (mod) {
       const k = key.toLowerCase();
       if (k === 'z' && !e.shiftKey) {
         e.preventDefault();
