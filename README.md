@@ -53,13 +53,17 @@ wasm-pack test --chrome
 
 ## Building for Production
 
-Create a production build:
+`trunk build`, `trunk build --release` and `trunk serve` write to `target/trunk-dist`, which is not tracked.
+
+## Release build
+
+The repository keeps a deliberate release copy of the build in `dist/`. Development builds never touch it. Regenerate it on purpose with:
 
 ```bash
-trunk build --release
+scripts/release-dist.sh
 ```
 
-The output will be in the `dist` directory.
+This runs `trunk build --release --dist dist` and adds the embeddable bundle (`terraphim-editor.min.js`, `terraphim-editor.min.css`, `example.html`; needs `terser` and `cleancss`). Review `git status dist` and commit the result.
 
 ## Contributing
 
