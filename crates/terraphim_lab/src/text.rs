@@ -5,6 +5,13 @@
 //! offset into the body exactly as the caller passed it (hard-wrapped lines,
 //! `\r\n` line endings and all), so a mark computed here can be converted to
 //! UTF-16 and handed to the editor without an offset map.
+//!
+//! Markdown structure (what is prose and what is protected) comes from the
+//! `markdown` crate's mdast; this module does not re-implement block or
+//! inline parsing.
+
+use markdown::mdast::{self, Node};
+use markdown::{Constructs, ParseOptions};
 
 /// A paragraph-level block of prose (a paragraph or a list item).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,175 +187,126 @@ pub(crate) fn overlaps(ranges: &[(usize, usize)], start: usize, end: usize) -> b
     ranges.get(i).is_some_and(|r| r.0 < end)
 }
 
-/// Byte length of a list marker (`- `, `* `, `+ `, `12. `, `3) `) at the start
-/// of an already left-trimmed line, including the following space.
-fn list_marker_len(t: &str) -> Option<usize> {
-    let b = t.as_bytes();
-    if b.len() >= 2 && matches!(b[0], b'-' | b'*' | b'+') && b[1] == b' ' {
-        // `- [ ] ` task-list boxes are part of the marker.
-        for task in ["[ ] ", "[x] ", "[X] "] {
-            if t[2..].starts_with(task) {
-                return Some(2 + task.len());
+/// Parse options: GitHub-flavoured Markdown plus front matter, the dialect
+/// the editor writes.
+fn parse_options() -> ParseOptions {
+    ParseOptions {
+        constructs: Constructs {
+            frontmatter: true,
+            ..Constructs::gfm()
+        },
+        ..ParseOptions::gfm()
+    }
+}
+
+/// Byte range of a node in the original body. `markdown` reports positions
+/// as byte offsets into the string it parsed.
+fn span(node: &Node) -> Option<(usize, usize)> {
+    node.position().map(|p| (p.start.offset, p.end.offset))
+}
+
+/// True for a link whose visible text is its destination: an autolink
+/// (`<https://...>`) or a GFM literal autolink (`https://...`, `www.x.org`,
+/// `a@b.org`). Those are protected whole.
+fn is_autolink(link: &mdast::Link, text: &str, (start, end): (usize, usize)) -> bool {
+    let source = &text[start..end];
+    !source.starts_with('[') || link.children.is_empty()
+}
+
+/// Walk the mdast, collecting prose paragraphs and protected ranges.
+fn collect(
+    node: &Node,
+    text: &str,
+    paragraphs: &mut Vec<Paragraph>,
+    protected: &mut Vec<(usize, usize)>,
+) {
+    match node {
+        // Never prose, never marked: protect the whole node and stop.
+        Node::Html(_)
+        | Node::Code(_)
+        | Node::InlineCode(_)
+        | Node::Heading(_)
+        | Node::Table(_)
+        | Node::Blockquote(_)
+        | Node::Definition(_)
+        | Node::ThematicBreak(_)
+        | Node::Image(_)
+        | Node::ImageReference(_)
+        | Node::Yaml(_)
+        | Node::Toml(_)
+        | Node::Math(_)
+        | Node::InlineMath(_)
+        | Node::FootnoteReference(_) => {
+            if let Some(r) = span(node) {
+                protected.push(r);
+            }
+            return;
+        }
+        Node::Link(link) => {
+            if let Some((start, end)) = span(node) {
+                let children_end = link.children.last().and_then(span).map(|(_, e)| e);
+                match children_end {
+                    // `[text](destination)`: the text is prose, the
+                    // `](destination)` tail is not.
+                    Some(ce) if !is_autolink(link, text, (start, end)) => {
+                        protected.push((start, start + 1));
+                        protected.push((ce, end));
+                    }
+                    _ => {
+                        protected.push((start, end));
+                        return;
+                    }
+                }
             }
         }
-        return Some(2);
-    }
-    let digits = b.iter().take_while(|c| c.is_ascii_digit()).count();
-    if (1..=9).contains(&digits)
-        && b.len() > digits + 1
-        && matches!(b[digits], b'.' | b')')
-        && b[digits + 1] == b' '
-    {
-        return Some(digits + 2);
-    }
-    None
-}
-
-fn is_heading(t: &str) -> bool {
-    let hashes = t.bytes().take_while(|&c| c == b'#').count();
-    (1..=6).contains(&hashes) && t[hashes..].chars().next().is_none_or(char::is_whitespace)
-}
-
-/// A thematic break or setext underline: three or more of one of `-`, `*`,
-/// `_`, `=`, optionally separated by spaces.
-fn is_rule_line(t: &str) -> Option<char> {
-    let first = t.chars().next()?;
-    if !matches!(first, '-' | '*' | '_' | '=') {
-        return None;
-    }
-    let mut n = 0;
-    for c in t.chars() {
-        if c == first {
-            n += 1;
-        } else if c != ' ' && c != '\t' {
-            return None;
+        Node::LinkReference(lr) => {
+            // `[text][label]`: protect the brackets and label, keep the text.
+            if let Some((start, end)) = span(node) {
+                match lr.children.last().and_then(span) {
+                    Some((_, ce)) => {
+                        protected.push((start, start + 1));
+                        protected.push((ce, end));
+                    }
+                    None => {
+                        protected.push((start, end));
+                        return;
+                    }
+                }
+            }
         }
+        Node::Paragraph(_) => {
+            if let Some((start, end)) = span(node)
+                && end > start
+            {
+                paragraphs.push(Paragraph { start, end });
+            }
+        }
+        _ => {}
     }
-    (n >= 3).then_some(first)
-}
-
-fn is_html_block(t: &str) -> bool {
-    let mut it = t.chars();
-    it.next() == Some('<')
-        && it
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '/' || c == '!')
-}
-
-/// `[label]: destination` link reference definitions.
-fn is_link_definition(t: &str) -> bool {
-    t.starts_with('[') && t.find("]:").is_some_and(|p| p > 1)
-}
-
-struct Builder {
-    paragraphs: Vec<Paragraph>,
-    protected: Vec<(usize, usize)>,
-    open: Option<Paragraph>,
-}
-
-impl Builder {
-    fn close(&mut self) {
-        if let Some(p) = self.open.take()
-            && p.end > p.start
-        {
-            self.paragraphs.push(p);
+    if let Some(children) = node.children() {
+        for child in children {
+            collect(child, text, paragraphs, protected);
         }
     }
 }
 
 impl<'a> Doc<'a> {
-    /// Analyse `text` without copying or normalising it.
+    /// Analyse `text` without copying or normalising it. Block and inline
+    /// structure comes from the `markdown` crate's mdast (GFM plus front
+    /// matter); sentences and words are segmented here, on prose only.
     pub(crate) fn parse(text: &'a str) -> Doc<'a> {
-        let mut b = Builder {
-            paragraphs: Vec::new(),
-            protected: Vec::new(),
-            open: None,
-        };
-        // (fence character, fence length) while inside a fenced block.
-        let mut fence: Option<(char, usize)> = None;
-        let mut pos = 0usize;
-        for line in text.split_inclusive('\n') {
-            let line_start = pos;
-            pos += line.len();
-            let content = line.trim_end_matches(['\n', '\r']);
-            let content_end = line_start + content.len();
-            let trimmed = content.trim_start();
-            let indent = content.len() - trimmed.len();
-
-            if let Some((fc, flen)) = fence {
-                b.protected.push((line_start, content_end));
-                let run = trimmed.chars().take_while(|&c| c == fc).count();
-                if run >= flen && trimmed[run * fc.len_utf8()..].trim().is_empty() {
-                    fence = None;
-                }
-                continue;
-            }
-            if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
-                b.close();
-                let fc = trimmed.chars().next().unwrap_or('`');
-                fence = Some((fc, trimmed.chars().take_while(|&c| c == fc).count()));
-                b.protected.push((line_start, content_end));
-                continue;
-            }
-            if trimmed.is_empty() {
-                b.close();
-                continue;
-            }
-            if indent >= 4 && b.open.is_none() {
-                // Indented code block.
-                b.protected.push((line_start, content_end));
-                continue;
-            }
-            if let Some(rule) = is_rule_line(trimmed) {
-                // A setext underline turns the open paragraph into a heading.
-                if matches!(rule, '=' | '-')
-                    && let Some(p) = b.open.take()
-                {
-                    b.protected.push((p.start, p.end));
-                }
-                b.close();
-                b.protected.push((line_start, content_end));
-                continue;
-            }
-            if is_heading(trimmed)
-                || trimmed.starts_with('|')
-                || trimmed.starts_with('>')
-                || is_html_block(trimmed)
-                || is_link_definition(trimmed)
-            {
-                b.close();
-                b.protected.push((line_start, content_end));
-                continue;
-            }
-            if let Some(m) = list_marker_len(trimmed) {
-                b.close();
-                b.protected.push((line_start, line_start + indent + m));
-                b.open = Some(Paragraph {
-                    start: line_start + indent + m,
-                    end: content_end,
-                });
-                continue;
-            }
-            match b.open.as_mut() {
-                Some(p) => p.end = content_end,
-                None => {
-                    b.open = Some(Paragraph {
-                        start: line_start + indent,
-                        end: content_end,
-                    })
-                }
-            }
+        let mut paragraphs = Vec::new();
+        let mut protected = Vec::new();
+        // Plain Markdown (not MDX) never fails to parse; if it ever did, the
+        // document would simply have no prose and so no marks.
+        if let Ok(root) = markdown::to_mdast(text, &parse_options()) {
+            collect(&root, text, &mut paragraphs, &mut protected);
         }
-        b.close();
-
-        let mut protected = b.protected;
-        for p in &b.paragraphs {
-            inline_protected(text, p.start, p.end, &mut protected);
-        }
+        paragraphs.sort_unstable_by_key(|p| (p.start, p.end));
         let protected = merge(protected);
 
         let mut sentences = Vec::new();
-        for (para, p) in b.paragraphs.iter().enumerate() {
+        for (para, p) in paragraphs.iter().enumerate() {
             for (k, (s, e)) in split_sentences(text, p.start, p.end, &protected)
                 .into_iter()
                 .enumerate()
@@ -363,7 +321,7 @@ impl<'a> Doc<'a> {
         }
         Doc {
             text,
-            paragraphs: b.paragraphs,
+            paragraphs,
             sentences,
             protected,
             words: word_spans(text),
@@ -427,75 +385,6 @@ impl<'a> Doc<'a> {
         let (s, e) = (start + lead, start + lead + trimmed.len());
         if e > s && self.word_count(s, e) > 0 {
             out.push((s, e));
-        }
-    }
-}
-
-/// Protect inline code spans, link destinations and bare URLs inside one
-/// paragraph. Inline code may span line breaks within the paragraph.
-fn inline_protected(text: &str, start: usize, end: usize, out: &mut Vec<(usize, usize)>) {
-    let slice = &text[start..end];
-    let bytes = slice.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'`' => {
-                let run = bytes[i..].iter().take_while(|&&c| c == b'`').count();
-                // Find a closing run of exactly the same length.
-                let mut j = i + run;
-                let mut closed = None;
-                while j < bytes.len() {
-                    if bytes[j] == b'`' {
-                        let r = bytes[j..].iter().take_while(|&&c| c == b'`').count();
-                        if r == run {
-                            closed = Some(j + r);
-                            break;
-                        }
-                        j += r;
-                    } else {
-                        j += 1;
-                    }
-                }
-                match closed {
-                    Some(e) => {
-                        out.push((start + i, start + e));
-                        i = e;
-                    }
-                    None => i += run,
-                }
-            }
-            b']' if bytes.get(i + 1) == Some(&b'(') => {
-                // Link destination: `](...)`, balanced parentheses.
-                let mut depth = 0i32;
-                let mut j = i + 1;
-                while j < bytes.len() {
-                    match bytes[j] {
-                        b'(' => depth += 1,
-                        b')' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        b'\n' => break,
-                        _ => {}
-                    }
-                    j += 1;
-                }
-                let e = (j + 1).min(bytes.len());
-                out.push((start + i + 1, start + e));
-                i = e;
-            }
-            b'h' if slice[i..].starts_with("http://") || slice[i..].starts_with("https://") => {
-                let len = slice[i..]
-                    .find(|c: char| c.is_whitespace() || matches!(c, '>' | ')' | '"'))
-                    .unwrap_or(slice.len() - i);
-                // A trailing full stop or comma ends the sentence, not the URL.
-                let url = slice[i..i + len].trim_end_matches(['.', ',', ';', ':']);
-                out.push((start + i, start + i + url.len()));
-                i += len.max(1);
-            }
-            _ => i += 1,
         }
     }
 }
@@ -625,7 +514,7 @@ mod tests {
         assert!(prot.contains(&"# Heading here"));
         assert!(prot.contains(&"`code. Here`"));
         assert!(prot.iter().any(|p| p.contains("fenced. Code")));
-        assert!(prot.contains(&"| a | b |"));
+        assert!(prot.contains(&"| a | b |\n|---|---|"));
         assert!(prot.contains(&"> quoted"));
         let s: Vec<&str> = doc
             .sentences
@@ -666,7 +555,137 @@ mod tests {
         let prot: Vec<&str> = doc.protected.iter().map(|&(s, e)| &text[s..e]).collect();
         assert_eq!(
             prot,
-            vec!["(https://example.org/teh-page)", "https://x.org/a.b"]
+            vec!["[", "](https://example.org/teh-page)", "https://x.org/a.b"]
+        );
+    }
+
+    /// Prose sentences of `text`, in order.
+    fn sentences(text: &str) -> Vec<&str> {
+        let doc = Doc::parse(text);
+        doc.sentences
+            .iter()
+            .map(|s| &text[s.start..s.end])
+            .collect()
+    }
+
+    /// True when every byte of `needle` (first occurrence) is protected.
+    fn fully_protected(text: &str, needle: &str) -> bool {
+        let doc = Doc::parse(text);
+        let start = text.find(needle).expect("needle in text");
+        (start..start + needle.len()).all(|b| in_ranges(&doc.protected, b))
+    }
+
+    #[test]
+    fn multi_line_html_block_is_protected_on_every_line() {
+        let text = "Before it.\n\n<div>\nInner teh line one.\nInner line two.\n</div>\n\nAfter it.";
+        assert!(fully_protected(
+            text,
+            "<div>\nInner teh line one.\nInner line two.\n</div>"
+        ));
+        assert_eq!(sentences(text), vec!["Before it.", "After it."]);
+    }
+
+    #[test]
+    fn html_comment_spanning_lines_is_protected() {
+        let text =
+            "Before it.\n\n<!--\nA commented teh sentence.\n\nStill a comment.\n-->\n\nAfter it.";
+        assert!(fully_protected(
+            text,
+            "A commented teh sentence.\n\nStill a comment."
+        ));
+        assert_eq!(sentences(text), vec!["Before it.", "After it."]);
+    }
+
+    #[test]
+    fn pipe_less_gfm_table_is_protected() {
+        let text =
+            "Before it.\n\nName | Value\n--- | ---\nteh basically | awesome stuff\n\nAfter it.";
+        assert!(fully_protected(text, "teh basically | awesome stuff"));
+        assert!(fully_protected(text, "Name | Value"));
+        assert_eq!(sentences(text), vec!["Before it.", "After it."]);
+    }
+
+    #[test]
+    fn table_with_alignment_row_is_protected() {
+        let text = "| Left | Centre | Right |\n|:-----|:------:|------:|\n| teh | basically | stuff |\n\nAfter it.";
+        assert!(fully_protected(text, "| teh | basically | stuff |"));
+        assert!(fully_protected(text, "|:-----|:------:|------:|"));
+        assert_eq!(sentences(text), vec!["After it."]);
+    }
+
+    #[test]
+    fn setext_heading_is_protected_whole() {
+        let text = "Title words that\nwrap\n---\n\nBody text.";
+        assert!(fully_protected(text, "Title words that\nwrap\n---"));
+        assert_eq!(sentences(text), vec!["Body text."]);
+    }
+
+    #[test]
+    fn indented_code_is_protected() {
+        let text = "Before it.\n\n    teh code line one.\n    Basically code two.\n\nAfter it.";
+        assert!(fully_protected(
+            text,
+            "teh code line one.\n    Basically code two."
+        ));
+        assert_eq!(sentences(text), vec!["Before it.", "After it."]);
+    }
+
+    #[test]
+    fn nested_list_with_fenced_code_is_protected() {
+        let text = "- Outer item.\n  - Inner item.\n\n    ```\n    teh fenced. Code here\n    ```\n\n  - Last item.";
+        assert!(fully_protected(text, "teh fenced. Code here"));
+        assert_eq!(
+            sentences(text),
+            vec!["Outer item.", "Inner item.", "Last item."]
+        );
+    }
+
+    #[test]
+    fn block_quote_with_lazy_continuation_is_protected() {
+        let text = "> Quoted teh line\nlazy continuation basically.\n\nAfter it.";
+        assert!(fully_protected(
+            text,
+            "> Quoted teh line\nlazy continuation basically."
+        ));
+        assert_eq!(sentences(text), vec!["After it."]);
+    }
+
+    #[test]
+    fn autolinks_and_reference_links() {
+        let text = "Mail <https://example.org/teh> or see [the docs][ref] today.\n\n[ref]: https://example.org/teh";
+        let doc = Doc::parse(text);
+        let prot: Vec<&str> = doc.protected.iter().map(|&(s, e)| &text[s..e]).collect();
+        assert_eq!(
+            prot,
+            vec![
+                "<https://example.org/teh>",
+                "[",
+                "][ref]",
+                "[ref]: https://example.org/teh"
+            ]
+        );
+        assert_eq!(
+            sentences(text),
+            vec!["Mail <https://example.org/teh> or see [the docs][ref] today."]
+        );
+    }
+
+    #[test]
+    fn front_matter_is_protected() {
+        let text = "---\ntitle: teh basically awesome\n---\n\nBody text.";
+        assert!(fully_protected(text, "title: teh basically awesome"));
+        assert_eq!(sentences(text), vec!["Body text."]);
+    }
+
+    #[test]
+    fn mdast_offsets_are_bytes_on_multibyte_text() {
+        let text = "Caf\u{e9} \u{1d11e} `c\u{f6}de` here.\r\n\r\n# H\u{e9}ading";
+        let doc = Doc::parse(text);
+        let prot: Vec<&str> = doc.protected.iter().map(|&(s, e)| &text[s..e]).collect();
+        assert_eq!(prot, vec!["`c\u{f6}de`", "# H\u{e9}ading"]);
+        assert_eq!(
+            sentences(text),
+            vec!["Caf\u{e9} \u{1d11e} `c\u{f6}de` here."]
         );
     }
 }

@@ -17,6 +17,9 @@ ahash = { version = "0.8", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+# Markdown structure (prose vs protected ranges) from a real CommonMark/GFM
+# parser; the same crate the editor uses for its preview.
+markdown = "1.0.0-alpha.21"
 
 # criterion pulls in rayon, and terraphim_rolegraph pulls in tokio "full";
 # neither compiles for wasm32, so both are native-only dev-dependencies.

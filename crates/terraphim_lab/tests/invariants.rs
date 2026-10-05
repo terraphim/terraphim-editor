@@ -81,6 +81,87 @@ fn protected_text_is_never_marked() {
     );
 }
 
+/// Block structures the review of PR #42 found unprotected by a line-based
+/// detector, each full of text every action would mark in prose.
+const STRUCTURE_BODY: &str = "\
+Setext heading with teh basically awesome stuff, perhaps
+---
+
+<div>
+Perhaps teh html block is basically awesome stuff.
+Second inner line, which (as noted, which is odd) runs on; and on, because it must, although nobody, really, asked for it, at all, ever, in any way.
+</div>
+
+<!--
+Commented teh line is basically awesome.
+
+Still commented stuff, perhaps.
+-->
+
+Name | Value
+--- | ---
+teh basically | awesome stuff, perhaps
+
+| Left | Centre |
+|:-----|:------:|
+| teh basically | awesome stuff |
+
+    indented teh code is basically awesome stuff
+
+- Outer item recieve is basically fine.
+  - Inner item.
+
+    ```
+    teh fenced code is basically awesome stuff, perhaps
+    ```
+
+> Quoted teh line that is basically
+lazy continuation awesome stuff, perhaps.
+
+Final prose recieve is basically fine.
+";
+
+#[test]
+fn markdown_structures_are_never_marked() {
+    let body = STRUCTURE_BODY;
+    let marks = mark_all(body, &role_config());
+    let regions = [
+        "Setext heading with teh basically awesome stuff, perhaps\n---",
+        "<div>\nPerhaps teh html block is basically awesome stuff.",
+        "Second inner line, which (as noted, which is odd) runs on",
+        "Commented teh line is basically awesome.\n\nStill commented stuff, perhaps.",
+        "Name | Value\n--- | ---\nteh basically | awesome stuff, perhaps",
+        "| teh basically | awesome stuff |",
+        "indented teh code is basically awesome stuff",
+        "teh fenced code is basically awesome stuff, perhaps",
+        "> Quoted teh line that is basically\nlazy continuation awesome stuff, perhaps.",
+    ];
+    for needle in regions {
+        let (ps, pe) = range16(body, needle, 0);
+        for m in &marks {
+            assert!(
+                m.end <= ps || m.start >= pe,
+                "{:?} {:?} overlaps {needle:?}",
+                m.kind,
+                covered(body, m)
+            );
+        }
+    }
+    // The prose paragraphs, including the list items, are still marked.
+    let s = summary(body, &marks);
+    let typos: Vec<&str> = s
+        .iter()
+        .filter(|(k, _, _)| *k == MarkKind::Typo)
+        .map(|(_, t, _)| t.as_str())
+        .collect();
+    assert_eq!(typos, vec!["recieve", "recieve"], "{s:?}");
+    assert_eq!(
+        s.iter().filter(|(k, _, _)| *k == MarkKind::Filler).count(),
+        2,
+        "{s:?}"
+    );
+}
+
 #[test]
 fn sentence_marks_split_around_inline_code() {
     let mut config = LabConfig::with_defaults().unwrap();
@@ -137,7 +218,7 @@ fn every_mark_is_in_bounds_and_on_char_boundaries() {
     for (name, body) in FIXTURES
         .iter()
         .copied()
-        .chain([("protected", PROTECTED_BODY)])
+        .chain([("protected", PROTECTED_BODY), ("structure", STRUCTURE_BODY)])
     {
         let len16 = body.encode_utf16().count();
         for m in mark_all(body, &config) {
@@ -178,7 +259,7 @@ fn no_action_mutates_the_input() {
     for (name, body) in FIXTURES
         .iter()
         .copied()
-        .chain([("protected", PROTECTED_BODY)])
+        .chain([("protected", PROTECTED_BODY), ("structure", STRUCTURE_BODY)])
     {
         let before = body.to_string();
         for action in LabAction::ALL {

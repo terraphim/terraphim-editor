@@ -24,10 +24,15 @@
 //!
 //! # Protected text
 //!
-//! Headings, fenced and indented code, tables, block quotes, HTML blocks,
-//! link reference definitions, inline code, link destinations and bare URLs
-//! are never marked. A sentence-level mark on a sentence that holds inline
-//! code is split into one mark per piece of prose around the code.
+//! Markdown structure comes from the `markdown` crate's mdast (GFM plus front
+//! matter), not from a hand-written detector. Headings (ATX and setext),
+//! fenced and indented code, tables (with or without outer pipes), block
+//! quotes (including lazy continuation lines), HTML blocks and comments,
+//! inline HTML, link reference definitions, front matter, images, inline
+//! code, link destinations and autolinks (`<...>` and GFM literal URLs) are
+//! never marked; only paragraph prose (including list items) is. A
+//! sentence-level mark on a sentence that holds inline code is split into one
+//! mark per piece of prose around the code.
 //!
 //! # Weakest sentences
 //!
