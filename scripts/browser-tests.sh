@@ -13,24 +13,26 @@
 # Host load (issue #53). wasm-bindgen-test-runner gives each binary a fixed
 # 20 s budget (see the header of tests/web.rs); the runner is not given more
 # time here: an unresponsive page is a failure the suite exists to catch.
-# Instead, before the first binary and before each timing binary the script
+# Instead, before the first binary and before each benchmark the script
 # waits (up to BROWSER_TESTS_LOAD_WAIT seconds, default 300) for the
 # one-minute load average to drop below BROWSER_TESTS_MAX_LOAD (default 20),
-# so that the browser tests do not run alongside a heavy build. Binaries
-# that assert on timing (web_bench: the debounced surface must be no slower
-# than the textarea baseline, issue #28) are skipped, and reported as
-# SKIPPED, if the load is still above the limit; every other binary then runs
-# anyway and its line records the load it ran at.
+# so that the browser tests do not run alongside a heavy build. The
+# benchmarks (web_bench asserts that the debounced surface is no slower than
+# the textarea baseline, issue #28; web_bench_logged types into a 5,000-word
+# document on several paths and is the binary closest to the budget) are
+# skipped, and reported as SKIPPED, if the load is still above the limit;
+# every other binary then runs anyway and its line records the load it ran
+# at.
 #
 # Exit status: 0 when every binary passed, 1 when any failed, 3 when none
-# failed but a timing binary was skipped for load (the run is incomplete).
+# failed but a benchmark was skipped for load (the run is incomplete).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 MAX_LOAD="${BROWSER_TESTS_MAX_LOAD:-20}"
 LOAD_WAIT="${BROWSER_TESTS_LOAD_WAIT:-300}"
-# Binaries whose assertions compare timings.
-TIMING_BINARIES=" web_bench "
+# Benchmarks: run only below the load limit.
+BENCHMARKS=" web_bench web_bench_logged "
 # The runner's budget is part of what is tested.
 unset WASM_BINDGEN_TEST_TIMEOUT
 
@@ -79,10 +81,10 @@ skipped=0
 summary=()
 first=1
 for bin in "${BINARIES[@]}"; do
-  # Wait before the first binary and before each timing binary.
-  if [ "$first" -eq 1 ] || [[ "$TIMING_BINARIES" == *" $bin "* ]]; then
-    if ! wait_for_load && [[ "$TIMING_BINARIES" == *" $bin "* ]]; then
-      line="$bin: SKIPPED (load $(load1) >= $MAX_LOAD; asserts timing)"
+  # Wait before the first binary and before each benchmark.
+  if [ "$first" -eq 1 ] || [[ "$BENCHMARKS" == *" $bin "* ]]; then
+    if ! wait_for_load && [[ "$BENCHMARKS" == *" $bin "* ]]; then
+      line="$bin: SKIPPED (load $(load1) >= $MAX_LOAD; benchmark)"
       echo "$line"
       summary+=("$line")
       skipped=$((skipped + 1))
