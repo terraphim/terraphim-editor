@@ -224,6 +224,9 @@ async fn test_indicators_follow_reanchored_spans_while_typing() {
           const ed = teInd.editor();
           const s = ed.surface;
           const layer = teInd.layer();
+          // A wide debounce window, so the per-frame check below cannot race
+          // the refresh on a loaded host.
+          layer.delay = 600;
           window.__teIndRun = {
             startWord: teInd.span('s2').anchor.start,
             startPara: teInd.span('s4').anchor.start,
@@ -237,6 +240,7 @@ async fn test_indicators_follow_reanchored_spans_while_typing() {
           s.focus();
           s.setSelectionOffsets(at, at);
           for (const ch of 'Indeed, ') document.execCommand('insertText', false, ch);
+          __teIndRun.typedAt = performance.now();
           const out = [];
           // The surface moved the decoration at once; the model read waits.
           const live = ed.decorations.current('indicators').find((d) => d.id === 's2');
@@ -247,15 +251,19 @@ async fn test_indicators_follow_reanchored_spans_while_typing() {
         })()"##,
     );
     assert_eq!(prep, "");
-    // A few animation frames, well inside the 120 ms debounce: the dots have
+    // Two real animation frames, well inside the debounce: the dots have
     // already followed the moved decoration without any model read.
-    sleep(40).await;
+    let frames =
+        js_eval("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))");
+    JsFuture::from(frames.dyn_into::<Promise>().unwrap())
+        .await
+        .unwrap();
     let early = js_string(
         r##"(() => {
           const out = [];
           const layer = teInd.layer();
           if (layer.refreshCount !== __teIndRun.refreshes) out.push('refreshed before the debounce');
-          if (!layer.pending()) out.push('refresh no longer pending at 40 ms');
+          if (!layer.pending()) out.push('refresh no longer pending after ' + (performance.now() - __teIndRun.typedAt) + ' ms');
           const live = teInd.editor().decorations.current('indicators').find((d) => d.id === 's2');
           const r = teInd.editor().surface.rangeForOffsets(live.start, live.end).getBoundingClientRect();
           const box = teInd.dotBox('s2');
@@ -265,7 +273,7 @@ async fn test_indicators_follow_reanchored_spans_while_typing() {
     );
     assert_eq!(early, "");
     // Real timers: the rest of the trailing debounce plus a few frames.
-    sleep(120 + 110).await;
+    sleep(600 + 150).await;
     let result = js_string(
         r##"(() => {
           const out = [];
@@ -294,6 +302,7 @@ async fn test_indicators_follow_reanchored_spans_while_typing() {
           const rule = teInd.holder('s4').querySelector('.te-ind-rule').getBoundingClientRect();
           if (!teInd.near(rule.top, p[0].top) || !teInd.near(rule.bottom, p[p.length - 1].bottom)) out.push('rule did not follow');
           if (!s.isCanonical().ok) out.push('not canonical');
+          layer.delay = 120;
           return out.join('; ');
         })()"##,
     );
