@@ -50,6 +50,9 @@
  * A commit also checks that the block's original text is still at the mapped
  * range; if not, the draft goes to the notice instead of being applied.
  * Kept drafts follow later edits and stay available in both views.
+ * Escape never discards typed text: closing an editor whose draft differs
+ * from the block puts the draft in the same notice; only "Discard" there
+ * drops it.
  *
  * Teardown never mutates the document (the host may already have saved):
  * destroy() collects the open editor's draft (if it differs from the block's
@@ -71,7 +74,9 @@
  *   ArrowUp / ArrowDown / Home / End   move between blocks
  *   Enter or F2                        edit the focused block
  *   Shift+Enter                        add a paragraph below the block
- *   Ctrl+Enter / Escape (editing)      commit / cancel the edit
+ *   Ctrl+Enter (editing)               commit the edit
+ *   Escape (editing)                   close the editor; typed text is kept
+ *                                      in the drafts notice, never discarded
  *   Delete                             delete the block
  *   Tab                                the focused block's action buttons
  *                                      (edit, add below, delete); Escape
@@ -699,7 +704,7 @@ class BlocksView {
    * Keep the draft of a closed editor in the notice. A draft identical to
    * what the block held (nothing typed) is not kept: nothing is lost.
    */
-  keepDraft(ed, edit, whole) {
+  keepDraft(ed, edit, whole, reason = null) {
     const value = window.EditorSurface.normaliseNewlines(ed.textarea.value);
     if (ed.isNew ? value.trim() === '' : value === ed.original) return null;
     const draft = {
@@ -712,7 +717,7 @@ class BlocksView {
       // Where to re-apply: an offset in the body, or the block index when
       // the whole document was replaced.
       anchor: whole ? null : edit ? edit.start : ed.start,
-      reason: whole ? 'replaced' : 'changed',
+      reason: reason || (whole ? 'replaced' : 'changed'),
     };
     this.drafts.push(draft);
     this.renderDrafts();
@@ -732,9 +737,12 @@ class BlocksView {
       const icon = document.createElement('i');
       icon.className = 'fa-solid fa-circle-info';
       icon.setAttribute('aria-hidden', 'true');
-      msg.append(icon, document.createTextNode(d.reason === 'replaced'
-        ? ' The document was replaced while you were editing a block. Your draft is kept here.'
-        : ' The block changed while you were editing it. Your draft is kept here.'));
+      const messages = {
+        replaced: ' The document was replaced while you were editing a block. Your draft is kept here.',
+        escaped: ' You closed a block editor without saving. Your draft is kept here.',
+        changed: ' The block changed while you were editing it. Your draft is kept here.',
+      };
+      msg.append(icon, document.createTextNode(messages[d.reason] || messages.changed));
       const pre = document.createElement('pre');
       pre.className = 'te-blocks-draft-text';
       pre.textContent = d.value;
@@ -980,13 +988,22 @@ class BlocksView {
     return { start: base + selStart, end: base + selEnd };
   }
 
-  /** Close the open editor without applying it. */
+  /**
+   * Close the open editor without applying it (Escape). Escape never
+   * discards typed text: a draft that differs from the block (or a non-blank
+   * new paragraph) moves to the kept-drafts notice, announced through its
+   * aria-live region, where "Replace block" / "Insert as new paragraph"
+   * applies it and "Discard" drops it. Focus returns to the card. Returns
+   * the kept draft, or null when nothing was typed.
+   */
   cancelEdit() {
     const edit = this.editing;
-    if (!edit) return;
+    if (!edit) return null;
     this.editing = null;
+    const kept = this.keepDraft(edit, null, false, 'escaped');
     this.render(false);
     this.setCurrent(edit.index, true);
+    return kept;
   }
 
   /** Open an editor for a new paragraph after block `index` (-1: at the top). */

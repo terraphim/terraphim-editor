@@ -130,6 +130,12 @@ range `[start, start + original.length)` is mapped through it.
 
   A draft identical to the block's text (nothing typed) is not kept, since
   nothing would be lost.
+- **Escape never discards typed text; Discard in the notice does.** Escape
+  closes the editor. If the textarea differs from the block's original text
+  (or is a non-blank new paragraph), the draft moves into the same notice,
+  with the same entry shape and buttons as an overlap draft. The notice's
+  `aria-live` region announces it, and focus returns to the card. An
+  unchanged draft just closes.
 - **Safety net:** a commit checks that the block's original text is still at
   the mapped range. If it is not, the draft goes to the notice instead of
   being applied.
@@ -181,8 +187,8 @@ second `destroy()` returns `[]`. A host can call `editor.blocks.pendingDrafts()`
   to remove, Tab for actions."), and `aria-keyshortcuts` lists them too.
 - Keyboard: ArrowUp and ArrowDown move between blocks, Home and End jump to
   the first and last, Enter or F2 edits, Shift+Enter adds a paragraph below,
-  Ctrl+Enter commits, Escape cancels, and Delete removes the block (which
-  can be undone).
+  Ctrl+Enter commits, Escape closes the editor, and Delete removes the block
+  (which can be undone).
 - Every action is reachable by Tab. The per-card action buttons (edit, add
   below, delete) follow the roving tabindex: only the focused card's buttons
   are in the tab order, so the order is card, edit, add below, delete, then

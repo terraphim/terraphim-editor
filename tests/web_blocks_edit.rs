@@ -1,6 +1,6 @@
 //! Browser tests for the Blocks view (issue #19): structural edits, Write_On
-//! interplay, drafts kept across outside changes and keyboard access to every
-//! block action. Run with `wasm-pack test --headless --chrome`. Real scripts,
+//! interplay, drafts kept across outside changes and Escape, and keyboard
+//! access to every block action. Run with `wasm-pack test --headless --chrome`. Real scripts,
 //! the real exported document API, real fixtures and real editing commands
 //! (`document.execCommand`); nothing is mocked. Split from `web_blocks.rs` to
 //! keep each binary well inside its 20 s budget; every scenario runs as short
@@ -295,6 +295,84 @@ async fn test_every_block_action_is_keyboard_reachable() {
           bv.setCurrent(1);
           teTest.key(document.activeElement, 'Delete');
           if (s.getText() !== '# A\n\npara one\n') out.push('Delete key ' + JSON.stringify(s.getText()));
+        "##,
+    ])
+    .await;
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_escape_keeps_typed_drafts() {
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    let result = run_steps(&[
+        // Escape after typing: the editor closes, the draft goes to the
+        // notice (aria-live) and pendingDrafts(), focus returns to the card,
+        // and the body is unchanged.
+        r##"
+          T.doc = '# A\n\npara one\n\npara two\n';
+          s.setText(T.doc);
+          bv.setView('blocks');
+          const ta = bv.editBlock(1);
+          ta.value = 'para ONE';
+          teTest.key(ta, 'Escape');
+          const notice = bv.draftsElement;
+          if (bv.editing || bv.list.querySelector('textarea')) out.push('editor still open');
+          if (s.getText() !== T.doc) out.push('Escape changed the body');
+          if (document.activeElement !== bv.cards()[1]) out.push('focus not on the card');
+          const kept = bv.keptDrafts();
+          if (kept.length !== 1 || kept[0].reason !== 'escaped' || kept[0].value !== 'para ONE' || kept[0].originalText !== 'para one') out.push('kept ' + JSON.stringify(kept));
+          if (JSON.stringify(bv.pendingDrafts()) !== JSON.stringify([{ value: 'para ONE', originalText: 'para one', anchor: 5, index: 1, isNew: false }])) out.push('pending ' + JSON.stringify(bv.pendingDrafts()));
+          if (!teTest.visible(notice) || notice.getAttribute('aria-live') !== 'polite' || !notice.textContent.includes('para ONE')) out.push('notice not announced');
+          const apply = notice.querySelector('[data-draft-action="apply"]');
+          if (apply.textContent !== 'Replace block') out.push('label ' + apply.textContent);
+        "##,
+        // Apply replaces the block; one undo step reverts it.
+        r##"
+          bv.draftsElement.querySelector('[data-draft-action="apply"]').click();
+          if (s.getText() !== '# A\n\npara ONE\n\npara two\n') out.push('apply ' + JSON.stringify(s.getText()));
+          if (bv.keptDrafts().length || !bv.draftsElement.hidden) out.push('notice not cleared');
+          s.undo();
+          if (s.getText() !== T.doc) out.push('undo ' + JSON.stringify(s.getText()));
+        "##,
+        // Discard removes an escaped draft; Escape with nothing typed (or a
+        // blank new paragraph) leaves no notice.
+        r##"
+          let ta = bv.editBlock(2);
+          ta.value = 'gone';
+          teTest.key(ta, 'Escape');
+          if (bv.keptDrafts().length !== 1) out.push('second draft not kept');
+          bv.draftsElement.querySelector('[data-draft-action="discard"]').click();
+          if (bv.keptDrafts().length || !bv.draftsElement.hidden || s.getText() !== T.doc) out.push('discard');
+          ta = bv.editBlock(1);
+          teTest.key(ta, 'Escape');
+          if (bv.keptDrafts().length || !bv.draftsElement.hidden) out.push('notice for an unchanged block');
+          ta = bv.insertBlockAfter(0);
+          ta.value = '   ';
+          teTest.key(ta, 'Escape');
+          if (bv.keptDrafts().length || !bv.draftsElement.hidden) out.push('notice for a blank new paragraph');
+          if (bv.list.querySelector('.te-block-new')) out.push('blank new card left behind');
+        "##,
+        // An escaped new paragraph is reported by destroy().
+        r##"
+          const ta = bv.insertBlockAfter(0);
+          ta.value = 'new para';
+          teTest.key(ta, 'Escape');
+          const apply = bv.draftsElement.querySelector('[data-draft-action="apply"]');
+          if (!apply || apply.textContent !== 'Insert as new paragraph') out.push('new paragraph label');
+          const events = [];
+          const on = (e) => events.push(e.detail.drafts);
+          document.addEventListener('te:blocks-drafts', on);
+          const ret = ed.destroy();
+          document.removeEventListener('te:blocks-drafts', on);
+          const want = JSON.stringify([{ value: 'new para', originalText: '', anchor: 5, index: 1, isNew: true }]);
+          if (JSON.stringify(ret) !== want) out.push('destroy returned ' + JSON.stringify(ret));
+          if (events.length !== 1 || JSON.stringify(events[0]) !== want) out.push('event ' + JSON.stringify(events));
+          if (s.getText() !== T.doc) out.push('teardown changed the document');
+          const fresh = new MarkdownEditor(window.EditorConfig);
+          fresh.initialize();
+          window.__teEditor = fresh;
+          teTest.resetBlocks();
         "##,
     ])
     .await;

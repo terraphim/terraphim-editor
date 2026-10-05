@@ -292,11 +292,15 @@ async fn test_keyboard_navigation_focus_and_caret_across_views() {
           teTest.key(document.activeElement, 'Enter');
           let ta = bv.list.querySelector('textarea.te-block-editor');
           if (!ta || document.activeElement !== ta || ta.value !== 'para two') return 'Enter did not open the editor';
-          ta.value = 'discarded';
+          ta.value = 'escaped draft';
           teTest.key(ta, 'Escape');
           if (bv.list.querySelector('textarea')) out.push('Escape left the editor open');
           if (s.getText() !== T.doc) out.push('Escape changed the body');
           if (at() !== '2') out.push('focus after Escape ' + at());
+          // Escape keeps typed text in the notice; Discard there drops it.
+          if (bv.keptDrafts().length !== 1) out.push('escaped draft not kept');
+          bv.draftsElement.querySelector('[data-draft-action="discard"]').click();
+          if (at() !== '2') out.push('focus after Discard ' + at());
           teTest.key(document.activeElement, 'Enter');
           ta = bv.list.querySelector('textarea.te-block-editor');
           ta.value = 'para 2';
