@@ -241,6 +241,57 @@
     outline-offset: 1px;
 }
 
+/* Move up / Move down (#58): no button where the block cannot move. */
+.te-block-action[hidden] {
+    display: none;
+}
+
+/* Messages about refused actions, such as a move the model would not make
+   because it would split a span or ghost. Polite live region. */
+.te-blocks-notice[hidden] {
+    display: none !important;
+}
+
+.te-blocks-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--te-color-accent-soft);
+    border-left: 3px solid var(--te-color-accent);
+    border-radius: var(--te-radius-popover);
+    background: var(--sl-color-neutral-0, #fff);
+}
+
+.te-blocks-notice-text {
+    flex: 1;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.te-blocks-notice-dismiss {
+    font: inherit;
+    font-size: 0.75rem;
+    width: 1.75rem;
+    height: 1.5rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--sl-color-neutral-600, #52525b);
+    cursor: pointer;
+}
+
+.te-blocks-notice-dismiss:hover {
+    background: var(--sl-color-neutral-100, #f4f4f5);
+    color: var(--te-color-accent);
+}
+
+.te-blocks-notice-dismiss:focus-visible {
+    outline: 2px solid var(--te-color-accent);
+    outline-offset: 1px;
+}
+
 /* Blocks is not part of Write_On: never shown there. */
 body[data-mode="write-on"] .te-blocks,
 body[data-mode="write-on"] .te-view-toggle {

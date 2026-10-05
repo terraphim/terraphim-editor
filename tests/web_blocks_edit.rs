@@ -45,7 +45,6 @@ async fn test_insert_delete_and_write_on_mode() {
           ta.value = '   ';
           bv.commitEdit();
           expect('blank insert ignored', 'new\n\npara one\n');
-          if (bv.list.querySelector('[data-action="up"], [data-action="down"]')) out.push('move controls present');
         "##,
         // A new block between annotated blocks shifts every later anchor and
         // sets nothing aside.
@@ -240,13 +239,13 @@ async fn test_every_block_action_is_keyboard_reachable() {
           bv.setCurrent(0);
           const tabbable = () => Array.from(bv.container.querySelectorAll('*')).filter((el) => el.tabIndex >= 0 && (el.matches('button, textarea') || el.classList.contains('te-block')));
           const names = (els) => els.map((el) => el.dataset.action || (el.classList.contains('te-block') ? 'card' + el.dataset.index : el.className)).join(',');
-          if (names(tabbable()) !== 'card0,edit,insert,delete,te-blocks-add') out.push('tab order ' + names(tabbable()));
+          if (names(tabbable()) !== 'card0,edit,down,insert,delete,te-blocks-add') out.push('tab order ' + names(tabbable()));
           for (const b of bv.cards()[0].querySelectorAll('.te-block-action')) {
             if (!b.getAttribute('aria-keyshortcuts')) out.push('no aria-keyshortcuts on ' + b.dataset.action);
           }
           if (!/Shift\+Enter/.test(bv.cards()[0].getAttribute('aria-keyshortcuts'))) out.push('card keyshortcuts');
           teTest.key(document.activeElement, 'ArrowDown');
-          if (names(tabbable()) !== 'card1,edit,insert,delete,te-blocks-add') out.push('roving actions ' + names(tabbable()));
+          if (names(tabbable()) !== 'card1,edit,up,insert,delete,te-blocks-add') out.push('roving actions ' + names(tabbable()));
           const edit = bv.cards()[1].querySelector('[data-action="edit"]');
           edit.focus();
           if (document.activeElement !== edit) out.push('edit button not focusable');
