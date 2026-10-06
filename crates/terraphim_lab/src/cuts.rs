@@ -94,7 +94,9 @@ where
     let flat: Vec<usize> = ranges.iter().flat_map(|&(s, e)| [s, e]).collect();
     let bytes = utf16_to_bytes(body, &flat);
     let mut cuts: Vec<(usize, usize)> = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .filter_map(|pair| match (pair[0], pair[1]) {
             (Some(s), Some(e)) if e > s => Some((s, e)),
             _ => None,
