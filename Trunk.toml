@@ -8,8 +8,11 @@ dist = "target/trunk-dist"
 address = "127.0.0.1"
 port = 8080
 
+# post_build: the embeddable bundle copies the hashed wasm-bindgen output to
+# fixed names, so it must run after the Rust pipeline has written it (a
+# `build` hook runs alongside the asset pipelines).
 [[hooks]]
-stage = "build"
+stage = "post_build"
 command = "sh"
 command_arguments = ["-c", "bash scripts/build-dist.sh"]
 

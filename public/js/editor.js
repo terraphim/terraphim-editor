@@ -1276,6 +1276,28 @@ const TeKg = {
 };
 window.TeKg = TeKg;
 
+/** Shoelace icon names are lower-case words joined by hyphens. */
+const TE_ICON_NAME = /^[a-z0-9-]+$/;
+
+/**
+ * An <sl-icon> for `name`. Configuration values (which a host page passes
+ * through the embed API, #77) are never parsed as HTML: a name that is not
+ * a plain icon name is dropped rather than set.
+ */
+function teConfigIcon(name) {
+  const icon = document.createElement('sl-icon');
+  if (typeof name === 'string' && TE_ICON_NAME.test(name)) icon.setAttribute('name', name);
+  return icon;
+}
+
+/** An element with `text` as its text content (never HTML). */
+function teTextElement(tag, text, className) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  el.textContent = text == null ? '' : String(text);
+  return el;
+}
+
 class MarkdownEditor {
   constructor(config) {
     this.config = config;
@@ -1344,19 +1366,32 @@ class MarkdownEditor {
     return drafts;
   }
 
-  initialize() {
+  /**
+   * Wire the editor to the template markup inside `root` (issue #77): the
+   * element the Rust `mount_editor` rendered into, `#app` on the full page
+   * or the embed wrapper's container. Every lookup is scoped to `root`, so
+   * markup elsewhere on the page is never touched. Without `root`, `#app`
+   * is used when present (the full page), otherwise the whole document.
+   */
+  initialize(root) {
+    const scope = root || document.getElementById('app') || document;
     // Get DOM elements after template is rendered
-    this.input = document.querySelector('.markdown-input');
-    this.toolbar = document.querySelector('#formatting-toolbar');
-    this.shortcutsList = document.querySelector('#shortcuts-list');
-    this.dialog = document.querySelector('.shortcuts-dialog');
-    this.helpButton = document.querySelector('#show-help');
+    this.input = scope.querySelector('.markdown-input');
+    this.toolbar = scope.querySelector('#formatting-toolbar');
+    this.shortcutsList = scope.querySelector('#shortcuts-list');
+    this.dialog = scope.querySelector('.shortcuts-dialog');
+    this.helpButton = scope.querySelector('#show-help');
 
     // Check if elements exist
     if (!this.input || !this.toolbar || !this.shortcutsList || !this.dialog || !this.helpButton) {
       console.error('Required DOM elements not found');
       return;
     }
+    // The editor's own root: panels mount here and the Write_On layout
+    // rules key on its `te-app` class.
+    this.root = scope === document
+      ? this.input.closest('.te-app') || this.input.parentElement
+      : scope;
 
     if (this.shortcuts.length === 0) {
       console.error('No shortcuts available');
@@ -1440,13 +1475,14 @@ class MarkdownEditor {
     // Create toolbar buttons
     this.shortcuts.forEach(shortcut => {
       const button = document.createElement('sl-tooltip');
-      button.setAttribute('content', shortcut.key);
+      button.setAttribute('content', String(shortcut.key));
 
-      button.innerHTML = `
-        <sl-button size="small" variant="default">
-          <sl-icon name="${shortcut.name}"></sl-icon>
-        </sl-button>
-      `;
+      // Built node by node: config values are text, never markup.
+      const slButton = document.createElement('sl-button');
+      slButton.setAttribute('size', 'small');
+      slButton.setAttribute('variant', 'default');
+      slButton.appendChild(teConfigIcon(shortcut.name));
+      button.appendChild(slButton);
 
       button.querySelector('sl-button').addEventListener('click', () => {
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
@@ -1474,11 +1510,9 @@ class MarkdownEditor {
     this.shortcuts.forEach(shortcut => {
       const item = document.createElement('div');
       item.className = 'shortcut-item';
-      item.innerHTML = `
-        <sl-icon name="${shortcut.name}"></sl-icon>
-        <span class="shortcut-desc">${shortcut.desc}</span>
-        <sl-badge variant="neutral">${shortcut.key}</sl-badge>
-      `;
+      const badge = teTextElement('sl-badge', shortcut.key);
+      badge.setAttribute('variant', 'neutral');
+      item.append(teConfigIcon(shortcut.name), teTextElement('span', shortcut.desc, 'shortcut-desc'), badge);
       this.shortcutsList.appendChild(item);
       this.createdNodes.push(item);
     });
@@ -1510,10 +1544,7 @@ class MarkdownEditor {
     this.commands.forEach(cmd => {
       const item = document.createElement('div');
       item.classList.add('command-item');
-      item.innerHTML = `
-        <sl-icon name="${cmd.icon}"></sl-icon>
-        <span>${cmd.name}</span>
-      `;
+      item.append(teConfigIcon(cmd.icon), teTextElement('span', cmd.name));
 
       item.addEventListener('click', () => {
         if (slashPosition !== null && this.surface.getText().charAt(slashPosition) === '/') {
@@ -1652,12 +1683,13 @@ class MarkdownEditor {
   // ---------------------------------------------------------------------
 
   /**
-   * The WASM document API: `window.wasmBindings` in the Trunk build. Returns
+   * The WASM document API: `config.bindings` (passed by the embed wrapper,
+   * issue #77), else `window.wasmBindings` as in the Trunk build. Returns
    * null when the module does not expose it, in which case the editor still
    * works as a plain Markdown editor.
    */
   documentApi() {
-    const api = window.wasmBindings;
+    const api = (this.config && this.config.bindings) || window.wasmBindings;
     return api && typeof api.open_document === 'function' && typeof api.apply_edit === 'function'
       ? api
       : null;
@@ -2349,9 +2381,14 @@ class MarkdownEditor {
 window.EditorSurface = EditorSurface;
 window.MarkdownEditor = MarkdownEditor;
 
-// Update the initEditor function
+// The full page (index.html): wait for the Rust start function to render
+// the template into #app, then start the editor on it. A page that embeds
+// the editor through TeraphimEditor (window.TE_EMBED, set by
+// public/js/terraphim-editor.js) or that has no #app is left alone (#77).
 const initEditor = () => {
   const checkElements = () => {
+    const app = document.getElementById('app');
+    if (window.TE_EMBED || !app) return;
     const required = [
       '.markdown-input',
       '#formatting-toolbar',
@@ -2360,7 +2397,7 @@ const initEditor = () => {
       '#show-help'
     ];
 
-    if (required.every(selector => document.querySelector(selector))) {
+    if (required.every(selector => app.querySelector(selector))) {
       // Tear down any previous editor so its listeners and DOM do not leak.
       if (window.terraphimEditor && typeof window.terraphimEditor.destroy === 'function') {
         window.terraphimEditor.destroy();
@@ -2372,7 +2409,7 @@ const initEditor = () => {
         commands: [],
         styles: {}
       }));
-      editor.initialize();
+      editor.initialize(app);
       window.terraphimEditor = editor;
     } else {
       // Check again in 100ms
@@ -2385,6 +2422,7 @@ const initEditor = () => {
 
 // Make sure config is loaded before initializing
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.TE_EMBED || !document.getElementById('app')) return;
   if (window.EditorConfig) {
     initEditor();
   } else {

@@ -2,7 +2,9 @@
 //!
 //! Loads the real stylesheet into the live document and checks, via
 //! `getComputedStyle`, that the custom properties resolve and that the
-//! opt-in scope applies the theme. No mocks.
+//! opt-in scope applies the theme. The scope is the editor root (`.te-app`)
+//! carrying `data-mode="write-on"` or the `write-on` class; the same
+//! attribute on any other element is not styled (issue #77). No mocks.
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
@@ -112,7 +114,14 @@ fn assert_scope_applies(scope_attr: (&str, &str)) {
     let style = inject_stylesheet(&doc);
 
     let scoped = doc.create_element("div").unwrap();
-    scoped.set_attribute(scope_attr.0, scope_attr.1).unwrap();
+    scoped.set_attribute("class", "te-app").unwrap();
+    if scope_attr.0 == "class" {
+        scoped
+            .set_attribute("class", &format!("te-app {}", scope_attr.1))
+            .unwrap();
+    } else {
+        scoped.set_attribute(scope_attr.0, scope_attr.1).unwrap();
+    }
     scoped.set_attribute("style", "width: 2000px").unwrap();
     let surface = doc.create_element("div").unwrap();
     surface.set_attribute("class", "te-surface").unwrap();
@@ -189,4 +198,33 @@ fn data_mode_attribute_applies_write_on_theme() {
 #[wasm_bindgen_test]
 fn write_on_class_applies_write_on_theme() {
     assert_scope_applies(("class", "write-on"));
+}
+
+/// A host element that is not the editor root is never themed, whatever it
+/// carries (issue #77: an embedded editor must not restyle the host page).
+#[wasm_bindgen_test]
+fn write_on_scope_outside_the_editor_root_is_not_styled() {
+    let doc = document();
+    let body = doc.body().unwrap();
+    let style = inject_stylesheet(&doc);
+    let mut failures = Vec::new();
+    for (name, value) in [("data-mode", "write-on"), ("class", "write-on")] {
+        let host = doc.create_element("div").unwrap();
+        host.set_attribute(name, value).unwrap();
+        let surface = doc.create_element("div").unwrap();
+        surface.set_attribute("class", "te-surface").unwrap();
+        host.append_child(&surface).unwrap();
+        body.append_child(&host).unwrap();
+        let bg = computed(&host, "background-color");
+        let max = computed(&surface, "max-width");
+        host.remove();
+        if bg != "rgba(0, 0, 0, 0)" {
+            failures.push(format!("{name}={value}: host background {bg}"));
+        }
+        if max != "none" {
+            failures.push(format!("{name}={value}: host surface max-width {max}"));
+        }
+    }
+    style.remove();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

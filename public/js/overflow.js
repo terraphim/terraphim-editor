@@ -262,6 +262,23 @@ class TeOverflowPanel {
     }
   }
 
+  /**
+   * Mark the panel open (`data-te-overflow="open"`) on the editor's root,
+   * which the Write_On layout uses to keep the column clear of it, and on
+   * <body> only where the chrome owns the page (#77: an embedded editor
+   * never touches <body>).
+   */
+  setPageFlag(open) {
+    const chrome = this.editor.chrome;
+    const targets = [this.editor.root];
+    if (!chrome || chrome.pageMode !== false) targets.push(document.body);
+    for (const el of targets) {
+      if (!el) continue;
+      if (open) el.dataset.teOverflow = 'open';
+      else delete el.dataset.teOverflow;
+    }
+  }
+
   /** Can the panel be shown: Write_On mode (or no chrome) and a model? */
   usable() {
     if (this.destroyed || !this.api()) return false;
@@ -363,7 +380,7 @@ class TeOverflowPanel {
       this.returnFocus = active && active !== document.body && !this.root.contains(active) ? active : null;
       this.refresh();
       this.root.hidden = false;
-      document.body.dataset.teOverflow = 'open';
+      this.setPageFlag(true);
       this.syncControl();
     }
     if (focus) this.area.focus({ preventScroll: true });
@@ -376,7 +393,7 @@ class TeOverflowPanel {
     this.flush();
     const hadFocus = this.root.contains(document.activeElement);
     this.root.hidden = true;
-    delete document.body.dataset.teOverflow;
+    this.setPageFlag(false);
     this.syncControl();
     if (restoreFocus && hadFocus) {
       const back = this.returnFocus;
@@ -494,7 +511,7 @@ class TeOverflowPanel {
     this.unregisterItem();
     this.offChange();
     this.abortController.abort();
-    if (!this.root.hidden) delete document.body.dataset.teOverflow;
+    if (!this.root.hidden) this.setPageFlag(false);
     const control = this.control();
     if (control) {
       control.removeAttribute('aria-expanded');

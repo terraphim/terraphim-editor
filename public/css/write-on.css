@@ -8,36 +8,39 @@
  * Plain mode (default): the existing editor plus the dim word/char counter
  * in the top-left corner. The corner controls carry the `hidden` attribute.
  *
- * Write_On mode (<body data-mode="write-on">): full-bleed dark page, the
+ * Write_On mode (data-mode="write-on" on the editor root, .te-app, and on
+ * <body> on the full page only; issue #77): full-bleed dark page, the
  * writing surface as a centred ~70ch column, no toolbar, no preview pane,
  * and the corner controls of R-7.2.
  */
 
 /* ---- Write_On page layout (R-7.1) ---- */
 
-body[data-mode="write-on"] #app {
+/* #app.te-app outranks the full page's inline #app rule. */
+.te-app[data-mode="write-on"],
+#app.te-app[data-mode="write-on"] {
     height: auto;
     min-height: 100vh;
     padding: 0;
 }
 
-body[data-mode="write-on"] .toolbar,
-body[data-mode="write-on"] .editor-container [slot="end"] {
+.te-app[data-mode="write-on"] .toolbar,
+.te-app[data-mode="write-on"] .editor-container [slot="end"] {
     display: none;
 }
 
 /* Shoelace writes grid-template-columns inline on the host; a block host
    stacks the slots and leaves only the writing surface in flow. */
-body[data-mode="write-on"] sl-split-panel {
+.te-app[data-mode="write-on"] sl-split-panel {
     display: block !important;
     height: auto;
 }
 
-body[data-mode="write-on"] sl-split-panel::part(divider) {
+.te-app[data-mode="write-on"] sl-split-panel::part(divider) {
     display: none;
 }
 
-body[data-mode="write-on"] .markdown-input.te-surface {
+.te-app[data-mode="write-on"] .markdown-input.te-surface {
     width: auto;
     height: auto;
     min-height: calc(100vh - var(--te-page-margin-top) - 6rem);
@@ -48,7 +51,7 @@ body[data-mode="write-on"] .markdown-input.te-surface {
     font-size: var(--te-font-size-body);
 }
 
-body[data-mode="write-on"] .markdown-input.te-surface:empty::before {
+.te-app[data-mode="write-on"] .markdown-input.te-surface:empty::before {
     color: var(--te-color-text-dim);
     opacity: 1;
 }
@@ -283,7 +286,7 @@ body[data-mode="write-on"] .markdown-input.te-surface:empty::before {
    Plain mode keeps the browser default; in Write_On the notice sits on a
    panel in dim text so it reads against the dark page without shouting. */
 
-body[data-mode="write-on"] .te-warning {
+.te-app[data-mode="write-on"] .te-warning {
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
@@ -299,15 +302,15 @@ body[data-mode="write-on"] .te-warning {
     line-height: 1.5;
 }
 
-body[data-mode="write-on"] .te-warning[hidden] {
+.te-app[data-mode="write-on"] .te-warning[hidden] {
     display: none;
 }
 
-body[data-mode="write-on"] .te-warning-text {
+.te-app[data-mode="write-on"] .te-warning-text {
     flex: 1;
 }
 
-body[data-mode="write-on"] .te-warning-dismiss {
+.te-app[data-mode="write-on"] .te-warning-dismiss {
     padding: 0 0.25rem;
     border: none;
     background: transparent;
@@ -316,8 +319,8 @@ body[data-mode="write-on"] .te-warning-dismiss {
     cursor: pointer;
 }
 
-body[data-mode="write-on"] .te-warning-dismiss:hover,
-body[data-mode="write-on"] .te-warning-dismiss:focus-visible {
+.te-app[data-mode="write-on"] .te-warning-dismiss:hover,
+.te-app[data-mode="write-on"] .te-warning-dismiss:focus-visible {
     color: var(--te-color-accent);
 }
 
@@ -328,7 +331,7 @@ body[data-mode="write-on"] .te-warning-dismiss:focus-visible {
    is scoped to Write_On mode: plain mode renders nothing. Design notes:
    docs/design/indicators.md */
 
-body[data-mode="write-on"] .te-indicator-host {
+.te-app[data-mode="write-on"] .te-indicator-host {
     --te-ind-dot: 3px;           /* dot diameter */
     --te-ind-dot-gap: 3px;       /* spacing ~ one diameter (R-3.2) */
     --te-ind-row-offset: 2px;    /* dot row below the text box */
@@ -338,8 +341,8 @@ body[data-mode="write-on"] .te-indicator-host {
 
 /* R-3.1: thin muted underline under word and sentence spans, unchanged on
    hover. Paragraph spans get no underline (R-3.4). */
-body[data-mode="write-on"] .te-surface .te-ind-word,
-body[data-mode="write-on"] .te-surface .te-ind-sentence {
+.te-app[data-mode="write-on"] .te-surface .te-ind-word,
+.te-app[data-mode="write-on"] .te-surface .te-ind-sentence {
     text-decoration-line: underline;
     text-decoration-style: solid;
     text-decoration-thickness: 1px;
@@ -349,7 +352,7 @@ body[data-mode="write-on"] .te-surface .te-ind-sentence {
 }
 
 /* R-3.5: headlines bold, same face and colour, slightly larger. */
-body[data-mode="write-on"] .te-surface .te-ind-headline {
+.te-app[data-mode="write-on"] .te-surface .te-ind-headline {
     font-weight: 700;
     font-size: 1.15em;
 }
@@ -358,7 +361,7 @@ body[data-mode="write-on"] .te-surface .te-ind-headline {
     display: none;
 }
 
-body[data-mode="write-on"] .te-indicators {
+.te-app[data-mode="write-on"] .te-indicators {
     display: block;
     position: absolute;
     inset: 0;
@@ -367,38 +370,38 @@ body[data-mode="write-on"] .te-indicators {
     z-index: 1;
 }
 
-body[data-mode="write-on"] .te-indicators [hidden] {
+.te-app[data-mode="write-on"] .te-indicators [hidden] {
     display: none;
 }
 
 /* R-3.2: dot row; centred under a word, ending at the underline's right
    end for sentences and headlines. Left/top are set by the layer. */
-body[data-mode="write-on"] .te-ind-row {
+.te-app[data-mode="write-on"] .te-ind-row {
     position: absolute;
     margin-top: var(--te-ind-row-offset);
 }
 
-body[data-mode="write-on"] .te-ind-row--centre {
+.te-app[data-mode="write-on"] .te-ind-row--centre {
     transform: translateX(-50%);
 }
 
-body[data-mode="write-on"] .te-ind-row--end {
+.te-app[data-mode="write-on"] .te-ind-row--end {
     transform: translateX(-100%);
 }
 
-body[data-mode="write-on"] .te-ind-dots,
-body[data-mode="write-on"] .te-ind-col {
+.te-app[data-mode="write-on"] .te-ind-dots,
+.te-app[data-mode="write-on"] .te-ind-col {
     display: flex;
     gap: var(--te-ind-dot-gap);
 }
 
-body[data-mode="write-on"] .te-ind-col {
+.te-app[data-mode="write-on"] .te-ind-col {
     flex-direction: column;
 }
 
 /* R-3.3: dim dots at the soft accent; exactly one lit at the full accent
    (the 40% colour is below 3:1, see docs/design/indicators.md). */
-body[data-mode="write-on"] .te-ind-dot {
+.te-app[data-mode="write-on"] .te-ind-dot {
     display: block;
     flex: none;
     width: var(--te-ind-dot);
@@ -409,19 +412,19 @@ body[data-mode="write-on"] .te-ind-dot {
     cursor: default;
 }
 
-body[data-mode="write-on"] .te-ind-dot--active {
+.te-app[data-mode="write-on"] .te-ind-dot--active {
     background: var(--te-color-accent);
 }
 
 /* R-3.4: paragraph rule in the left gutter spanning the paragraph, with a
    dot column immediately to its left. The holder is a zero-width box at
    the text's left edge; its height is the paragraph's. */
-body[data-mode="write-on"] .te-ind-para {
+.te-app[data-mode="write-on"] .te-ind-para {
     position: absolute;
     width: 0;
 }
 
-body[data-mode="write-on"] .te-ind-rule {
+.te-app[data-mode="write-on"] .te-ind-rule {
     position: absolute;
     top: 0;
     right: var(--te-ind-gutter);
@@ -430,7 +433,7 @@ body[data-mode="write-on"] .te-ind-rule {
     background: var(--te-color-accent-soft);
 }
 
-body[data-mode="write-on"] .te-ind-para .te-ind-col {
+.te-app[data-mode="write-on"] .te-ind-para .te-ind-col {
     position: absolute;
     top: 0;
     right: calc(var(--te-ind-gutter) + 1px + var(--te-ind-dot-gap));

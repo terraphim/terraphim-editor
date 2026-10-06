@@ -61,7 +61,43 @@ struct EditorTemplate {
     initial_preview: String,
 }
 
+/// Module start: render the full-page editor into `#app` (the Trunk build).
+///
+/// Does nothing on a page that embeds the editor through the
+/// `TeraphimEditor` wrapper (`public/js/terraphim-editor.js`): the wrapper
+/// sets `window.TE_EMBED = true` before it instantiates the module and then
+/// calls [`mount_editor`] on its own container, so a host page that happens
+/// to have an element with id `app` is never taken over. A page without
+/// `#app` is also left alone, so instantiating the module never fails for
+/// want of one (a failing start function would reject the glue's `init()`).
 #[wasm_bindgen(start)]
+pub fn start() -> Result<(), JsValue> {
+    console_error_panic_hook::set_once();
+    if embedded_page() {
+        return Ok(());
+    }
+    let has_app = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id("app"))
+        .is_some();
+    if has_app {
+        run()
+    } else {
+        Ok(())
+    }
+}
+
+/// Whether the page declared itself an embedding host (`window.TE_EMBED`).
+fn embedded_page() -> bool {
+    js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("TE_EMBED"))
+        .map(|v| v.is_truthy())
+        .unwrap_or(false)
+}
+
+/// Render the full-page editor, with the welcome text, into `#app`.
+///
+/// Errors when the page has no element with id `app`.
+#[wasm_bindgen]
 pub fn run() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
@@ -75,25 +111,50 @@ pub fn run() -> Result<(), JsValue> {
 
     // The welcome text is the open document until the user opens a file, so
     // edits to it are tracked by the span model like any other document.
-    with_session(|session| session.open(INITIAL_MARKDOWN));
+    mount_editor(&app, INITIAL_MARKDOWN)
+}
+
+/// Render the editor markup into `root` with `initial` as the open document
+/// and wire the live preview to the surface inside `root` (issue #77).
+///
+/// This is the entry point of the embeddable wrapper; [`run`] uses it for
+/// `#app`. Every lookup is scoped to `root`, so markup elsewhere on the page
+/// is never touched. `root` gains the `te-app` class, which the Write_On
+/// layout rules key on. There is one document session and one preview per
+/// module instance, so mounting replaces the previous editor: one editor
+/// per page (see docs/design/embedding.md).
+#[wasm_bindgen]
+pub fn mount_editor(root: &Element, initial: &str) -> Result<(), JsValue> {
+    with_session(|session| session.open(initial));
 
     // The initial preview is rendered immediately, as part of the template.
-    let initial_preview = render_markdown(INITIAL_MARKDOWN)?;
+    let initial_preview = render_markdown(initial)?;
 
     let template = EditorTemplate {
-        initial_content: INITIAL_MARKDOWN.to_string(),
+        initial_content: initial.to_string(),
         initial_preview,
     };
 
-    app.set_inner_html(
+    root.set_inner_html(
         &template
             .render()
             .map_err(|e| JsValue::from_str(&format!("Failed to render template: {}", e)))?,
     );
+    root.class_list().add_1("te-app")?;
 
-    setup_markdown_conversion(&document)?;
+    setup_markdown_conversion(root)?;
 
     Ok(())
+}
+
+/// Forget the editor wired by the last [`mount_editor`]: cancel a pending
+/// preview render and drop the references to its nodes, so a destroyed
+/// embed leaves no timer behind. The surface's `input` listener stays on the
+/// (removed) surface and does nothing once the state is gone.
+#[wasm_bindgen]
+pub fn unmount_editor() {
+    cancel_pending();
+    PREVIEW.with(|cell| cell.borrow_mut().take());
 }
 
 /// Convert Markdown to HTML with the `markdown` crate.
@@ -141,11 +202,11 @@ thread_local! {
 /// schedules a new one [`preview_delay`] milliseconds later (trailing edge).
 /// `textContent` is read when the render fires, so the preview always shows
 /// the latest text. A delay of `0` renders synchronously inside the handler.
-fn setup_markdown_conversion(document: &Document) -> Result<(), JsValue> {
-    let surface = document
+fn setup_markdown_conversion(root: &Element) -> Result<(), JsValue> {
+    let surface = root
         .query_selector(".markdown-input")?
         .ok_or_else(|| JsValue::from_str("No editing surface found"))?;
-    let preview = document
+    let preview = root
         .query_selector(".markdown-preview")?
         .ok_or_else(|| JsValue::from_str("No preview div found"))?;
 

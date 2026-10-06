@@ -133,7 +133,8 @@
 
 /* Keep the writing column clear of the open panel on wide screens. */
 @media (min-width: 60rem) {
-    body[data-mode="write-on"][data-te-overflow="open"] #app {
+    .te-app[data-mode="write-on"][data-te-overflow="open"],
+    #app.te-app[data-mode="write-on"][data-te-overflow="open"] {
         padding-right: calc(clamp(16rem, 28vw, 26rem) + 2rem);
     }
 }

@@ -5,7 +5,7 @@ Issue: terraphim/terraphim-editor#7 (epic #1). Spec: `docs/requirements/alternat
 ## Modes
 
 - **Plain (default).** The existing editor (toolbar, split preview), plus a dim `N words M chars` counter in the top-left corner. None of the corner controls is rendered visibly: their wrapper carries the `hidden` attribute.
-- **Write_On.** Clicking the counter (a real `<button>` with `aria-pressed`, so Enter and Space also work) sets `<body data-mode="write-on">`. `tokens.css` and `write-on.css` then give a full-bleed dark page and a centred `--te-measure` (70ch) column. The toolbar and the preview pane are hidden (R-7.1), and the corner controls appear. Clicking the counter again returns to plain mode.
+- **Write_On.** Clicking the counter (a real `<button>` with `aria-pressed`, so Enter and Space also work) sets `data-mode="write-on"` on the editor root (`.te-app`) and, on the full page, on `<body>` (an embedded editor leaves `<body>` alone, issue #77; see `docs/design/embedding.md`). `tokens.css` and `write-on.css` then give a full-bleed dark page and a centred `--te-measure` (70ch) column. The toolbar and the preview pane are hidden (R-7.1), and the corner controls appear. Clicking the counter again returns to plain mode.
 
 Spec note: R-7.1 and R-2.1 describe plain mode as text plus counter only, without a toolbar. Issue #7 keeps the existing plain editor as it is and hides the toolbar only in Write_On mode, and the merged browser tests depend on the plain toolbar being there. Removing the plain-mode toolbar is a separate decision.
 
@@ -46,7 +46,7 @@ The reference is a native `<dialog>` opened with `showModal()`, so Esc closes it
 
 ## Lifecycle
 
-`MarkdownEditor.initialize()` creates the chrome inside `.editor-container` and passes the editor's `AbortController` signal, so every chrome listener is removed when the editor is destroyed. `MarkdownEditor.destroy()` calls `chrome.destroy()`, which closes the reference, removes the chrome DOM, drops its surface change subscription and removes `data-mode` from `<body>` if the chrome set it.
+`MarkdownEditor.initialize()` creates the chrome inside `.editor-container` and passes the editor's `AbortController` signal, so every chrome listener is removed when the editor is destroyed. `MarkdownEditor.destroy()` calls `chrome.destroy()`, which closes the reference, removes the chrome DOM, drops its surface change subscription and removes `data-mode` from the editor root and from `<body>` if the chrome set it.
 
 ## Tests
 

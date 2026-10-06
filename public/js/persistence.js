@@ -40,7 +40,8 @@
  * Open (default action of te:open). window.showOpenFilePicker (accepting
  * .md, .markdown and .txt) or, without it, a hidden <input type=file>. A
  * Markdown or text file dropped anywhere on the editor (the surface, its
- * container, the Write_On page or the panels) opens too; only drops that
+ * container, the panels, or on a standalone page the Write_On page) opens
+ * too; only drops that
  * carry Files are handled, so text drags (the page, the Overflow panel) are
  * untouched. The file is read first; if the document has unsaved changes a
  * dialog then offers Save first / Discard changes / Cancel (Escape cancels).
@@ -509,10 +510,14 @@ class TePersistence {
     return this.inScope(e.target);
   }
 
-  /** Drops on the editor, its chrome and panels, or the bare page. */
+  /**
+   * Drops on the editor, its chrome and panels, or (on a standalone page
+   * only) the bare page: an embedded editor never takes a file dropped on
+   * the host page around it (#77).
+   */
   inScope(target) {
     if (!(target instanceof Node)) return false;
-    if (target === document.body || target === document.documentElement || target === document) return true;
+    if (target === document.body || target === document.documentElement || target === document) return this.standalone;
     const el = target.nodeType === 1 ? target : target.parentElement;
     if (!el) return false;
     const container = this.editor.input && (this.editor.input.closest('.editor-container') || this.editor.input);

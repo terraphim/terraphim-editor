@@ -301,7 +301,9 @@ class TeAlternativesPanel {
     this.statusEl = status;
     this.list = list;
     this.ids = { panel: root.id };
-    const host = (this.editor.input && this.editor.input.closest('#app')) || document.body;
+    // The editor's own root (#app on the full page, the embed container
+    // otherwise, issue #77).
+    const host = this.editor.root || (this.editor.input && this.editor.input.closest('.te-app')) || document.body;
     host.appendChild(root);
     this.host = host;
   }

@@ -586,7 +586,9 @@ class BlocksView {
       pre.textContent = block.text;
       body.appendChild(pre);
     } else {
-      // Same converter, and the same trust level, as the live preview.
+      // Same converter, and the same trust level, as the live preview: the
+      // Rust `render_markdown` uses the markdown crate's defaults, which
+      // escape raw HTML and drop dangerous link protocols.
       body.innerHTML = html;
     }
     card.append(head, body);
@@ -595,7 +597,7 @@ class BlocksView {
 
   /** HTML from the Rust converter, or null when it is not exposed. */
   renderMarkdown(text) {
-    const api = window.wasmBindings;
+    const api = (this.editor.config && this.editor.config.bindings) || window.wasmBindings;
     if (!api || typeof api.render_markdown !== 'function') return null;
     try {
       return api.render_markdown(text);

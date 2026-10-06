@@ -1,14 +1,42 @@
-body {
-    margin: 0;
-    padding: 20px;
+/*
+ * Embeddable bundle base styles (terraphim-editor.min.css, issue #77).
+ *
+ * Only the bundle uses this file (index.html styles the full page inline).
+ * Every rule is scoped to the editor's own elements so the host page is not
+ * restyled: `.te-app` is the element the editor renders into (the wrapper's
+ * `.terraphim-editor-container`), and `.command-menu` is the slash command
+ * palette the editor appends to <body>. Give the host element a height; the
+ * editor fills it.
+ */
+
+.terraphim-editor-container {
+    height: 100%;
+    min-height: 20rem;
+    box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-#app {
-    width: 100vw;
-    height: 100vh;
-    margin: 0;
-} 
+.te-app .editor-container,
+.te-app sl-split-panel {
+    height: 100%;
+}
+
+.te-app .markdown-input {
+    width: 100%;
+    height: calc(100% - 50px);
+    border: none;
+    padding: 1rem;
+    resize: none;
+    font-family: monospace;
+    outline: none;
+}
+
+.te-app .markdown-preview {
+    height: 100%;
+    padding: 1rem;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
 
 .command-menu {
   position: absolute;
@@ -42,4 +70,4 @@ body {
 
 .command-item sl-icon {
   color: var(--sl-color-neutral-600);
-} 
+}
