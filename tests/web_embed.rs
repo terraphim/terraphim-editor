@@ -68,6 +68,12 @@ async fn js_await_string(src: &str) -> String {
 /// `window.__teEmbed` (the wrapper) and `window.__teEditor` (its
 /// MarkdownEditor, for the shared helpers).
 async fn fresh_embed(value: &str) {
+    fresh_embed_with(value, "{}").await;
+}
+
+/// `fresh_embed` with extra editor config: `config_js` is a JavaScript
+/// object literal merged into the `config` option.
+async fn fresh_embed_with(value: &str, config_js: &str) {
     let document = document();
     let ok = js_string(
         "(() => { if (window.__teEmbed) window.__teEmbed.destroy(); window.__teEmbed = null; \
@@ -102,7 +108,7 @@ async fn fresh_embed(value: &str) {
             bindings: window.wasmBindings,
             loadShoelace: false,
             value: {value},
-            config: {{ fileSystemAccess: false, autosaveDelay: 40 }},
+            config: Object.assign({{ fileSystemAccess: false, autosaveDelay: 40 }}, {config_js}),
           }}).then((e) => {{
             window.__teEmbed = e;
             window.__teEditor = e.markdownEditor;
@@ -111,6 +117,7 @@ async fn fresh_embed(value: &str) {
         }})()"##,
         decoy = js_string_literal(DECOY_HTML),
         value = js_string_literal(value),
+        config_js = config_js,
     );
     assert_eq!(js_await_string(&src).await, "ok");
 }
@@ -241,6 +248,106 @@ async fn test_write_on_toggle_and_scoped_events() {
         DECOY_CHECK_JS,
     ])
     .await;
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_write_on_in_an_embed_leaves_the_host_page_unstyled() {
+    fresh_embed("Some words here.").await;
+    let result = run_steps(&[
+        r##"
+          const E = window.__teEmbed;
+          const decoy = document.getElementById('te-decoy');
+          // What the host page looks like before Write_On.
+          T.snap = () => {
+            const b = getComputedStyle(document.body);
+            const d = getComputedStyle(decoy);
+            return JSON.stringify({
+              attrs: Array.from(document.body.attributes).map((a) => a.name + '=' + a.value),
+              body: [b.backgroundColor, b.color, b.fontFamily, b.colorScheme, b.minHeight],
+              decoy: [d.backgroundColor, d.color, d.fontFamily],
+            });
+          };
+          T.before = T.snap();
+          T.plainBg = getComputedStyle(E.container).backgroundColor;
+          E.setWriteOn(true);
+          if (!E.isWriteOn()) return 'Write_On not on';
+          if (document.body.dataset.mode !== undefined) out.push('body data-mode set');
+          if (T.snap() !== T.before) out.push('host page restyled: ' + T.snap() + ' vs ' + T.before);
+          // The editor itself takes the Write_On theme and layout.
+          if (E.container.dataset.mode !== 'write-on') out.push('root data-mode');
+          if (getComputedStyle(E.container).backgroundColor === T.plainBg) out.push('root not themed');
+          if (teTest.visible(E.container.querySelector('.toolbar'))) out.push('toolbar visible');
+          if (!teTest.visible(E.container.querySelector('.te-chrome [data-control="overflow"]'))) out.push('corner controls hidden');
+        "##,
+        // The Overflow panel marks the root, not <body>.
+        r##"
+          const E = window.__teEmbed;
+          if (!ed.overflow.open({ focus: false })) return 'overflow did not open';
+          if (E.container.dataset.teOverflow !== 'open') out.push('root not marked');
+          if (document.body.dataset.teOverflow !== undefined) out.push('body marked');
+          ed.overflow.close({ restoreFocus: false });
+          if (E.container.dataset.teOverflow !== undefined) out.push('root still marked');
+          E.setWriteOn(false);
+          if (E.container.dataset.mode !== undefined) out.push('root mode left');
+          if (T.snap() !== T.before) out.push('host page changed after plain');
+        "##,
+        DECOY_CHECK_JS,
+    ])
+    .await;
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_config_values_render_as_text_never_markup() {
+    // A host passes config through the embed API: names, descriptions and
+    // keys must land as text, and icon names must be plain icon names.
+    fresh_embed_with(
+        "x",
+        r##"{
+          shortcuts: [
+            { name: '"><img src=x onerror="window.__teXss=1">', key: '<img src=x onerror="window.__teXss=2">', prefix: '*', suffix: '*', desc: '<img src=x onerror="window.__teXss=3">desc' },
+            { name: 'type-bold', key: 'ctrl+b', prefix: '**', suffix: '**', desc: 'Bold' },
+          ],
+          commands: [
+            { name: '<img src=x onerror="window.__teXss=4">cmd', icon: 'x" onmouseover="window.__teXss=5', prefix: '', suffix: '' },
+            { name: 'Bold', icon: 'type-bold', prefix: '**', suffix: '**' },
+          ],
+        }"##,
+    )
+    .await;
+    // Give any injected handler (an image error event) time to run.
+    sleep(50).await;
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const E = window.__teEmbed;
+          const ed = E.markdownEditor;
+          const scopes = [E.container, ed.commandMenu];
+          for (const scope of scopes) {
+            if (scope.querySelector('img')) out.push('an <img> was parsed in ' + scope.className);
+          }
+          if (window.__teXss !== undefined) out.push('script ran: ' + window.__teXss);
+          const items = ed.shortcutsList.querySelectorAll('.shortcut-item');
+          if (items.length !== 2) out.push('help items ' + items.length);
+          const desc = items[0].querySelector('.shortcut-desc');
+          if (!desc || desc.textContent !== '<img src=x onerror="window.__teXss=3">desc') out.push('desc ' + (desc && desc.textContent));
+          const badge = items[0].querySelector('sl-badge');
+          if (!badge || badge.textContent !== '<img src=x onerror="window.__teXss=2">') out.push('key badge ' + (badge && badge.textContent));
+          // Bad icon names are dropped, good ones kept.
+          const icons = Array.from(ed.toolbar.querySelectorAll('sl-icon')).map((i) => i.getAttribute('name'));
+          if (JSON.stringify(icons.slice(0, 2)) !== '[null,"type-bold"]') out.push('toolbar icons ' + JSON.stringify(icons));
+          const tip = ed.toolbar.querySelector('sl-tooltip');
+          if (tip.getAttribute('content') !== '<img src=x onerror="window.__teXss=2">') out.push('tooltip content');
+          const cmds = Array.from(ed.commandMenu.querySelectorAll('.command-item'));
+          if (cmds.length !== 2) out.push('commands ' + cmds.length);
+          if (cmds[0].textContent.trim() !== '<img src=x onerror="window.__teXss=4">cmd') out.push('command name ' + cmds[0].textContent);
+          const cmdIcons = cmds.map((c) => c.querySelector('sl-icon').getAttribute('name'));
+          if (JSON.stringify(cmdIcons) !== '[null,"type-bold"]') out.push('command icons ' + JSON.stringify(cmdIcons));
+          if (cmds[0].querySelector('[onmouseover]')) out.push('attribute injected');
+          return out.join('; ');
+        })()"##,
+    );
     assert_eq!(result, "");
 }
 

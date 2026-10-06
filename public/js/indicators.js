@@ -38,7 +38,7 @@
  * TeIndicatorLayer
  * ----------------
  * Draws the "dots under text" for spans with alternatives, in Write_On mode
- * only (body[data-mode="write-on"]). Spans with only their original (R-2.7)
+ * only ([data-mode="write-on"] on the editor root). Spans with only their original (R-2.7)
  * and set-aside spans get nothing.
  *
  * - Underline (R-3.1): CSS `text-decoration` on the decoration span classes

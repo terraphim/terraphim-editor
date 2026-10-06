@@ -33,7 +33,9 @@
  *
  * Scoping: the Write_On theme and layout apply only beneath an element
  * carrying data-mode="write-on" or the class "write-on". The plain editor
- * is unaffected until issue #7 wires the toggle. To preview, set
+ * is unaffected. The chrome (public/js/chrome.js) sets the attribute on the
+ * editor root (.te-app) and, on the full page only, on <body>; an embedded
+ * editor never restyles the host page (issue #77). To preview, set
  *   <body data-mode="write-on">
  * (or add class="write-on" to <body>) by hand or in the browser devtools.
  *

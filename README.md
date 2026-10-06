@@ -247,7 +247,7 @@ Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, r
 </script>
 ```
 
-The editor object has `getValue()`, `setValue()`, `openDocument(text, name)`, `saveDocument()` (Markdown plus the annotation block), `exportDocument()` (clean Markdown), `isWriteOn()` / `setWriteOn()`, `on()` / `off()` for its `te:*` events, `persistence` and `destroy()`. Shoelace is loaded from its CDN; link FontAwesome yourself, as above. One editor per page: the document model lives in the WebAssembly module as a single instance, so a second `create()` is refused until the first is destroyed. In Write_On mode the editor takes over the page, as the standalone editor does. Design notes: `docs/design/embedding.md`.
+The editor object has `getValue()`, `setValue()`, `openDocument(text, name)`, `saveDocument()` (Markdown plus the annotation block), `exportDocument()` (clean Markdown), `isWriteOn()` / `setWriteOn()`, `on()` / `off()` for its `te:*` events, `persistence` and `destroy()`. Shoelace is loaded from its CDN; link FontAwesome yourself, as above. One editor per page: the document model lives in the WebAssembly module as a single instance, so a second `create()` is refused until the first is destroyed. Write_On themes the editor's own container and never restyles the host page; its corner controls sit in the viewport corners, so give the editor most of the page. Design notes: `docs/design/embedding.md`.
 
 ![The bundle's example.html: an embedded editor in a host page](docs/images/embed-example.png)
 

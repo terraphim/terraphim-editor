@@ -1276,6 +1276,28 @@ const TeKg = {
 };
 window.TeKg = TeKg;
 
+/** Shoelace icon names are lower-case words joined by hyphens. */
+const TE_ICON_NAME = /^[a-z0-9-]+$/;
+
+/**
+ * An <sl-icon> for `name`. Configuration values (which a host page passes
+ * through the embed API, #77) are never parsed as HTML: a name that is not
+ * a plain icon name is dropped rather than set.
+ */
+function teConfigIcon(name) {
+  const icon = document.createElement('sl-icon');
+  if (typeof name === 'string' && TE_ICON_NAME.test(name)) icon.setAttribute('name', name);
+  return icon;
+}
+
+/** An element with `text` as its text content (never HTML). */
+function teTextElement(tag, text, className) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  el.textContent = text == null ? '' : String(text);
+  return el;
+}
+
 class MarkdownEditor {
   constructor(config) {
     this.config = config;
@@ -1453,13 +1475,14 @@ class MarkdownEditor {
     // Create toolbar buttons
     this.shortcuts.forEach(shortcut => {
       const button = document.createElement('sl-tooltip');
-      button.setAttribute('content', shortcut.key);
+      button.setAttribute('content', String(shortcut.key));
 
-      button.innerHTML = `
-        <sl-button size="small" variant="default">
-          <sl-icon name="${shortcut.name}"></sl-icon>
-        </sl-button>
-      `;
+      // Built node by node: config values are text, never markup.
+      const slButton = document.createElement('sl-button');
+      slButton.setAttribute('size', 'small');
+      slButton.setAttribute('variant', 'default');
+      slButton.appendChild(teConfigIcon(shortcut.name));
+      button.appendChild(slButton);
 
       button.querySelector('sl-button').addEventListener('click', () => {
         this.wrapSelectedText(shortcut.prefix, shortcut.suffix);
@@ -1487,11 +1510,9 @@ class MarkdownEditor {
     this.shortcuts.forEach(shortcut => {
       const item = document.createElement('div');
       item.className = 'shortcut-item';
-      item.innerHTML = `
-        <sl-icon name="${shortcut.name}"></sl-icon>
-        <span class="shortcut-desc">${shortcut.desc}</span>
-        <sl-badge variant="neutral">${shortcut.key}</sl-badge>
-      `;
+      const badge = teTextElement('sl-badge', shortcut.key);
+      badge.setAttribute('variant', 'neutral');
+      item.append(teConfigIcon(shortcut.name), teTextElement('span', shortcut.desc, 'shortcut-desc'), badge);
       this.shortcutsList.appendChild(item);
       this.createdNodes.push(item);
     });
@@ -1523,10 +1544,7 @@ class MarkdownEditor {
     this.commands.forEach(cmd => {
       const item = document.createElement('div');
       item.classList.add('command-item');
-      item.innerHTML = `
-        <sl-icon name="${cmd.icon}"></sl-icon>
-        <span>${cmd.name}</span>
-      `;
+      item.append(teConfigIcon(cmd.icon), teTextElement('span', cmd.name));
 
       item.addEventListener('click', () => {
         if (slashPosition !== null && this.surface.getText().charAt(slashPosition) === '/') {

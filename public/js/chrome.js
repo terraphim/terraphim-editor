@@ -4,10 +4,12 @@
  *
  * The plain editor is the default. The only addition in plain mode is a dim
  * `N words M chars` counter in the top-left corner. Clicking the counter
- * toggles Write_On mode, which sets `data-mode="write-on"` on <body> (the
- * scope used by public/css/tokens.css and public/css/write-on.css) and on
- * the editor's root (`editor.root`, the `.te-app` element: #app or an embed
- * container, issue #77) and reveals the corner controls:
+ * toggles Write_On mode, which sets `data-mode="write-on"` on the editor's
+ * root (`editor.root`, the `.te-app` element: #app or an embed container,
+ * issue #77; the scope used by public/css/tokens.css and
+ * public/css/write-on.css) and, on the full page only (root #app or
+ * `config.standalone`), on <body> too, so the whole page goes dark. An
+ * embedded editor never touches <body>. It also reveals the corner controls:
  *
  *   top-left       N words M chars   toggles Write_On mode (always visible)
  *   top-centre     ●●●               alternatives panel   -> te:open-panel {panel: 'alternatives'}
@@ -128,6 +130,12 @@ class WriteOnChrome {
     this.destroyed = false;
     this.mode = 'plain';
     this.ownsBodyMode = false;
+    // Only the full page (the editor rendered into #app, or a standalone
+    // editor) puts Write_On on <body>; an embedded editor keeps it on its
+    // own root so the host page is never restyled (#77).
+    const root = editor.root;
+    this.pageMode = !!(editor.config && editor.config.standalone === true) ||
+      !root || root === document.body || root.id === 'app';
 
     this.build();
     this.offChange = editor.surface ? editor.surface.onChange(() => this.refresh()) : () => {};
@@ -431,10 +439,10 @@ class WriteOnChrome {
     const changed = next !== this.mode;
     this.mode = next;
     const on = next === 'write-on';
-    if (on) {
+    if (on && this.pageMode) {
       document.body.dataset.mode = 'write-on';
       this.ownsBodyMode = true;
-    } else if (this.ownsBodyMode) {
+    } else if (!on && this.ownsBodyMode) {
       delete document.body.dataset.mode;
       this.ownsBodyMode = false;
     }
