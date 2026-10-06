@@ -910,13 +910,27 @@ class TePersistence {
           this.showNotice(`Could not write ${handle.name}: ${err.message || err.name}.`, [], 'error');
           return null;
         }
-        if (keepHandle && generation === this.generation && !this.destroyed && handle !== this.handle) {
-          // A first save-as: the chosen file becomes the document.
-          const oldDraft = this.draftId;
-          this.handle = handle;
-          this.fileName = handle.name;
-          this.rekey(handle.name);
-          this.setDraftIdentity({ handle }, () => this.moveDraft(oldDraft, this.draftId));
+        if (keepHandle && handle !== this.handle) {
+          // The written file's size and time: the draft id falls back to
+          // them when the handle cannot be kept in IndexedDB, so two files
+          // with the same name still get different ids.
+          let meta = {};
+          try {
+            const written = await handle.getFile();
+            meta = { name: written.name, size: written.size, lastModified: written.lastModified };
+          } catch (err) {
+            meta = { name: handle.name };
+          }
+          if (generation === this.generation && !this.destroyed && handle !== this.handle) {
+            // A first save-as: the chosen file becomes the document. Its
+            // draft id is chosen once here and kept for the session (later
+            // saves change the file's size and time, not the id).
+            const oldDraft = this.draftId;
+            this.handle = handle;
+            this.fileName = handle.name;
+            this.rekey(handle.name);
+            this.setDraftIdentity(Object.assign({ handle }, meta), () => this.moveDraft(oldDraft, this.draftId));
+          }
         }
         return { name: handle.name, method: 'file' };
       },
