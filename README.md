@@ -229,7 +229,29 @@ Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, r
 
 ## Embed it in a page
 
-Save and open work in the standalone page with no host code. To host the editor in your own application, serve the page Trunk builds (`index.html` plus the generated assets in `target/trunk-dist`) or adapt it. It creates the editor on load and exposes it as `window.terraphimEditor`, so a host script can take over storage:
+`trunk build --release` writes an embeddable bundle next to the standalone page in `target/trunk-dist`: `terraphim-editor.min.js`, `terraphim-editor.min.css`, the WebAssembly module (`terraphim_editor.js` and `terraphim_editor_bg.wasm`) and a working `example.html`. Serve those files from one directory and a page with nothing but a container gets the whole editor, Write_On chrome, alternatives, Lab, Blocks, Overflow and save/open included:
+
+```html
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="terraphim-editor.min.css">
+<div id="editor" style="height: 80vh"></div>
+<script src="terraphim-editor.min.js"></script>
+<script type="module">
+  const editor = await TeraphimEditor.create(document.getElementById('editor'), {
+    value: '# Hello',
+    // wasmUrl / glueUrl: only if the module is not next to the script
+    // standalone: true: Ctrl+S / Ctrl+O anywhere on the page
+  });
+  editor.setValue('# Hello again');
+  editor.on('te:saved', (event) => console.log(event.detail.text));
+</script>
+```
+
+The editor object has `getValue()`, `setValue()`, `openDocument(text, name)`, `saveDocument()` (Markdown plus the annotation block), `exportDocument()` (clean Markdown), `isWriteOn()` / `setWriteOn()`, `on()` / `off()` for its `te:*` events, `persistence` and `destroy()`. Shoelace is loaded from its CDN; link FontAwesome yourself, as above. One editor per page: the document model lives in the WebAssembly module as a single instance, so a second `create()` is refused until the first is destroyed. In Write_On mode the editor takes over the page, as the standalone editor does. Design notes: `docs/design/embedding.md`.
+
+![The bundle's example.html: an embedded editor in a host page](docs/images/embed-example.png)
+
+The standalone page (`index.html`) creates its editor on load and exposes it as `window.terraphimEditor`; with the embed, use the object `create()` returns. Either way a host script can take over storage:
 
 ```html
 <script>
@@ -250,8 +272,6 @@ Save and open work in the standalone page with no host code. To host the editor 
 ```
 
 `te:save`, `te:open` and `te:markdown` (the `M↓` control) bubble to `document` and are cancelable; without `preventDefault()` the editor saves to a file or download, opens a file, and shows the export dialog. `te:saved` carries the serialised document (`detail.text`) whenever the editor saves; `te:written`, `te:opened`, `te:dirty-change`, `te:mode-change` and `te:blocks-drafts` report what happened. `exportDocument()` returns the clean Markdown. Set `fileSystemAccess: false` in the editor config to always download instead of using the browser's file picker. In an embedding page Ctrl+S and Ctrl+O act only while focus is in the editor, so the host's own shortcuts keep working; `standalone: true` (what the standalone page sets) makes them act anywhere. Design notes: `docs/design/persistence.md`.
-
-A self-contained embed (a single script that renders the editor into any element) is not ready yet: `trunk build --release` also writes `terraphim-editor.min.js` with a `TeraphimEditor` wrapper, but it still expects the full page's markup. That work is tracked in issue #77.
 
 ## How it is built
 

@@ -5,8 +5,9 @@
  * The plain editor is the default. The only addition in plain mode is a dim
  * `N words M chars` counter in the top-left corner. Clicking the counter
  * toggles Write_On mode, which sets `data-mode="write-on"` on <body> (the
- * scope used by public/css/tokens.css and public/css/write-on.css) and
- * reveals the corner controls:
+ * scope used by public/css/tokens.css and public/css/write-on.css) and on
+ * the editor's root (`editor.root`, the `.te-app` element: #app or an embed
+ * container, issue #77) and reveals the corner controls:
  *
  *   top-left       N words M chars   toggles Write_On mode (always visible)
  *   top-centre     ●●●               alternatives panel   -> te:open-panel {panel: 'alternatives'}
@@ -17,8 +18,9 @@
  *   bottom-centre  LAB               Lab                  -> te:lab
  *   bottom-right   XYZ               Overflow panel       -> te:overflow
  *
- * Events are CustomEvents dispatched from the chrome root inside #app; they
- * bubble, so listen on `document`. `detail.editor` is the MarkdownEditor.
+ * Events are CustomEvents dispatched from the chrome root inside the
+ * editor's root; they bubble, so listen on the root or on `document`.
+ * `detail.editor` is the MarkdownEditor.
  * te:save, te:open and te:markdown are cancelable. Their default actions
  * belong to editor.persistence (public/js/persistence.js, issues #76 and
  * #73), which dispatches the events itself: save calls
@@ -436,6 +438,11 @@ class WriteOnChrome {
       delete document.body.dataset.mode;
       this.ownsBodyMode = false;
     }
+    const root = this.editor.root;
+    if (root && root !== document.body) {
+      if (on) root.dataset.mode = 'write-on';
+      else delete root.dataset.mode;
+    }
     this.root.classList.toggle('te-chrome-on', on);
     this.corners.hidden = !on;
     this.counter.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -458,6 +465,8 @@ class WriteOnChrome {
       delete document.body.dataset.mode;
       this.ownsBodyMode = false;
     }
+    const root = this.editor.root;
+    if (root && root !== document.body) delete root.dataset.mode;
     this.destroyed = true;
     this.offChange();
     this.root.remove();

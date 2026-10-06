@@ -15,7 +15,7 @@
 
 /* ---- Write_On page layout (R-7.1) ---- */
 
-body[data-mode="write-on"] #app {
+body[data-mode="write-on"] .te-app {
     height: auto;
     min-height: 100vh;
     padding: 0;

@@ -1,18 +1,17 @@
+<!-- Embedding the editor (issue #77). The bundle (scripts/build-dist.sh, run
+     by trunk build) writes a complete, servable copy of this page as
+     example.html next to terraphim-editor.min.js. See docs/design/embedding.md. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="terraphim-editor.min.css">
+
+<div id="editor-container" style="height: 500px"></div>
+
 <script src="terraphim-editor.min.js"></script>
-
-<div id="editor-container"></div>
-
-<script>
-  const editor = new TeraphimEditor(document.getElementById('editor-container'), {
-    // Optional custom config overrides
-    styles: {
-      editorHeight: '500px',
-      defaultSplitPosition: 40
-    }
+<script type="module">
+  const editor = await TeraphimEditor.create(document.getElementById('editor-container'), {
+    value: '# Hello',
+    // standalone: true,        // Ctrl+S / Ctrl+O anywhere on the page
+    // config: { documentKey: 'notes.md' },
   });
-  
-  editor.initialize().then(() => {
-    console.log('Editor initialized');
-  });
+  editor.on('te:saved', (e) => console.log('saved', e.detail.text.length, 'characters'));
 </script>

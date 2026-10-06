@@ -10,7 +10,8 @@ trunk build --release --dist dist
 
 # Fail loudly if the release copy is incomplete.
 for pattern in 'index.html' 'terraphim-editor-*_bg.wasm' 'terraphim-editor-*.js' \
-               'terraphim-editor.min.js' 'terraphim-editor.min.css' 'example.html'; do
+               'terraphim-editor.min.js' 'terraphim-editor.min.css' 'example.html' \
+               'terraphim_editor.js' 'terraphim_editor_bg.wasm'; do
   if ! compgen -G "dist/$pattern" > /dev/null; then
     echo "release-dist: dist/$pattern missing" >&2
     exit 1

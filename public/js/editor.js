@@ -1344,19 +1344,32 @@ class MarkdownEditor {
     return drafts;
   }
 
-  initialize() {
+  /**
+   * Wire the editor to the template markup inside `root` (issue #77): the
+   * element the Rust `mount_editor` rendered into, `#app` on the full page
+   * or the embed wrapper's container. Every lookup is scoped to `root`, so
+   * markup elsewhere on the page is never touched. Without `root`, `#app`
+   * is used when present (the full page), otherwise the whole document.
+   */
+  initialize(root) {
+    const scope = root || document.getElementById('app') || document;
     // Get DOM elements after template is rendered
-    this.input = document.querySelector('.markdown-input');
-    this.toolbar = document.querySelector('#formatting-toolbar');
-    this.shortcutsList = document.querySelector('#shortcuts-list');
-    this.dialog = document.querySelector('.shortcuts-dialog');
-    this.helpButton = document.querySelector('#show-help');
+    this.input = scope.querySelector('.markdown-input');
+    this.toolbar = scope.querySelector('#formatting-toolbar');
+    this.shortcutsList = scope.querySelector('#shortcuts-list');
+    this.dialog = scope.querySelector('.shortcuts-dialog');
+    this.helpButton = scope.querySelector('#show-help');
 
     // Check if elements exist
     if (!this.input || !this.toolbar || !this.shortcutsList || !this.dialog || !this.helpButton) {
       console.error('Required DOM elements not found');
       return;
     }
+    // The editor's own root: panels mount here and the Write_On layout
+    // rules key on its `te-app` class.
+    this.root = scope === document
+      ? this.input.closest('.te-app') || this.input.parentElement
+      : scope;
 
     if (this.shortcuts.length === 0) {
       console.error('No shortcuts available');
@@ -1652,12 +1665,13 @@ class MarkdownEditor {
   // ---------------------------------------------------------------------
 
   /**
-   * The WASM document API: `window.wasmBindings` in the Trunk build. Returns
+   * The WASM document API: `config.bindings` (passed by the embed wrapper,
+   * issue #77), else `window.wasmBindings` as in the Trunk build. Returns
    * null when the module does not expose it, in which case the editor still
    * works as a plain Markdown editor.
    */
   documentApi() {
-    const api = window.wasmBindings;
+    const api = (this.config && this.config.bindings) || window.wasmBindings;
     return api && typeof api.open_document === 'function' && typeof api.apply_edit === 'function'
       ? api
       : null;
@@ -2349,9 +2363,14 @@ class MarkdownEditor {
 window.EditorSurface = EditorSurface;
 window.MarkdownEditor = MarkdownEditor;
 
-// Update the initEditor function
+// The full page (index.html): wait for the Rust start function to render
+// the template into #app, then start the editor on it. A page that embeds
+// the editor through TeraphimEditor (window.TE_EMBED, set by
+// public/js/terraphim-editor.js) or that has no #app is left alone (#77).
 const initEditor = () => {
   const checkElements = () => {
+    const app = document.getElementById('app');
+    if (window.TE_EMBED || !app) return;
     const required = [
       '.markdown-input',
       '#formatting-toolbar',
@@ -2360,7 +2379,7 @@ const initEditor = () => {
       '#show-help'
     ];
 
-    if (required.every(selector => document.querySelector(selector))) {
+    if (required.every(selector => app.querySelector(selector))) {
       // Tear down any previous editor so its listeners and DOM do not leak.
       if (window.terraphimEditor && typeof window.terraphimEditor.destroy === 'function') {
         window.terraphimEditor.destroy();
@@ -2372,7 +2391,7 @@ const initEditor = () => {
         commands: [],
         styles: {}
       }));
-      editor.initialize();
+      editor.initialize(app);
       window.terraphimEditor = editor;
     } else {
       // Check again in 100ms
@@ -2385,6 +2404,7 @@ const initEditor = () => {
 
 // Make sure config is loaded before initializing
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.TE_EMBED || !document.getElementById('app')) return;
   if (window.EditorConfig) {
     initEditor();
   } else {

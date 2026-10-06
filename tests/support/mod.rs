@@ -70,6 +70,10 @@ pub const OVERFLOW_CSS: &str = include_str!("../../public/css/overflow.css");
 // Save, open, drafts and the Markdown export view (issues #76, #73).
 pub const PERSISTENCE_JS: &str = include_str!("../../public/js/persistence.js");
 pub const PERSISTENCE_CSS: &str = include_str!("../../public/css/persistence.css");
+// The embeddable wrapper (issue #77), loaded by `web_embed.rs` only.
+pub const TERAPHIM_EDITOR_JS: &str = include_str!("../../public/js/terraphim-editor.js");
+pub const BUNDLE_CSS: &str = include_str!("../../public/styles.css");
+pub use terraphim_editor::{mount_editor, unmount_editor};
 
 /// Small helpers shared by the JavaScript snippets below.
 pub const TEST_HELPERS_JS: &str = r##"
@@ -296,6 +300,18 @@ pub fn install_document_bindings() {
     install(
         "open_document",
         Closure::<dyn FnMut(String) -> JsValue>::new(|s: String| open_document(&s)).into_js_value(),
+    );
+    // The embed entry points (issue #77).
+    install(
+        "mount_editor",
+        Closure::<dyn FnMut(web_sys::Element, String) -> Result<(), JsValue>>::new(
+            |root: web_sys::Element, initial: String| mount_editor(&root, &initial),
+        )
+        .into_js_value(),
+    );
+    install(
+        "unmount_editor",
+        Closure::<dyn FnMut()>::new(unmount_editor).into_js_value(),
     );
     install(
         "save_document",
