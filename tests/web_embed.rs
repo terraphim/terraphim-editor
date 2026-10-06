@@ -83,7 +83,7 @@ async fn fresh_embed_with(value: &str, config_js: &str) {
     assert_eq!(ok, "ok");
     while let Some(node) = document
         .query_selector(
-            "#app, #te-decoy, #te-host, #te-other, .command-menu, .te-chrome, .te-selection-menu, .te-blocks, .te-alt-panel, .te-overflow, .te-files-notice, .te-files-input, .te-files-dialog",
+            "#app, #te-decoy, #te-host, #te-other, #te-host-mode, #te-host-twin, .command-menu, .te-chrome, .te-selection-menu, .te-blocks, .te-alt-panel, .te-overflow, .te-files-notice, .te-files-input, .te-files-dialog",
         )
         .unwrap()
     {
@@ -258,6 +258,30 @@ async fn test_write_on_in_an_embed_leaves_the_host_page_unstyled() {
         r##"
           const E = window.__teEmbed;
           const decoy = document.getElementById('te-decoy');
+          // Host-owned elements that happen to use the editor's vocabulary:
+          // one carrying data-mode="write-on" itself, and a twin without it.
+          // The bundle must style neither (they must compute alike) and the
+          // embed's toggle must not change them.
+          const inner = '<div class="toolbar">toolbar</div><sl-split-panel></sl-split-panel>' +
+            '<div class="markdown-input te-surface">surface</div><div class="markdown-preview">preview</div>';
+          for (const [id, mode] of [['te-host-mode', 'write-on'], ['te-host-twin', null]]) {
+            const el = document.createElement('div');
+            el.id = id;
+            if (mode) el.dataset.mode = mode;
+            el.innerHTML = inner;
+            document.body.appendChild(el);
+          }
+          const styleOf = (el) => {
+            const c = getComputedStyle(el);
+            return [c.display, c.backgroundColor, c.color, c.fontFamily, c.fontSize, c.minHeight, c.maxWidth, c.paddingTop, c.colorScheme, c.height].join('|');
+          };
+          T.hostStyles = (id) => {
+            const root = document.getElementById(id);
+            return [root, ...root.children].map(styleOf).join(' / ');
+          };
+          if (T.hostStyles('te-host-mode') !== T.hostStyles('te-host-twin')) {
+            out.push('bundle styles a host data-mode element: ' + T.hostStyles('te-host-mode') + ' vs ' + T.hostStyles('te-host-twin'));
+          }
           // What the host page looks like before Write_On.
           T.snap = () => {
             const b = getComputedStyle(document.body);
@@ -266,6 +290,8 @@ async fn test_write_on_in_an_embed_leaves_the_host_page_unstyled() {
               attrs: Array.from(document.body.attributes).map((a) => a.name + '=' + a.value),
               body: [b.backgroundColor, b.color, b.fontFamily, b.colorScheme, b.minHeight],
               decoy: [d.backgroundColor, d.color, d.fontFamily],
+              hostMode: T.hostStyles('te-host-mode'),
+              hostTwin: T.hostStyles('te-host-twin'),
             });
           };
           T.before = T.snap();
@@ -291,6 +317,8 @@ async fn test_write_on_in_an_embed_leaves_the_host_page_unstyled() {
           E.setWriteOn(false);
           if (E.container.dataset.mode !== undefined) out.push('root mode left');
           if (T.snap() !== T.before) out.push('host page changed after plain');
+          document.getElementById('te-host-mode').remove();
+          document.getElementById('te-host-twin').remove();
         "##,
         DECOY_CHECK_JS,
     ])

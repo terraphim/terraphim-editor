@@ -31,13 +31,17 @@
  *   --te-measure             70ch      text column width (R-7.1)
  *   --te-page-margin-top     generous top margin (R-7.1)
  *
- * Scoping: the Write_On theme and layout apply only beneath an element
- * carrying data-mode="write-on" or the class "write-on". The plain editor
- * is unaffected. The chrome (public/js/chrome.js) sets the attribute on the
- * editor root (.te-app) and, on the full page only, on <body>; an embedded
- * editor never restyles the host page (issue #77). To preview, set
- *   <body data-mode="write-on">
- * (or add class="write-on" to <body>) by hand or in the browser devtools.
+ * Scoping: the Write_On theme and layout apply only to the editor root
+ * (.te-app: #app on the full page, the embed container otherwise) and its
+ * descendants, when it carries data-mode="write-on" (or the class
+ * "write-on"). The plain editor is unaffected. The chrome
+ * (public/js/chrome.js) sets the attribute on the editor root and, on the
+ * full page only, on <body>, which gets the page background; a host
+ * element with the same attribute is never styled (issue #77). The custom
+ * properties live on :root, so chrome mounted outside the root (selection
+ * menu, persistence notice and dialogs) reads them too. To preview, set
+ *   <div id="app" class="te-app" data-mode="write-on">
+ * by hand or in the browser devtools.
  *
  * Expected hooks inside the scope:
  *   .te-surface        the editable writing surface (contenteditable)
@@ -66,8 +70,11 @@
 
 /* ---- Write_On theme (opt-in scope) ---- */
 
-[data-mode="write-on"],
-.write-on {
+/* The editor root (.te-app) carries the theme; the full page also sets the
+   attribute on <body> for its own background (chrome.pageMode). */
+.te-app[data-mode="write-on"],
+.te-app.write-on,
+body[data-mode="write-on"] {
     min-height: 100vh;
     background-color: var(--te-color-bg);
     color: var(--te-color-text);
@@ -79,10 +86,10 @@
 
 /* ---- Write_On layout (R-7.1): centred ~70ch column, generous top margin ---- */
 
-[data-mode="write-on"] .te-surface,
-[data-mode="write-on"] .markdown-preview,
-.write-on .te-surface,
-.write-on .markdown-preview {
+.te-app[data-mode="write-on"] .te-surface,
+.te-app[data-mode="write-on"] .markdown-preview,
+.te-app.write-on .te-surface,
+.te-app.write-on .markdown-preview {
     box-sizing: content-box;
     max-width: var(--te-measure);
     margin-inline: auto;
@@ -94,7 +101,7 @@
     caret-color: var(--te-color-accent);
 }
 
-[data-mode="write-on"] ::selection,
-.write-on ::selection {
+.te-app[data-mode="write-on"] ::selection,
+.te-app.write-on ::selection {
     background-color: var(--te-color-accent-soft);
 }

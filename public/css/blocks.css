@@ -293,8 +293,8 @@
 }
 
 /* Blocks is not part of Write_On: never shown there. */
-[data-mode="write-on"] .te-blocks,
-[data-mode="write-on"] .te-view-toggle {
+.te-app[data-mode="write-on"] .te-blocks,
+.te-app[data-mode="write-on"] .te-view-toggle {
     display: none !important;
 }
 

@@ -208,7 +208,7 @@
 }
 
 @media (min-width: 48rem) {
-    [data-mode="write-on"] .te-alt-open .markdown-input.te-surface {
+    .te-app[data-mode="write-on"].te-alt-open .markdown-input.te-surface {
         margin-left: max(
             calc(var(--te-alt-panel-width) + 1rem),
             calc((100% - var(--te-measure) - 3rem) / 2)
