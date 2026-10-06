@@ -1330,6 +1330,7 @@ class MarkdownEditor {
     this.createdNodes = [];
     // Blocks view (issue #19): reports unapplied drafts, never edits.
     const drafts = (this.blocks ? this.blocks.destroy() : []).map((d) => ({ kind: 'block', ...d }));
+    if (this.persistence) this.persistence.destroy(); // #76 save, open, drafts
     if (this.overflow) this.overflow.destroy();
     if (this.chrome) this.chrome.destroy();
     if (this.selectionMenu) this.selectionMenu.destroy();
@@ -1412,6 +1413,12 @@ class MarkdownEditor {
     // (Write_On mode, the XYZ control) and the selection menu (its stash item).
     if (typeof window.TeOverflowPanel === 'function') {
       this.overflow = new window.TeOverflowPanel(this, { signal: this.abortController.signal });
+    }
+
+    // #76 #73 Save, open, autosave drafts and the Markdown export view
+    // (public/js/persistence.js): last, so it sees the chrome and panels.
+    if (typeof window.TePersistence === 'function') {
+      this.persistence = new window.TePersistence(this, { signal: this.abortController.signal });
     }
   }
 
@@ -2088,6 +2095,8 @@ class MarkdownEditor {
         console.error('chrome.documentChanged failed', err);
       }
     }
+    // #76 A host's own open re-keys the dirty state and drafts too.
+    if (this.persistence && typeof this.persistence.documentChanged === 'function') this.persistence.documentChanged(name);
     if (this.indicators) this.indicators.flush();
     if (this.ghosts) this.ghosts.flush();
     return opened;
@@ -2356,12 +2365,13 @@ const initEditor = () => {
       if (window.terraphimEditor && typeof window.terraphimEditor.destroy === 'function') {
         window.terraphimEditor.destroy();
       }
-      // Pass the EditorConfig when initializing
-      const editor = new MarkdownEditor(window.EditorConfig || {
+      // Pass the EditorConfig when initializing. This page is the editor,
+      // so Ctrl+S / Ctrl+O act anywhere on it (#76, `standalone`).
+      const editor = new MarkdownEditor(Object.assign({ standalone: true }, window.EditorConfig || {
         shortcuts: [],
         commands: [],
         styles: {}
-      });
+      }));
       editor.initialize();
       window.terraphimEditor = editor;
     } else {

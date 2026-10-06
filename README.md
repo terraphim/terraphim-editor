@@ -79,6 +79,18 @@ Drafting is mostly choosing. Ordinary editors make you delete the version you ar
       A classic source pane with a live Markdown preview, a formatting toolbar and a <code>/</code> command palette. Click the word counter to switch between plain and Write_On.
     </td>
   </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/restore-draft.png" alt="The restore-draft notice after a reload">
+      <h3>Save and open real files</h3>
+      Ctrl+S saves the document, alternatives, ghosts and overflow included, as a <code>.md</code> file: in Chrome and Edge the first save asks where and later saves write to the same file; in Firefox and Safari it downloads. Ctrl+O, the folder icon or dropping a file opens one and restores everything. A dot shows unsaved changes, and an autosaved draft survives a reload.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/markdown-export.png" alt="The Markdown export dialog">
+      <h3>Markdown export</h3>
+      <code>M↓</code> (or the toolbar's Markdown button) shows the clean Markdown: the active alternatives, without ghosted text, the overflow or the annotation block, ready to copy or download.
+    </td>
+  </tr>
 </table>
 
 Your alternatives, ghosts and overflow live in a small trailing block at the end of the Markdown file:
@@ -141,11 +153,11 @@ scripts/browser-tests.sh        # browser tests in headless Chrome (needs Chrome
 5. **Stash a tangent.** Select a paragraph and press **Ctrl+Shift+X**; open **XYZ** at the bottom right to see it.
 6. **Ask the Lab.** Click **LAB**, choose "Mark hedges and filler", then try **Tighten more** and **Make the cuts**. **Ctrl+Z** undoes the whole trim.
 7. **Rearrange.** Switch to **Blocks** in plain mode and move a paragraph with **Alt+Down**.
-8. **Save.** The floppy icon serialises the document (the Markdown plus its annotation block) and hands it to the page in a `te:saved` event; opening that text again restores every alternative, ghost and stash. The standalone page does not write files yet (a host page decides where documents are stored; see [Embed it](#embed-it-in-a-page)).
+8. **Save.** Press **Ctrl+S** (or click the floppy). In Chrome and Edge the first save asks where to put the `.md` file and later saves write to it; in Firefox and Safari it downloads. Opening it again (**Ctrl+O**, the folder icon, or dropping the file on the editor) restores every alternative, ghost and stash, and unsaved work survives a reload as a draft the editor offers to restore.
 
 ## Keyboard shortcuts
 
-Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, redo and Ctrl+Enter also accept Cmd. The keyboard glyph in Write_On mode shows the same reference.
+Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, redo, save, open and Ctrl+Enter also accept Cmd. The keyboard glyph in Write_On mode shows the same reference.
 
 <details open>
 <summary><b>Writing</b></summary>
@@ -157,6 +169,7 @@ Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, r
 | Ctrl+H | Heading |
 | `/` | Command palette |
 | Ctrl+Z / Ctrl+Y (or Cmd) | Undo / redo |
+| Ctrl+S / Ctrl+O (or Cmd) | Save / open a file (replaces the browser's own) |
 
 </details>
 
@@ -216,17 +229,19 @@ Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, r
 
 ## Embed it in a page
 
-The supported way to host the editor today is the page Trunk builds (`index.html` plus the generated assets in `target/trunk-dist`): serve it as is, or adapt it into your own page. It creates the editor on load and exposes it as `window.terraphimEditor`, so a host script can drive it:
+Save and open work in the standalone page with no host code. To host the editor in your own application, serve the page Trunk builds (`index.html` plus the generated assets in `target/trunk-dist`) or adapt it. It creates the editor on load and exposes it as `window.terraphimEditor`, so a host script can take over storage:
 
 ```html
 <script>
-  document.addEventListener('te:saved', (event) => {
-    // event.detail.text is the Markdown plus its annotation block; store it where you like.
-    fetch('/documents/draft.md', { method: 'PUT', body: event.detail.text });
+  document.addEventListener('te:save', (event) => {
+    event.preventDefault(); // store documents yourself instead of a file
+    const text = window.terraphimEditor.saveDocument(); // Markdown plus annotation block
+    fetch('/documents/draft.md', { method: 'PUT', body: text })
+      .then(() => window.terraphimEditor.persistence.markClean());
   });
 
   document.addEventListener('te:open', (event) => {
-    event.preventDefault(); // handle "open" yourself instead of the default
+    event.preventDefault();
     fetch('/documents/draft.md')
       .then((response) => response.text())
       .then((text) => window.terraphimEditor.openDocument(text, 'draft.md'));
@@ -234,7 +249,7 @@ The supported way to host the editor today is the page Trunk builds (`index.html
 </script>
 ```
 
-`window.terraphimEditor.saveDocument()` returns the serialised document and `exportDocument()` the clean Markdown (annotations and ghosted text removed). The editor emits DOM events a host can listen for, such as `te:save`, `te:saved`, `te:open`, `te:markdown` (the `M↓` control), `te:mode-change` and `te:blocks-drafts`.
+`te:save`, `te:open` and `te:markdown` (the `M↓` control) bubble to `document` and are cancelable; without `preventDefault()` the editor saves to a file or download, opens a file, and shows the export dialog. `te:saved` carries the serialised document (`detail.text`) whenever the editor saves; `te:written`, `te:opened`, `te:dirty-change`, `te:mode-change` and `te:blocks-drafts` report what happened. `exportDocument()` returns the clean Markdown. Set `fileSystemAccess: false` in the editor config to always download instead of using the browser's file picker. In an embedding page Ctrl+S and Ctrl+O act only while focus is in the editor, so the host's own shortcuts keep working; `standalone: true` (what the standalone page sets) makes them act anywhere. Design notes: `docs/design/persistence.md`.
 
 A self-contained embed (a single script that renders the editor into any element) is not ready yet: `trunk build --release` also writes `terraphim-editor.min.js` with a `TeraphimEditor` wrapper, but it still expects the full page's markup. That work is tracked in issue #77.
 
@@ -266,7 +281,7 @@ The Rust model is the source of truth: every edit goes to it first, and the surf
 | `src/` | WebAssembly entry point, Markdown rendering, the document, Lab and knowledge-graph bridges |
 | `crates/terraphim_alternatives` | The span model, annotation block, re-anchoring, moves and the shared word count |
 | `crates/terraphim_lab` | The Lab engine: mark actions and trim |
-| `public/js/`, `public/css/` | The editor surface and features; design tokens |
+| `public/js/`, `public/css/` | The editor surface and features (including save, open and export); design tokens |
 | `docs/requirements/`, `docs/design/` | Specification and per-feature design notes |
 | `tests/` | Native tests and the browser test binaries (`web_*.rs`) |
 

@@ -1,0 +1,199 @@
+/*
+ * Save, open, drafts and the Markdown export view (issues #76, #73)
+ * =================================================================
+ * Elements created by public/js/persistence.js. Every colour, radius and
+ * font comes from public/css/tokens.css (defined on :root, so the dialogs
+ * and notice look the same in plain and Write_On mode, like the shortcut
+ * reference). Design notes: docs/design/persistence.md
+ */
+
+/* ---- Dirty indicator: a dot on the save controls ---- */
+
+.te-chrome-save,
+.te-files-toolbar sl-button {
+    position: relative;
+}
+
+.te-chrome-save.te-dirty::after,
+.te-files-toolbar sl-button.te-dirty::after {
+    content: "";
+    position: absolute;
+    top: 0.125rem;
+    right: 0.125rem;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 50%;
+    background: var(--te-color-accent);
+    box-shadow: 0 0 0 2px var(--te-color-bg);
+    pointer-events: none;
+}
+
+/* Text kept for screen readers only (the toolbar buttons are icons). */
+.te-files-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* ---- Notice: draft restore and file errors (non-blocking) ---- */
+
+.te-files-notice {
+    position: fixed;
+    z-index: 30;
+    left: 50%;
+    bottom: 4rem;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: min(var(--te-measure), calc(100vw - 2rem));
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: var(--te-radius-popover);
+    background: var(--te-color-popover);
+    color: var(--te-color-text);
+    font-family: var(--te-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    box-shadow: 0 0.5rem 1.5rem rgba(10, 13, 28, 0.45);
+}
+
+.te-files-notice[hidden] {
+    display: none;
+}
+
+.te-files-notice[data-kind="error"] .te-files-notice-text {
+    color: var(--te-color-text-dim);
+}
+
+.te-files-notice-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.te-files-notice-button,
+.te-files-button {
+    padding: 0.25rem 0.625rem;
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--te-color-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.te-files-notice-button:first-child,
+.te-files-primary {
+    border-color: var(--te-color-accent);
+    color: var(--te-color-accent);
+}
+
+.te-files-notice-button:hover,
+.te-files-button:hover {
+    background: var(--te-color-popover-hover);
+}
+
+.te-files-notice-button:focus-visible,
+.te-files-button:focus-visible,
+.te-files-markdown-text:focus-visible {
+    outline: 2px solid var(--te-color-accent);
+    outline-offset: 2px;
+}
+
+.te-files-button i {
+    margin-right: 0.375rem;
+}
+
+/* ---- Dialogs: unsaved changes and the Markdown export (native <dialog>) ---- */
+
+.te-files-dialog {
+    width: min(26rem, calc(100vw - 2rem));
+    padding: 1rem 1.25rem 1.25rem;
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: var(--te-radius-popover);
+    background: var(--te-color-popover);
+    color: var(--te-color-text);
+    font-family: var(--te-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color-scheme: dark;
+}
+
+.te-files-markdown {
+    width: min(48rem, calc(100vw - 2rem));
+}
+
+.te-files-dialog::backdrop {
+    background: rgba(10, 13, 28, 0.6);
+}
+
+.te-files-dialog-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.te-files-dialog h2 {
+    margin: 0;
+    font-family: var(--te-font-display);
+    font-size: 1.5rem;
+    font-weight: 400;
+}
+
+.te-files-dialog-text {
+    margin: 0.5rem 0 0.75rem;
+    color: var(--te-color-text-dim);
+}
+
+.te-files-close {
+    padding: 0 0.25rem;
+    border: none;
+    font-size: 1.25rem;
+    color: var(--te-color-text-dim);
+}
+
+.te-files-markdown-text {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    /* Grows with the export (where field-sizing is supported), between a
+       comfortable minimum and most of the viewport. */
+    field-sizing: content;
+    min-height: 10rem;
+    max-height: min(60vh, 32rem);
+    padding: 0.75rem;
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: 4px;
+    background: var(--te-color-panel);
+    color: var(--te-color-text);
+    font-family: var(--te-font-mono);
+    font-size: 0.8125rem;
+    line-height: var(--te-line-height);
+    resize: vertical;
+}
+
+.te-files-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.te-files-status {
+    flex: 1;
+    color: var(--te-color-text-dim);
+}
+
+@media (max-width: 40rem) {
+    .te-files-notice {
+        flex-direction: column;
+        align-items: stretch;
+        bottom: 3.5rem;
+    }
+}
