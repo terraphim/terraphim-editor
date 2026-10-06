@@ -872,6 +872,12 @@ class TePersistence {
         this.emit('te:written', { name: result.name, method: result.method, text, stale: true });
         return true;
       }
+      if (result.keepDirty) {
+        // Only a copy was written (the document's own file refused
+        // permission): the document stays dirty, the notice says why.
+        this.emit('te:written', { name: result.name, method: result.method, text, copy: true });
+        return true;
+      }
       this.cleanText = text;
       const now = this.serialise();
       this.setDirty(now !== null && now !== text);
@@ -886,18 +892,37 @@ class TePersistence {
    * failed). With `keepHandle`, the first picker result is kept and reused.
    * The picker is requested synchronously so the click or key press that
    * started the save still counts as user activation.
+   *
+   * A kept handle may be read-only: handles from showOpenFilePicker() and
+   * dropped files are, until the user grants write access. Before writing,
+   * its permission is queried and, unless granted, requested (in the same
+   * task chain as the click or key press, within its activation). If it is
+   * refused, the text is saved elsewhere and nothing is lost: a save-as
+   * picker (the chosen file becomes the document, which is then clean), or,
+   * if the picker is refused too, a download of a copy, which leaves the
+   * document dirty (`keepDirty`) because its own file is unchanged. A
+   * cancelled picker writes nothing. The notice tells the user each time.
    */
   writeFile(text, name, { keepHandle = false, generation = this.generation } = {}) {
     if (!this.fsAccess) return Promise.resolve(this.download(text, name));
-    let handlePromise;
-    if (keepHandle && this.handle) {
-      handlePromise = Promise.resolve(this.handle);
-    } else {
+    const pick = () => {
       try {
-        handlePromise = window.showSaveFilePicker({ suggestedName: name, types: TE_PICKER_TYPES });
+        return window.showSaveFilePicker({ suggestedName: name, types: TE_PICKER_TYPES });
       } catch (err) {
-        handlePromise = Promise.reject(err);
+        return Promise.reject(err);
       }
+    };
+    let handlePromise;
+    let refused = null; // the kept file that refused write permission
+    if (keepHandle && this.handle) {
+      const kept = this.handle;
+      handlePromise = this.ensureWritable(kept).then((ok) => {
+        if (ok) return kept;
+        refused = kept.name;
+        return pick();
+      });
+    } else {
+      handlePromise = pick();
     }
     return handlePromise.then(
       async (handle) => {
@@ -932,14 +957,54 @@ class TePersistence {
             this.setDraftIdentity(Object.assign({ handle }, meta), () => this.moveDraft(oldDraft, this.draftId));
           }
         }
+        if (refused) this.showNotice(`No permission to write ${refused}: saved as ${handle.name} instead.`, [], 'error');
         return { name: handle.name, method: 'file' };
       },
       (err) => {
-        if (err && err.name === 'AbortError') return null; // the user cancelled the picker
+        if (err && err.name === 'AbortError') {
+          // The user cancelled the picker: nothing written, still dirty.
+          if (refused) this.showNotice(`No permission to write ${refused}: nothing was saved.`, [], 'error');
+          return null;
+        }
         // No user activation or the picker is blocked: download instead.
         console.warn('File picker unavailable, downloading instead', err);
-        return this.download(text, name);
+        const result = this.download(text, name);
+        if (refused) {
+          result.keepDirty = true;
+          this.showNotice(
+            `No permission to write ${refused}: downloaded a copy as ${result.name} instead; ${refused} itself is unchanged.`,
+            [],
+            'error',
+          );
+        }
+        return result;
       },
+    );
+  }
+
+  /**
+   * Resolve true when `handle` may be written: queryPermission({ mode:
+   * 'readwrite' }) and, unless that is 'granted', requestPermission (which
+   * may ask the user). Handles without the permission methods (older
+   * browsers, origin-private files) are tried directly; a failed write is
+   * reported by writeFile().
+   */
+  ensureWritable(handle) {
+    const opts = { mode: 'readwrite' };
+    if (!handle || typeof handle.queryPermission !== 'function') return Promise.resolve(true);
+    let query;
+    try {
+      query = Promise.resolve(handle.queryPermission(opts));
+    } catch (err) {
+      query = Promise.reject(err);
+    }
+    return query.then(
+      (state) => {
+        if (state === 'granted') return true;
+        if (typeof handle.requestPermission !== 'function') return false;
+        return Promise.resolve(handle.requestPermission(opts)).then((next) => next === 'granted', () => false);
+      },
+      () => true,
     );
   }
 
