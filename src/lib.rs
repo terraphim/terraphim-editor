@@ -29,6 +29,16 @@ pub use kg::{
     kg_swap_alternative, load_thesaurus, thesaurus_name, KgError, KgSpan, KG_MODEL,
 };
 
+// Pluggable alternatives providers (issue #83, R-8.7).
+mod providers;
+pub use kg::{ThesaurusProvider, THESAURUS_PROVIDER_ID};
+pub use providers::{
+    alt_append_alternatives, alternatives_provider_ids, alternatives_provider_register,
+    alternatives_provider_unregister, append_from_providers, parse_supplied, provider_ids,
+    register_external_provider, register_provider, reset_providers, unregister_external_provider,
+    unregister_provider, AlternativesProvider, ExternalProvider, ProviderContext, Suggestion,
+};
+
 mod lab;
 pub use lab::{lab_actions, lab_mark, trim_make_cuts, trim_plan_json, trim_status};
 // The alternatives side panel (issue #10).

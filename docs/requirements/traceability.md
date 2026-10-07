@@ -83,7 +83,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 | R-6.5 Overflow persisted | inferred | `Annotations.overflow` → `web_overflow::test_panel_text_persists_is_not_exported…` | Done | preserved on block rewrite | Untested |
 | R-7.1 Dark centred 70ch layout | frames | `tokens.css`, `write-on.css` → `web_chrome::test_counter_click_toggles_write_on…` | Done in Write_On (70ch not asserted; see R-2.1) | Zed centred layout | Not possible |
 | R-7.2 Corner controls | 0:03, 4:29 | `chrome.js` build → `web_chrome::test_counter_click_toggles_write_on_and_every_corner_control` | Done; X/LinkedIn Out of scope (§1) | Zed's own save and open | Not possible |
-| R-7.3 Context menu, 4 items + shortcuts | 2:38 | `TeSelectionMenu` + plug-ins → `web_ghosts::test_menu_keyboard_navigation_and_plugins`, `web_overflow::test_stash…` | Done (the AI item only on KG terms) | code-action menu | Not possible |
+| R-7.3 Context menu, 4 items + shortcuts | 2:38 | `TeSelectionMenu` + plug-ins → `web_ghosts::test_menu_keyboard_navigation_and_plugins`, `web_overflow::test_stash…` | Done (the AI item only on KG terms, or on any selection once a host provider is registered, #83) | code-action menu | Not possible |
 | R-7.4 No shortcut collisions | inferred | `config.js`, `editor_config.toml`, `selection-menu.js` (Ctrl+/, Ctrl+Shift+A/G/X), `teConfigShortcutMatches` in `editor.js` (exact modifiers, Shift included) → `web_shortcuts::test_configured_and_write_on_shortcuts_are_disjoint`, `web_shortcuts::test_config_shortcut_does_not_fire_on_write_on_shift_chord`, `web_shortcuts::test_config_shortcuts_need_their_exact_modifiers` | Done (#85): configured keys from both files are disjoint from the live menu keys, the shortcut reference and the panel, cycling and pull-back keys, normalised with Shift; a config `ctrl+x` no longer fires on Ctrl+Shift+X | extension binds no keys | N/A |
 | R-8.1 Lab popover | 4:52–4:59 | `lab.js` TeLabPopover → `web_lab::test_each_action_marks_exactly_the_engine_spans_and_clear_works` | Done | trim rows in the code-action menu; mark actions not offered | Partial |
 | R-8.2 Six mark actions, never rewrite | 5:03–5:15 | `terraphim_lab` → `invariants::labels_and_kinds_cover_all_six_actions`, `invariants::no_action_mutates_the_input`, `web_lab::test_each_action_marks…` | Done | Lab diagnostics + "Apply fix: X" → CT `lab::one_code_per_mark_kind_with_the_engine_reason`, T `command_tests::lab_mark_publishes_one_action_with_fixes` | Partial: only via settings and a save; off-tone untested |
@@ -91,7 +91,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 | R-8.4 Faded cuts + status card | 5:27–5:46, 5:40 frame | `TeLabTrim` + `card_text` → `web_trim::test_each_level_card…` (exact hint and buttons) | Done (local deterministic engine, decisions 12.4/12.5) | `trim-candidate` Unnecessary + showMessageRequest card → T `trim_review_tests::a_preview_returns_first_then_sends_the_card_with_three_actions`; live Zed | Done (pending rc.2 pin; card buttons not keyboard-reachable) |
 | R-8.5 Keep, Make the cuts, Walk through, Done | 5:41–5:46 | `trim.js` → `web_trim::test_click_keeps_the_outermost_cut…`, `web_trim_cuts::*`, `web_trim_done::*` | Done | Keep / Make the cuts / Walk through actions → T `trim_review_tests::keep_unfades_exactly_that_cut…`, `walk_through_selects_each_cut_in_order_and_wraps`; live Zed | Done (pending rc.2 pin) |
 | R-8.6 AI alternatives appended, bot-marked | 3:03–3:24 | `src/kg.rs` append_alternatives → `tests/kg.rs::ai_alternatives_for_selection_append_after_the_writers_own`, `web_kg_menu::…` | Done (thesaurus as "AI", decision 12.4) | "Replace with X" from the thesaurus | Partial: nothing appended or bot-marked |
-| R-8.7 Pluggable provider | inferred | thesaurus wired directly (`src/kg.rs`) → `tests/kg.rs::loading_reports_the_thesaurus…` | **Partial**: no provider abstraction or LLM seam | thesaurus setting → T `thesaurus_tests::*` | Partial |
+| R-8.7 Pluggable provider | inferred | `AlternativesProvider` trait + ordered registry (`src/providers.rs`), thesaurus as `ThesaurusProvider` (`src/kg.rs`), `editor.registerAlternativesProvider` for async host providers → `tests/providers.rs::*` (10, a second real provider in provider order, de-duplicated, source and model), `web_providers::*` (4, async host provider as one undo step) | Done (thesaurus default and only built-in; LLM call deferred by decision 12.4, `docs/design/provider-seam.md`) | thesaurus setting → T `thesaurus_tests::*` | Partial |
 | R-9.1 Markdown + trailing block | decision 12.2 | crate `block.rs` → `persistence::preview_and_export_match_golden_files`, `block_round_trip::*` | Done | block excluded from analysis; one diagnostic if malformed → CT `alternatives::malformed_block_yields_one_diagnostic…` | Done (no folding) |
 | R-9.2 Schema + context re-anchoring | decisions 2026-10-04/05 | crate `model.rs`, `context.rs`, `reanchor.rs` → `context_reanchor::*` (16), `reanchoring::*` | Done | round-trips the editor's writer → CT `block_features::committed_fixture_is_the_editor_writer_output` | Partial: context never refreshed by the server |
 | R-9.3 Export: active text, no ghosts, no overflow | decision 12.3 | `Document::export` → `lifecycle::export_drops_ghosted_text_and_omits_overflow_and_block` | Done | none | Missing |
@@ -100,13 +100,13 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 
 | | Done | Partial | Missing | Not possible | Untested | Out of scope / N/A |
 |---|---|---|---|---|---|---|
-| terraphim-editor (41) | 39 | 2 (R-2.1, R-8.7) | 0 | n/a | 0 | X/LinkedIn per §1 (inside R-7.2) |
+| terraphim-editor (41) | 40 | 1 (R-2.1) | 0 | n/a | 0 | X/LinkedIn per §1 (inside R-7.2) |
 | Zed (41) | 5 (R-2.6, R-8.3, R-8.4, R-8.5, R-9.1) | 10 (R-8.2 among them) | 7 | 17 | 1 (R-6.5) | 1 (R-7.4) |
 
 ## Gaps and the smallest fixes
 
 **terraphim-editor**
-1. **R-8.7:** add a provider seam (trait or JS interface) for alternatives, with the thesaurus as the first implementation. Decision 12.4 already expects it.
+1. ~~**R-8.7:** add a provider seam (trait or JS interface) for alternatives, with the thesaurus as the first implementation. Decision 12.4 already expects it.~~ Done in #83.
 2. ~~**R-3.5:** style plain `#` headings in Write_On, and hide the marker.~~ Done in #84.
 3. ~~**R-7.4:** add a test asserting the configured and Write_On shortcuts are disjoint, with Shift taken into account.~~ Done in #85.
 4. **R-2.1 / R-7.1:** decide whether plain mode should drop the legacy toolbar and preview (a recorded deviation today).

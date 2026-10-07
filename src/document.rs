@@ -52,6 +52,8 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 
+use crate::providers::Suggestion;
+
 use serde_json::{json, Value};
 use terraphim_alternatives::{
     parse, utf16_len, utf16_to_byte, write, Anchor, Counts, Document, EditError, Ghost,
@@ -1623,6 +1625,29 @@ impl DocumentSession {
         source: Source,
         model: Option<&str>,
     ) -> Result<Option<AltChange>, String> {
+        let suggestions: Vec<Suggestion> = texts
+            .iter()
+            .map(|text| Suggestion {
+                text: text.clone(),
+                source,
+                model: model.map(str::to_owned),
+            })
+            .collect();
+        self.append_suggestions(kind, start, end, &suggestions)
+    }
+
+    /// [`append_alternatives`](Self::append_alternatives) for suggestions
+    /// that each carry their own `source` and `model` (the provider seam,
+    /// R-8.7). They are appended in order as ONE change; a text the span
+    /// already offers, or an earlier suggestion repeats, is skipped, so the
+    /// first provider to offer a text keeps its provenance.
+    pub fn append_suggestions(
+        &mut self,
+        kind: SpanKind,
+        start: usize,
+        end: usize,
+        suggestions: &[Suggestion],
+    ) -> Result<Option<AltChange>, String> {
         let existing = self
             .doc
             .annotations
@@ -1638,15 +1663,14 @@ impl DocumentSession {
                 .into_iter()
                 .collect(),
         };
-        let fresh: Vec<String> = texts
+        let fresh: Vec<Suggestion> = suggestions
             .iter()
-            .filter(|t| !t.is_empty() && offered.insert((*t).clone()))
+            .filter(|s| !s.text.is_empty() && offered.insert(s.text.clone()))
             .cloned()
             .collect();
         if fresh.is_empty() {
             return Ok(None);
         }
-        let model = model.map(str::to_owned);
         self.alt_change(known.as_deref(), |s| {
             let id = match known.clone() {
                 Some(id) => id,
@@ -1656,10 +1680,10 @@ impl DocumentSession {
                     .map_err(|e| e.to_string())?,
             };
             let mut first = None;
-            for text in fresh {
+            for suggestion in fresh {
                 let index = s
                     .doc
-                    .add_alternative(&id, text, source, model.clone())
+                    .add_alternative(&id, suggestion.text, suggestion.source, suggestion.model)
                     .map_err(|e| e.to_string())?;
                 first.get_or_insert(index);
             }

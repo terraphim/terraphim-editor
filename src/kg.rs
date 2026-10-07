@@ -47,13 +47,14 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{json, Value};
-use terraphim_alternatives::{Source, SpanKind};
+use terraphim_alternatives::utf16_to_byte;
 use terraphim_lsp_core::{utf16_len, AlternativeSet, KgEngine, TermMatch};
 use wasm_bindgen::prelude::*;
 
 use crate::document::{
     with_session, AltChange, DocumentSession, EditOutcome, SwapEdit, SwapOutcome,
 };
+use crate::providers::{append_from_providers, AlternativesProvider, ProviderContext, Suggestion};
 
 /// The model name recorded on alternatives appended from the KG (R-8.6).
 pub const KG_MODEL: &str = "kg";
@@ -398,22 +399,81 @@ fn term_at(session: &DocumentSession, start: usize, end: usize) -> Option<Altern
     (intersects && !set.replacements.is_empty()).then_some(set)
 }
 
-/// The id of a live block span that overlaps the term of `set` without being
-/// exactly over it (a sentence or paragraph span around the word, say). The
-/// writer's span wins there, so the term is not offered.
-fn blocking_span(session: &DocumentSession, set: &AlternativeSet) -> Option<String> {
-    let (s, e) = (set.term.range.start.utf16, set.term.range.end.utf16);
+/// The id of a live block span that overlaps `start..end` without being
+/// exactly over it (a sentence or paragraph span around a word, say). The
+/// writer's span wins there, so the range is not offered.
+pub(crate) fn blocking_range(
+    session: &DocumentSession,
+    start: usize,
+    end: usize,
+) -> Option<String> {
     session
         .document()
         .annotations
         .spans
         .iter()
         .find(|sp| {
-            sp.anchor.start < e
-                && s < sp.anchor.end
-                && !(sp.anchor.start == s && sp.anchor.end == e)
+            sp.anchor.start < end
+                && start < sp.anchor.end
+                && !(sp.anchor.start == start && sp.anchor.end == end)
         })
         .map(|sp| sp.id.clone())
+}
+
+fn blocking_span(session: &DocumentSession, set: &AlternativeSet) -> Option<String> {
+    blocking_range(
+        session,
+        set.term.range.start.utf16,
+        set.term.range.end.utf16,
+    )
+}
+
+/// The range of the KG term that "AI alternatives" would target at the
+/// selection (see [`term_at`]), for the provider seam.
+pub(crate) fn term_range_at(
+    session: &DocumentSession,
+    start: usize,
+    end: usize,
+) -> Option<(usize, usize)> {
+    term_at(session, start, end).map(|set| (set.term.range.start.utf16, set.term.range.end.utf16))
+}
+
+/// `body[start..end]` for UTF-16 offsets.
+pub(crate) fn slice_utf16(body: &str, start: usize, end: usize) -> Option<&str> {
+    let a = utf16_to_byte(body, start)?;
+    let b = utf16_to_byte(body, end)?;
+    body.get(a..b)
+}
+
+/// The thesaurus as an [`AlternativesProvider`] (R-8.7): the synonyms of the
+/// KG term at the target, as `source: "ai"`, `model: "kg"` (R-8.6). It is the
+/// default, and out of the box the only, provider.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ThesaurusProvider;
+
+/// The thesaurus provider's registry id.
+pub const THESAURUS_PROVIDER_ID: &str = "thesaurus";
+
+impl AlternativesProvider for ThesaurusProvider {
+    fn id(&self) -> &str {
+        THESAURUS_PROVIDER_ID
+    }
+
+    fn alternatives(&self, context: &ProviderContext<'_>) -> Vec<Suggestion> {
+        let Some(set) = with_kg(|kg| kg.engine.alternatives_at_utf16(context.body, context.start))
+        else {
+            return Vec::new();
+        };
+        // Only the term the target is over: a selection that is not a KG
+        // term is not the thesaurus's to answer.
+        if (set.term.range.start.utf16, set.term.range.end.utf16) != (context.start, context.end) {
+            return Vec::new();
+        }
+        set.replacements
+            .iter()
+            .map(|r| Suggestion::ai(r.text.clone(), KG_MODEL))
+            .collect()
+    }
 }
 
 /// `{ term, conceptId, nterm, range: { start, end }, alternatives: [{ text,
@@ -457,26 +517,16 @@ pub fn kg_lookup(session: &DocumentSession, start: usize, end: usize) -> Value {
 /// alternatives already there; synonyms the span already offers are skipped
 /// (`Ok(None)` when nothing is left to add). Refused, changing nothing, when
 /// there is no KG term at the selection or a different span overlaps it.
+///
+/// It asks the registered providers (R-8.7, [`crate::providers`]), of which
+/// the thesaurus is the default, so a provider registered with
+/// [`crate::register_provider`] adds its suggestions after the thesaurus's.
 pub fn kg_append(
     session: &mut DocumentSession,
     start: usize,
     end: usize,
 ) -> Result<Option<AltChange>, KgError> {
-    let set = term_at(session, start, end).ok_or(KgError::NoTerm)?;
-    if let Some(id) = blocking_span(session, &set) {
-        return Err(KgError::Overlaps(id));
-    }
-    let texts: Vec<String> = set.replacements.iter().map(|r| r.text.clone()).collect();
-    session
-        .append_alternatives(
-            SpanKind::Word,
-            set.term.range.start.utf16,
-            set.term.range.end.utf16,
-            &texts,
-            Source::Ai,
-            Some(KG_MODEL),
-        )
-        .map_err(KgError::Model)
+    append_from_providers(session, start, end, &HashMap::new())
 }
 
 /// The thesaurus name, if one is loaded.
@@ -488,7 +538,7 @@ pub fn thesaurus_name() -> Option<String> {
 // JavaScript exports (`window.wasmBindings.<name>` in the Trunk build).
 // ---------------------------------------------------------------------------
 
-fn to_js(value: &Value) -> JsValue {
+pub(crate) fn to_js(value: &Value) -> JsValue {
     js_sys::JSON::parse(&value.to_string()).unwrap_or(JsValue::NULL)
 }
 

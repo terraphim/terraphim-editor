@@ -1249,7 +1249,8 @@ class EditorSurface {
  *   editor.loadThesaurus(json)        // -> { name, concepts, skipped }; throws on bad JSON
  *   editor.clearThesaurus()
  *   editor.kgLookup(start, end)       // -> { term, range, alternatives, span } | null
- *   editor.kgAlternativesForSelection()  // Ctrl+Shift+G, R-8.6
+ *   editor.kgAlternativesForSelection()  // thesaurus only, R-8.6
+ *   editor.alternativesForSelection()    // Ctrl+Shift+G through every provider, R-8.7 (#83)
  *   editor.annotations().kg           // derived KG spans (never saved)
  *   editor.swapAlternative('kg-2-0', 1)  // swaps a KG span like any other
  */
@@ -1268,13 +1269,21 @@ const TeKg = {
       available: (ctx) => {
         if (!ctx) return false;
         if (ctx.kgTerm === undefined) ctx.kgTerm = editor.kgLookup(ctx.start, ctx.end);
-        return !!ctx.kgTerm;
+        // A host provider (#83) can answer for any non-empty selection.
+        return !!ctx.kgTerm || (editor.hasAlternativesProviders() && ctx.start !== ctx.end);
       },
-      run: (ctx) => editor.kgAlternativesForSelection(ctx),
+      run: (ctx) =>
+        editor.alternativesForSelection(ctx).catch((err) => {
+          console.error('AI alternatives for selection failed', err);
+          return null;
+        }),
     };
   },
 };
 window.TeKg = TeKg;
+
+/** Holders (registration entries) of each host alternatives provider id (#83), page-wide. */
+const TeProviderRefs = new Map();
 
 /** Shoelace icon names are lower-case words joined by hyphens. */
 const TE_ICON_NAME = /^[a-z0-9-]+$/;
@@ -1383,6 +1392,10 @@ class MarkdownEditor {
     for (const d of altDrafts) drafts.push({ kind: 'alternative', ...d }); // #10
     if (this.decorations) this.decorations.destroy();
     if (this.surface) this.surface.destroy();
+    // Host providers (#83) belong to this editor; the registry is the page's.
+    for (const id of Array.from((this.alternativeProviders || new Map()).keys())) {
+      this.unregisterAlternativesProvider(id);
+    }
     this.warningListeners.clear();
     return drafts;
   }
@@ -1974,12 +1987,156 @@ class MarkdownEditor {
       console.warn('No knowledge-graph alternatives for the selection', err);
       return null;
     }
+    return this.showAlternativesFor(sel, change);
+  }
+
+  /** Open the panel (Write_On) on the span the append touched. */
+  showAlternativesFor(sel, change) {
     const term = this.kgLookup(sel.start, sel.end);
     const spanId = change ? change.span : term && term.span;
     if (spanId && this.altPanel && typeof this.altPanel.open === 'function' && this.altPanel.isWriteOn()) {
       this.altPanel.open({ spanId });
     }
     return change;
+  }
+
+  // ---------------------------------------------------------------------
+  // Alternatives providers (issue #83, R-8.7; docs/design/provider-seam.md).
+  // The thesaurus is the default provider (src/providers.rs). A host page
+  // can add asynchronous ones, for example a future LLM provider calling
+  // terraphim_server's /chat:
+  //
+  //   editor.registerAlternativesProvider({
+  //     id: 'llm',
+  //     model: 'llama-3',            // recorded as the line's model
+  //     alternatives: async ({ text, body, start, end }) =>
+  //       ['alt one', { text: 'alt two', model: 'llama-3-70b' }],
+  //   });
+  //
+  // Results are appended after the thesaurus's (and earlier providers'), as
+  // source "ai" with the model name, de-duplicated, as ONE undo step.
+  // ---------------------------------------------------------------------
+
+  /**
+   * Register an asynchronous provider after the ones already there.
+   * `provider.id` is a non-empty string, `provider.alternatives(context)` a
+   * function returning (a promise of) an array of strings or
+   * `{ text, model }`; `provider.model` names the model (default: the id).
+   * Re-registering an id replaces the function and keeps its place.
+   * Returns a function that unregisters it.
+   */
+  registerAlternativesProvider(provider) {
+    if (!provider || typeof provider.id !== 'string' || !provider.id) {
+      throw new Error('An alternatives provider needs an id');
+    }
+    if (typeof provider.alternatives !== 'function') {
+      throw new Error('An alternatives provider needs an alternatives(context) function');
+    }
+    if (provider.id === 'thesaurus') throw new Error('The provider id "thesaurus" is reserved');
+    const api = this.requireDocumentApi();
+    if (typeof api.alternatives_provider_register !== 'function') {
+      throw new Error('The WASM document API cannot register alternatives providers');
+    }
+    if (!this.alternativeProviders) this.alternativeProviders = new Map();
+    const model = typeof provider.model === 'string' && provider.model ? provider.model : provider.id;
+    // The WASM registry is the page's (one document session), so entries
+    // are counted per id across editors: the id leaves it only when the
+    // last editor holding it lets go.
+    api.alternatives_provider_register(provider.id, model); // throws before any count changes
+    const entry = { provider, model };
+    const previous = this.alternativeProviders.get(provider.id);
+    const holders = (TeProviderRefs.get(provider.id) || []).filter((h) => h !== previous);
+    holders.push(entry);
+    TeProviderRefs.set(provider.id, holders);
+    this.alternativeProviders.set(provider.id, entry);
+    // The handle only removes its own registration, never a later one.
+    return () => this.unregisterAlternativesProvider(provider.id, entry);
+  }
+
+  /** Remove a provider registered here; false when there was none. */
+  unregisterAlternativesProvider(id, entry = null) {
+    if (!this.alternativeProviders || !this.alternativeProviders.has(id)) return false;
+    if (entry && this.alternativeProviders.get(id) !== entry) return false;
+    const held = this.alternativeProviders.get(id);
+    this.alternativeProviders.delete(id);
+    const api = this.documentApi();
+    const holders = (TeProviderRefs.get(id) || []).filter((h) => h !== held);
+    if (holders.length > 0) {
+      // Others still hold the id: keep it, advertising a remaining holder's model.
+      TeProviderRefs.set(id, holders);
+      const last = holders[holders.length - 1];
+      if (api) api.alternatives_provider_register(id, last.model);
+      return true;
+    }
+    TeProviderRefs.delete(id);
+    if (api && typeof api.alternatives_provider_unregister === 'function') {
+      api.alternatives_provider_unregister(id);
+    }
+    return true;
+  }
+
+  /** The ids of every provider, thesaurus first, in the order they are asked. */
+  alternativesProviderIds() {
+    const api = this.documentApi();
+    return api && typeof api.alternatives_provider_ids === 'function' ? api.alternatives_provider_ids() : [];
+  }
+
+  /** True when a host page has registered an asynchronous provider. */
+  hasAlternativesProviders() {
+    return !!this.alternativeProviders && this.alternativeProviders.size > 0;
+  }
+
+  /**
+   * "AI alternatives for selection" through every provider (R-8.7). With no
+   * host provider this is exactly kgAlternativesForSelection, and runs
+   * synchronously. Otherwise each host provider is awaited (a provider that
+   * throws or returns something that is not an array is skipped, with a
+   * warning), then the thesaurus and host results are appended in provider
+   * order as ONE undo step. If the text changed while waiting, nothing is
+   * appended. Resolves to the change, or null.
+   */
+  async alternativesForSelection(ctx = null) {
+    if (!this.hasAlternativesProviders()) return this.kgAlternativesForSelection(ctx);
+    const sel = ctx ? { start: ctx.start, end: ctx.end } : this.surface.getSelectionOffsets();
+    const body = this.surface.getText();
+    const start = Math.min(sel.start, sel.end);
+    const end = Math.max(sel.start, sel.end);
+    const term = this.kgLookup(start, end);
+    const target = term ? term.range : { start, end };
+    const context = { text: body.slice(target.start, target.end), body, start: target.start, end: target.end };
+    const entries = Array.from(this.alternativeProviders.values());
+    const providers = entries;
+    const answers = await Promise.all(
+      providers.map(async ({ provider, model }) => {
+        try {
+          const result = await provider.alternatives({ ...context });
+          if (!Array.isArray(result)) throw new Error('alternatives() must resolve to an array');
+          // This editor's model name, not the registry's (editors may share an id).
+          return result.map((r) => (typeof r === 'string' ? { text: r, model } : r && typeof r === 'object' ? { ...r, model: r.model || model } : r));
+        } catch (err) {
+          console.warn(`Alternatives provider ${provider.id} failed`, err);
+          return [];
+        }
+      }),
+    );
+    if (this.destroyed || this.surface.getText() !== body) {
+      console.warn('The text changed while alternatives were being fetched; nothing appended');
+      return null;
+    }
+    const supplied = {};
+    providers.forEach((entry, i) => {
+      // A provider replaced or removed while we waited: its answers are stale.
+      if (this.alternativeProviders.get(entry.provider.id) !== entry) return;
+      supplied[entry.provider.id] = answers[i];
+    });
+    let change = null;
+    try {
+      change = this.alternativeOp('append_alternatives', start, end, JSON.stringify(supplied));
+    } catch (err) {
+      console.warn('No alternatives for the selection', err);
+      return null;
+    }
+    return this.showAlternativesFor({ start, end }, change);
   }
 
   // ---------------------------------------------------------------------

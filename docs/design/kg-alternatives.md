@@ -137,8 +137,9 @@ it is ONE undo step replayed with `alt_restore`; undo removes a created span
 and the KG span is derived again. When the panel is available in Write_On
 mode it then opens on the span.
 
-Only the thesaurus provider exists; an LLM provider stays behind the R-8.7
-abstraction in the core for a later release (decision 4).
+The append asks the registered providers, of which the thesaurus is the
+default and only built-in one (R-8.7, `docs/design/provider-seam.md`); an LLM
+provider stays a later release (decision 4).
 
 ## The panel (#10)
 

@@ -57,6 +57,11 @@ pub const ALT_PANEL_JS: &str = include_str!("../../public/js/alternatives-panel.
 pub const ALT_PANEL_CSS: &str = include_str!("../../public/css/alternatives-panel.css");
 // The alternatives side panel (issue #10).
 pub use terraphim_editor::{alt_add, alt_create_span, alt_edit, alt_move, alt_remove, alt_restore};
+// Pluggable alternatives providers (issue #83).
+pub use terraphim_editor::{
+    alt_append_alternatives, alternatives_provider_ids, alternatives_provider_register,
+    alternatives_provider_unregister,
+};
 // Knowledge-graph alternatives (issue #13).
 pub use terraphim_editor::{
     alt_kg_append, kg_clear_thesaurus, kg_document_spans, kg_load_thesaurus, kg_lookup_selection,
@@ -479,6 +484,32 @@ pub fn install_document_bindings() {
         "alt_kg_append",
         Closure::<dyn FnMut(u32, u32) -> Result<JsValue, JsValue>>::new(alt_kg_append)
             .into_js_value(),
+    );
+    // Pluggable alternatives providers (issue #83).
+    install(
+        "alternatives_provider_register",
+        Closure::<dyn FnMut(String, String) -> Result<(), JsValue>>::new(
+            |id: String, model: String| alternatives_provider_register(&id, &model),
+        )
+        .into_js_value(),
+    );
+    install(
+        "alternatives_provider_unregister",
+        Closure::<dyn FnMut(String) -> bool>::new(|id: String| {
+            alternatives_provider_unregister(&id)
+        })
+        .into_js_value(),
+    );
+    install(
+        "alternatives_provider_ids",
+        Closure::<dyn FnMut() -> JsValue>::new(alternatives_provider_ids).into_js_value(),
+    );
+    install(
+        "alt_append_alternatives",
+        Closure::<dyn FnMut(u32, u32, String) -> Result<JsValue, JsValue>>::new(
+            |start: u32, end: u32, supplied: String| alt_append_alternatives(start, end, &supplied),
+        )
+        .into_js_value(),
     );
     install(
         "trim_plan_json",
