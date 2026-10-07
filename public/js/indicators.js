@@ -76,12 +76,51 @@
  *   arrow key, or an arrow with nothing hovered, is left to the browser.
  *   Each swap is one undo step; see docs/design/cycling.md.
  *
+ * TeHeadingLayer
+ * --------------
+ * R-3.5 for every ATX heading, with or without alternatives (issue #84), in
+ * Write_On mode only. The `headings` registry layer holds two items per
+ * heading line outside fenced code: `h<n>` over the whole line (class
+ * `te-heading`: bold, same face and colour, 1.15em) and `m<n>` over its
+ * marker, the leading `#`s and the spaces after them (`te-heading-marker`).
+ *
+ * - The marker is hidden with `font-size: 0`, so it stays in the surface's
+ *   Text nodes: the document text, `root.textContent`, offsets, selection,
+ *   word counts, save and export all keep it, and the heading starts flush
+ *   with the body as in the video. While the selection touches a heading
+ *   line its marker is shown, dimmed (`te-heading-marker--shown`), so the
+ *   caret before the `#` is visible and a `#` being typed never vanishes.
+ *   That class is toggled on the rendered marker spans directly (never
+ *   through the registry), so caret moves re-render nothing, and is put back
+ *   after every render.
+ * - The line ranges are recomputed from the surface text on the animation
+ *   frame after a change. The registry ignores an identical list, so typing
+ *   in a body paragraph re-renders nothing; typing in a heading re-renders
+ *   once, before the next paint.
+ * - `TeIndicatorLayer.isHeadline` uses the same marker rule, so a headline
+ *   span with alternatives (`te-ind-headline`) is always a heading too. The
+ *   surface unions the classes of overlapping decorations on one flat span,
+ *   so the two never compound the size.
+ *
+ *   editor.headings.ranges()   // -> [{ start, end, markerEnd }] heading lines
+ *   editor.headings.flush()    // recompute and redraw now
+ *
  * Load order: after chrome.js and before editor.js, which instantiates both
  * classes in MarkdownEditor.initialize() when they exist. Full design notes:
  * docs/design/indicators.md
  */
 
 const TE_LAYER_NAME = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * Length of the ATX heading marker that starts `line` (up to three spaces,
+ * one to six `#`, then the spaces or tabs after them), or 0 if the line is
+ * not a heading. A bare `#` line is an empty heading.
+ */
+function teHeadingMarkerLength(line) {
+  const m = /^ {0,3}#{1,6}(?:[ \t]+|$)/.exec(line);
+  return m ? m[0].length : 0;
+}
 
 class TeDecorationRegistry {
   constructor(surface) {
@@ -465,7 +504,9 @@ class TeIndicatorLayer {
 
   static isHeadline(text, start) {
     const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-    return /^ {0,3}#{1,6}[ \t]/.test(text.slice(lineStart, start + 1));
+    const lineEnd = text.indexOf('\n', start);
+    const marker = teHeadingMarkerLength(text.slice(lineStart, lineEnd < 0 ? text.length : lineEnd));
+    return marker > 0 && start >= lineStart + marker;
   }
 
   static describe(kind, count, activeIndex) {
@@ -759,5 +800,189 @@ class TeIndicatorLayer {
   }
 }
 
+
+class TeHeadingLayer {
+  constructor(editor, options = {}) {
+    this.editor = editor;
+    this.surface = editor.surface;
+    this.registry = editor.decorations;
+    this.active = false;
+    this.destroyed = false;
+    this.frame = 0;
+    this.selectionFrame = 0;
+    // Heading lines as last computed: [{ start, end, markerEnd }].
+    this.headings = [];
+    // Indexes of the headings whose marker is shown.
+    this.shown = new Set();
+
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
+    if (options.signal) {
+      if (options.signal.aborted) this.abortController.abort();
+      else options.signal.addEventListener('abort', () => this.destroy(), { signal });
+    }
+    this.offChange = this.surface.onChange(() => this.schedule());
+    // Every render rebuilds the marker spans; put the shown class back.
+    this.offApply = this.registry.onApply(() => this.applyShown(true));
+    document.addEventListener('selectionchange', () => this.scheduleSelection(), { signal });
+    document.addEventListener('te:mode-change', (e) => {
+      if (!e.detail || !e.detail.editor || e.detail.editor === this.editor) {
+        this.setActive(e.detail && e.detail.mode === 'write-on');
+      }
+    }, { signal });
+    this.setActive(this.isWriteOn());
+  }
+
+  static get LAYER() {
+    return 'headings';
+  }
+
+  /** Heading lines of `text` outside fenced code: [{ start, end, markerEnd }]. */
+  static scan(text) {
+    const out = [];
+    let fence = null;
+    let start = 0;
+    while (start <= text.length) {
+      const nl = text.indexOf('\n', start);
+      const end = nl < 0 ? text.length : nl;
+      const line = text.slice(start, end);
+      const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+      if (fence) {
+        if (f && f[1][0] === fence[0] && f[1].length >= fence.length && /^ {0,3}[`~]+[ \t]*$/.test(line)) fence = null;
+      } else if (f && !(f[1][0] === '`' && line.slice(f[0].length).includes('`'))) {
+        fence = f[1];
+      } else {
+        const marker = teHeadingMarkerLength(line);
+        if (marker > 0) out.push({ start, end, markerEnd: start + marker });
+      }
+      if (nl < 0) break;
+      start = nl + 1;
+    }
+    return out;
+  }
+
+  isWriteOn() {
+    const chrome = this.editor.chrome;
+    if (chrome && typeof chrome.isWriteOn === 'function') return chrome.isWriteOn();
+    return document.body.dataset.mode === 'write-on';
+  }
+
+  setActive(on) {
+    if (this.destroyed) return;
+    on = !!on;
+    if (on === this.active) {
+      if (on) this.flush();
+      return;
+    }
+    this.active = on;
+    if (on) {
+      this.flush();
+    } else {
+      this.cancelPending();
+      this.headings = [];
+      this.shown.clear();
+      this.registry.clear(TeHeadingLayer.LAYER);
+    }
+  }
+
+  schedule() {
+    if (!this.active || this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      this.refresh();
+    });
+  }
+
+  scheduleSelection() {
+    if (!this.active || this.selectionFrame) return;
+    this.selectionFrame = requestAnimationFrame(() => {
+      this.selectionFrame = 0;
+      this.applyShown(false);
+    });
+  }
+
+  cancelPending() {
+    if (this.frame) cancelAnimationFrame(this.frame);
+    if (this.selectionFrame) cancelAnimationFrame(this.selectionFrame);
+    this.frame = 0;
+    this.selectionFrame = 0;
+  }
+
+  /** Recompute and redraw now. */
+  flush() {
+    if (!this.active) return;
+    if (this.frame) cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.refresh();
+  }
+
+  /** Heading lines as last computed. */
+  ranges() {
+    return this.headings.map((h) => ({ ...h }));
+  }
+
+  refresh() {
+    if (!this.active || this.destroyed) return;
+    this.headings = TeHeadingLayer.scan(this.surface.getText());
+    const items = [];
+    this.headings.forEach((h, i) => {
+      if (h.end > h.start) items.push({ id: `h${i}`, start: h.start, end: h.end, className: 'te-heading' });
+      items.push({ id: `m${i}`, start: h.start, end: h.markerEnd, className: 'te-heading-marker' });
+    });
+    // An identical list renders nothing (the registry compares).
+    this.registry.set(TeHeadingLayer.LAYER, items);
+    this.applyShown(true);
+  }
+
+  /** Indexes of the headings on the lines the selection touches. */
+  touched() {
+    const out = new Set();
+    const root = this.surface.root;
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0 || !root.contains(sel.anchorNode) || !root.contains(sel.focusNode)) return out;
+    const { start, end } = this.surface.getSelectionOffsets();
+    this.headings.forEach((h, i) => {
+      // A caret at the very end of the line is on it too.
+      if (start <= h.end && end >= h.start) out.add(i);
+    });
+    return out;
+  }
+
+  /**
+   * Show the markers of the heading lines under the selection, hide the
+   * rest. `force` re-applies after a render rebuilt the spans.
+   */
+  applyShown(force) {
+    if (!this.active || this.destroyed) return;
+    const next = this.touched();
+    const same = next.size === this.shown.size && [...next].every((i) => this.shown.has(i));
+    if (same && !force) return;
+    this.shown = next;
+    const root = this.surface.root;
+    for (const el of root.querySelectorAll('.te-heading-marker')) {
+      const ids = (el.getAttribute('data-te-decoration') || '').split(' ');
+      const id = ids.find((d) => d.startsWith(`${TeHeadingLayer.LAYER}:m`));
+      const i = id ? Number(id.slice(TeHeadingLayer.LAYER.length + 2)) : -1;
+      el.classList.toggle('te-heading-marker--shown', next.has(i));
+    }
+    // The marker's width moves the text after it: re-place the dots.
+    if (!same && this.editor.indicators && typeof this.editor.indicators.scheduleLayout === 'function') {
+      this.editor.indicators.scheduleLayout();
+    }
+  }
+
+  destroy() {
+    if (this.destroyed) return;
+    this.cancelPending();
+    if (this.active && this.surface && !this.surface.destroyed) this.registry.clear(TeHeadingLayer.LAYER);
+    this.destroyed = true;
+    this.active = false;
+    this.offChange();
+    this.offApply();
+    this.abortController.abort();
+  }
+}
+
 window.TeDecorationRegistry = TeDecorationRegistry;
 window.TeIndicatorLayer = TeIndicatorLayer;
+window.TeHeadingLayer = TeHeadingLayer;

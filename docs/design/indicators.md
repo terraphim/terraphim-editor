@@ -16,7 +16,7 @@ Issue: terraphim/terraphim-editor#8 (epic #1). Spec: `docs/requirements/alternat
 - Nothing hovers: no rule changes on hover (R-3.1).
 - Plain mode renders nothing: the layer clears its decorations, removes its overlay and stops observing the surface. Every CSS rule is also scoped to `body[data-mode="write-on"]`.
 - Line height: the dots, rule and column never change it (they are out of flow). The one intended exception is R-3.5: the headline's `1.15em` inline span makes that one line's box slightly taller, as the spec's appearance requires.
-- Headline styling applies to the span only. Styling every Markdown heading line in Write_On mode, with or without alternatives, is a separate decision.
+- Every ATX heading line, with or without alternatives, gets the same R-3.5 styling in Write_On mode (issue #84, `TeHeadingLayer` in `public/js/indicators.js`, decoration layer `headings`). The line carries `te-heading` and its marker (the leading `#`s and the spaces after them) `te-heading-marker`. Lines inside fenced code blocks are not headings. The marker is hidden with `font-size: 0`, so it stays in the surface text: the document, offsets, selection, word counts, save and export keep it, and the heading starts flush with the body, as at 0:03 in the video. While the selection touches a heading line its marker is shown dimmed (`te-heading-marker--shown`, toggled on the rendered spans without a re-render), so the caret before the `#` is visible and a `#` being typed never vanishes. A headline span with alternatives also carries `te-heading`; the surface unions both classes on one flat span, so the size does not compound. Tests: `tests/web_headings.rs`.
 
 ## How it is drawn
 

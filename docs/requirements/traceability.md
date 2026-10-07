@@ -65,7 +65,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 | R-3.2 Dot row, one per alternative | 0:33, 0:55 | `indicators.js` buildSpan → `web_indicators::test_word_headline…` | Done | inlay hint `[i/n]` → T `command_tests::inlay_hints_on_through_initialization_options` | Not possible (approximated) |
 | R-3.3 One lit dot | 1:43 | `te-ind-dot--active` → `web_indicators::test_word_headline…` | Done | `i` of `[i/n]` (concept order, not "original") | Not possible |
 | R-3.4 Paragraph gutter rule + dot column | 2:08 (frames) | `.te-ind-para` → `web_indicators::test_word_headline…` | Done | none | Not possible |
-| R-3.5 Headline bold, larger | 0:30 | `.te-ind-headline` → `web_indicators::test_word_headline…` | **Partial**: only headlines with alternatives, in Write_On; plain `#` headings unstyled | Zed theme | Not possible |
+| R-3.5 Headline bold, larger | 0:30 | `.te-heading`, `.te-heading-marker` (`TeHeadingLayer`, #84) and `.te-ind-headline` → `web_headings::*` (5: plain `#` styling and hidden marker, marker shown on the caret line, typing, plain mode, headline span with alternatives), `web_indicators::test_word_headline…` | Done (#84): every `#` line in Write_On is bold, same face and colour, 1.15em; the marker is hidden but kept in the text and export, and shown dimmed while the caret is on the line | Zed theme | Not possible |
 | R-3.6 Hover target; dot click jumps (inferred) | 0:40 | `onDotClick`, te:dot → `web_cycling::test_dot_click_jumps_and_alt_arrows_cycle_from_the_caret` | Done | hover shows the concept → T `lsp_integration_tests::test_hover_returns_description_for_matched_term` | Not possible (no dots; hover does not list alternatives) |
 | R-4.1 Left panel, toggle, text dims | 1:11–1:22 | `alternatives-panel.js` → `web_alt_panel::test_chrome_dot_provenance_tabs_and_save` | Done (width and dimming not asserted) | none | Not possible |
 | R-4.2 Word / Sentence / Paragraph tabs | 1:44 (frame) | `setTab` → `web_alt_panel::test_chrome_dot_provenance_tabs_and_save` | Done | none | Not possible |
@@ -100,14 +100,14 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 
 | | Done | Partial | Missing | Not possible | Untested | Out of scope / N/A |
 |---|---|---|---|---|---|---|
-| terraphim-editor (41) | 38 | 3 (R-2.1, R-3.5, R-8.7) | 0 | n/a | 0 | X/LinkedIn per §1 (inside R-7.2) |
+| terraphim-editor (41) | 39 | 2 (R-2.1, R-8.7) | 0 | n/a | 0 | X/LinkedIn per §1 (inside R-7.2) |
 | Zed (41) | 5 (R-2.6, R-8.3, R-8.4, R-8.5, R-9.1) | 10 (R-8.2 among them) | 7 | 17 | 1 (R-6.5) | 1 (R-7.4) |
 
 ## Gaps and the smallest fixes
 
 **terraphim-editor**
 1. **R-8.7:** add a provider seam (trait or JS interface) for alternatives, with the thesaurus as the first implementation. Decision 12.4 already expects it.
-2. **R-3.5:** style plain `#` headings in Write_On, and hide the marker.
+2. ~~**R-3.5:** style plain `#` headings in Write_On, and hide the marker.~~ Done in #84.
 3. ~~**R-7.4:** add a test asserting the configured and Write_On shortcuts are disjoint, with Shift taken into account.~~ Done in #85.
 4. **R-2.1 / R-7.1:** decide whether plain mode should drop the legacy toolbar and preview (a recorded deviation today).
 

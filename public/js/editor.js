@@ -1378,6 +1378,7 @@ class MarkdownEditor {
     if (this.selectionMenu) this.selectionMenu.destroy();
     if (this.ghosts) this.ghosts.destroy();
     if (this.indicators) this.indicators.destroy();
+    if (this.headings) this.headings.destroy();
     if (this.lab) this.lab.destroy();
     for (const d of altDrafts) drafts.push({ kind: 'alternative', ...d }); // #10
     if (this.decorations) this.decorations.destroy();
@@ -1437,6 +1438,10 @@ class MarkdownEditor {
       this.decorations = new window.TeDecorationRegistry(this.surface);
       if (typeof window.TeIndicatorLayer === 'function') {
         this.indicators = new window.TeIndicatorLayer(this, { signal: this.abortController.signal });
+      }
+      // R-3.5 for every `#` heading in Write_On (issue #84).
+      if (typeof window.TeHeadingLayer === 'function') {
+        this.headings = new window.TeHeadingLayer(this, { signal: this.abortController.signal });
       }
       // Ghost layer and selection context menu (public/js/selection-menu.js,
       // issue #11).
