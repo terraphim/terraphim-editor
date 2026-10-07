@@ -664,6 +664,7 @@ class TePersistence {
     this.identityReady = Promise.resolve();
     this.cleanText = this.serialise();
     this.setDirty(false);
+    this.showNotice(null);
     this.checkDraft(null);
   }
 
@@ -723,17 +724,20 @@ class TePersistence {
 
   /**
    * Offer to restore the stored draft for the current key when it differs
-   * from the opened document and, for a file, is newer than it.
+   * from the opened document and, for a file, is newer than it. With no
+   * draft to offer only a restore notice is withdrawn: after load() this
+   * runs when the file's draft id has been looked up, which can be after a
+   * save straight after the open has shown its own notice.
    */
   checkDraft(file) {
     this.pendingDraft = null;
     const draft = this.readDraft();
     if (!draft || this.cleanText === null || draft.text === this.cleanText) {
-      this.showNotice(null);
+      this.hideDraftNotice();
       return;
     }
     if (file && Number.isFinite(file.lastModified) && Number(draft.savedAt) <= file.lastModified) {
-      this.showNotice(null);
+      this.hideDraftNotice();
       return;
     }
     this.pendingDraft = draft;
@@ -746,6 +750,10 @@ class TePersistence {
       { name: 'restore', label: 'Restore', onClick: () => this.restoreDraft() },
       { name: 'discard', label: 'Discard', onClick: () => this.discardDraft() },
     ], 'draft');
+  }
+
+  hideDraftNotice() {
+    if (this.notice.dataset.kind === 'draft') this.showNotice(null);
   }
 
   restoreDraft() {

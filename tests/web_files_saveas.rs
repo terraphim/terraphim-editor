@@ -169,3 +169,55 @@ async fn test_a_kept_handle_without_write_permission_never_loses_the_text() {
     .await;
     assert_eq!(result, "");
 }
+
+/// Opening a file with a handle looks its draft id up in IndexedDB, and the
+/// draft check runs when that lookup ends. A save straight after the open,
+/// refused write permission, shows its error notice before then; the late
+/// draft check (no draft found) must leave that notice up. It used to hide
+/// whatever notice was showing, so on a loaded host the error vanished
+/// (issue #90: the first Gitea CI runs on bigbox).
+#[wasm_bindgen_test]
+async fn test_a_late_draft_check_keeps_a_save_error_notice() {
+    let _document = fresh_files_editor();
+    let result = js_async(
+        r##"
+        const out = [];
+        const ed = teFiles.reinit({ fileSystemAccess: undefined });
+        const p = ed.persistence;
+        const root = await navigator.storage.getDirectory();
+        const dir = await root.getDirectoryHandle('late90', { create: true });
+        // Test-page shims as in the test above: a handle refused write
+        // permission, and a save picker the user cancels.
+        const real = await teFiles.opfsFile(dir, 'late.md', 'Original.\n');
+        const kept = {
+          kind: 'file', name: 'late.md', real,
+          getFile: () => real.getFile(),
+          createWritable: () => real.createWritable(),
+          isSameEntry: (o) => real.isSameEntry(o && o.real ? o.real : o),
+          queryPermission: async () => 'denied',
+          requestPermission: async () => 'denied',
+        };
+        const picker = window.showSaveFilePicker;
+        window.showSaveFilePicker = async () => { throw new DOMException('cancelled', 'AbortError'); };
+        const notice = () => document.querySelector('.te-files-notice');
+        try {
+          if (!(await p.openFile(await real.getFile(), kept))) return 'open failed';
+          teFiles.type(ed, ' Unsaved.');
+          p.save();
+          if (await p.lastWrite) out.push('cancelled fallback reported a write');
+          const shown = notice().textContent;
+          if (!shown.includes('No permission to write late.md: nothing was saved')) out.push('notice before the draft check: ' + shown);
+          await p.identityReady;
+          if (notice().hidden) out.push('notice hidden by the draft check');
+          if (!notice().textContent.includes('No permission to write late.md: nothing was saved')) out.push('notice after the draft check: ' + notice().textContent);
+        } finally {
+          window.showSaveFilePicker = picker;
+          await root.removeEntry('late90', { recursive: true }).catch(() => {});
+          teTest.resetDrafts();
+        }
+        return out.join('; ');
+        "##,
+    )
+    .await;
+    assert_eq!(result, "");
+}

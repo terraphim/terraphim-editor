@@ -1,0 +1,9 @@
+{
+  "name": "terraphim-editor-ci-tools",
+  "private": true,
+  "description": "Node tools for the Gitea CI: Trunk's post_build hook (scripts/build-dist.sh) minifies the embeddable bundle with these. Installed by scripts/ci/tools.sh with npm ci --ignore-scripts.",
+  "dependencies": {
+    "clean-css-cli": "5.6.3",
+    "terser": "5.37.0"
+  }
+}

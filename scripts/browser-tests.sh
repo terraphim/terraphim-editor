@@ -27,6 +27,9 @@
 # a load of 14. The load average lags short spikes, so this lowers the risk
 # rather than removing it.
 #
+# BROWSER_TESTS_CARGO_ARGS adds arguments to each binary's `cargo test`
+# (CI passes --locked).
+#
 # Exit status: 0 when every binary passed, 1 when any failed, 3 when none
 # failed but a benchmark was skipped for load (the run is incomplete).
 set -uo pipefail
@@ -39,6 +42,7 @@ LOAD_WAIT="${BROWSER_TESTS_LOAD_WAIT:-300}"
 BENCHMARKS=" web_bench web_bench_logged "
 # The runner's budget is part of what is tested.
 unset WASM_BINDGEN_TEST_TIMEOUT
+read -r -a CARGO_ARGS <<< "${BROWSER_TESTS_CARGO_ARGS:-}"
 
 load1() {
   if [ -r /proc/loadavg ]; then
@@ -99,7 +103,7 @@ for bin in "${BINARIES[@]}"; do
   first=0
   load="$(load1)"
   start=$(date +%s)
-  out="$(wasm-pack test --headless --chrome -- --test "$bin" 2>&1)"
+  out="$(wasm-pack test --headless --chrome -- ${CARGO_ARGS[@]+"${CARGO_ARGS[@]}"} --test "$bin" 2>&1)"
   status=$?
   secs=$(( $(date +%s) - start ))
   finished="$(printf '%s\n' "$out" | grep -o 'finished in [0-9.]*s' | tail -1)"

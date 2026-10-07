@@ -1,0 +1,54 @@
+# Pull-request and push checks for terraphim-editor (issue #90): formatting,
+# clippy, the native tests, the browser tests in headless Chrome and the
+# release Trunk build.
+#
+# Runner conventions follow terraphim-ai's native-ci.yml and zed-terraphim's
+# ci.yml. The terraphim-native runner on bigbox checks the repository out
+# itself (no actions/checkout), runs each `run:` under `sh -c`, evaluates no
+# `${{ }}` expressions and accepts no `uses:`. Its command policy classifies
+# a step by its first word, so every step goes through `bash` and a script
+# in scripts/ci, which points Cargo's target and build directories at the
+# checkout (scripts/ci/env.sh).
+#
+# Credentials. The runner starts every step with its own environment,
+# tokens included, and for a pull request the steps, this file among them,
+# come from the pull request. Nothing in this repository can keep those
+# tokens from a pull request that wants them; that needs the runner to stop
+# passing them on (or a runner without them). What this workflow does is
+# need none of them, so a runner can serve it without credentials:
+#
+#   - The Terraphim Cargo registry asks for a token only for its
+#     config.json. scripts/ci/registry.sh fetches the locked Terraphim
+#     crates without one, checks them against Cargo.lock and serves them to
+#     Cargo as a local registry; Cargo never contacts that registry.
+#   - scripts/ci/env.sh, sourced by every step, removes every credential
+#     variable and runs Cargo offline except in `cargo fetch` (run.sh
+#     --network), which reaches crates.io only.
+#   - scripts/ci/secrets-audit.sh reports how many credential variables the
+#     runner passed in (names counted, never values) and fails if any are
+#     left after env.sh; scripts/ci/secrets-names-test.sh pins which names
+#     count as credentials.
+#
+# Tools are on PATH only after scripts/ci/tools.sh has reinstalled them
+# (--tools).
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: terraphim-native
+    timeout-minutes: 60
+    steps:
+      - run: bash scripts/ci/secrets-audit.sh
+      - run: bash scripts/ci/secrets-names-test.sh
+      - run: bash scripts/ci/registry.sh
+      - run: bash scripts/ci/run.sh rustup target add wasm32-unknown-unknown
+      - run: bash scripts/ci/run.sh cargo fmt --all -- --check
+      - run: bash scripts/ci/run.sh --network cargo fetch --locked
+      - run: bash scripts/ci/run.sh cargo clippy --locked --workspace --all-targets -- -D warnings
+      - run: bash scripts/ci/run.sh cargo test --locked --workspace
+      - run: bash scripts/ci/tools.sh
+      - run: bash scripts/ci/browser-tests.sh
+      - run: bash scripts/ci/run.sh --tools trunk build --release --locked

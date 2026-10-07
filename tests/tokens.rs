@@ -171,7 +171,13 @@ fn assert_scope_applies(scope_attr: (&str, &str)) {
         px(&surface_max) > 0.0,
         "{label}: surface max-width {surface_max}"
     );
-    assert_eq!(surface_ml, surface_mr, "{label}: surface centred");
+    // Auto margins split the free space in layout units of 1/64 px, so on
+    // some platforms (Chrome 145 on Linux) the two sides differ by one unit:
+    // 642.938px against 642.953px.
+    assert!(
+        (px(&surface_ml) - px(&surface_mr)).abs() < 0.5,
+        "{label}: surface centred, margins {surface_ml} and {surface_mr}"
+    );
     assert!(
         px(&surface_ml) > 0.0,
         "{label}: surface margin {surface_ml}"
