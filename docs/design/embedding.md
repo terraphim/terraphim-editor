@@ -69,13 +69,18 @@ Write_On never restyles the host page. The chrome sets `data-mode="write-on"` on
 | `saveDocument()` | the `.md` text (body plus annotation block); dispatches `te:saved`. Storing it is the host's job, or call `persistence.save()` for the file / download flow |
 | `exportDocument()` | clean Markdown |
 | `isWriteOn()` / `setWriteOn(on)` | Write_On mode |
+| `toolsVisible()` / `setTools(on)` | the plain-mode toolbar and preview (hidden by default, issue #86; Ctrl+Shift+L in the editor does the same) |
 | `on(type, fn)` / `off(type, fn)` | this editor's `te:*` events (from its container, or with `detail.editor` set to it); `on` returns an unsubscribe function |
 | `persistence` | `TePersistence` (save, open, drafts, `markClean()`) |
 | `markdownEditor` | the `MarkdownEditor` (surface, chrome, panels) |
 | `container` | the `.terraphim-editor-container` |
 | `destroy()` | remove everything the editor added, on the page and in the module; returns unapplied drafts (see `MarkdownEditor.destroy()`) |
 
-Options: `value` (default empty), `wasmUrl`, `glueUrl`, `bindings`, `standalone` (default `false`: Ctrl+S / Ctrl+O act only while focus is in the editor, see `docs/design/persistence.md`), `dirtyTitle` (default: `standalone`, so an embed does not prefix the host's `document.title`), `loadShoelace` (default `true`) and `config` (merged over `window.EditorConfig`: `shortcuts`, `commands`, `documentKey`, `fileSystemAccess`, `autosaveDelay`).
+Options: `value` (default empty), `wasmUrl`, `glueUrl`, `bindings`, `standalone` (default `false`: Ctrl+S / Ctrl+O act only while focus is in the editor, see `docs/design/persistence.md`), `dirtyTitle` (default: `standalone`, so an embed does not prefix the host's `document.title`), `loadShoelace` (default `true`) and `config` (merged over `window.EditorConfig`: `shortcuts`, `commands`, `documentKey`, `fileSystemAccess`, `autosaveDelay`, and `tools: true` to start with the plain-mode toolbar and preview shown).
+
+### Plain mode on an embed (issue #86)
+
+Plain mode is the text and the word count, as on the full page: the toolbar and the preview are hidden until the tools are shown (`setTools(true)`, Ctrl+Shift+L, or `config: { tools: true }` for a host that wants the old split editor by default). They are still rendered, so the formatting shortcuts, the palette, the toolbar buttons' API (`markdownEditor.toolbar`) and the preview HTML keep working; the rules are scoped to the editor's `.te-app` container, so a host's own `.toolbar` or `.markdown-preview` is never hidden. See `docs/design/write-on-chrome.md`.
 
 `new TeraphimEditor(element, options).initialize()` still works: `initialize()` is an alias of `mount()`, which now also loads the module and renders the markup.
 
@@ -100,6 +105,7 @@ The toolbar, the help list and the slash command palette are built with `createE
 | `test_create_renders_into_a_bare_container_and_stays_inside_it` | rendering into an empty element; every looked-up element, the chrome and the toolbar buttons inside the container; initial value, model and preview; `setValue`/`getValue`; native typing; the Rust preview updates the container's preview only; a toolbar button formats |
 | `test_module_start_leaves_an_embedding_page_alone` | `start()` does not render into a host page's own `#app`; the `editor.js` bootstrap starts no second controller |
 | `test_write_on_toggle_and_scoped_events` | the counter toggles Write_On (container `data-mode`, toolbar and preview hidden, corner controls shown); `on`/`off`; an event from elsewhere is not delivered; `setWriteOn` |
+| `test_embed_plain_mode_hides_the_tools_until_asked`, `test_embed_config_tools_starts_with_the_toolbar_and_preview` | plain mode hides the container's toolbar and preview but not the host's decoy ones; Ctrl+B still formats; `setTools` shows them with a current preview; `config.tools` |
 | `test_write_on_in_an_embed_leaves_the_host_page_unstyled` | a host element carrying its own `data-mode="write-on"` with `.toolbar`, `sl-split-panel`, `.te-surface` and `.markdown-preview` children computes exactly like a twin without the attribute (the bundle does not style it) and does not change when the embed toggles; Write_On on an embed leaves `<body>`'s attributes and computed styles unchanged while the container is themed; the Overflow panel marks the root, not `<body>` |
 | `test_config_values_render_as_text_never_markup` | shortcut names, descriptions and keys and command names with `<img onerror>` payloads land as text (no `<img>` parsed, nothing runs); icon names that are not `/^[a-z0-9-]+$/` are dropped, valid ones kept |
 | `test_files_dropped_on_the_host_page_are_left_to_the_host` | drops on the page and the decoy are ignored; a drop on the surface opens the file |

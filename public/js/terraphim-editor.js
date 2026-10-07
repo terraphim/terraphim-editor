@@ -32,7 +32,9 @@
  *   dirtyTitle     prefix document.title while unsaved (default: standalone)
  *   loadShoelace   load the Shoelace components from the CDN (default true)
  *   config         overrides merged over window.EditorConfig (shortcuts,
- *                  commands, documentKey, fileSystemAccess, autosaveDelay)
+ *                  commands, documentKey, fileSystemAccess, autosaveDelay,
+ *                  tools: true to start with the plain-mode toolbar and
+ *                  preview shown, issue #86)
  *
  * One editor per page: the document session and the live preview live in
  * the WebAssembly module as single instances, so a second create() while
@@ -264,6 +266,21 @@ class TeraphimEditor {
   setWriteOn(on) {
     const chrome = this.requireEditor().chrome;
     if (chrome) chrome.setMode(on ? 'write-on' : 'plain');
+  }
+
+  /** Whether the plain-mode toolbar and preview are shown (issue #86). */
+  toolsVisible() {
+    const chrome = this.requireEditor().chrome;
+    return !!chrome && chrome.toolsVisible();
+  }
+
+  /**
+   * Show or hide the plain-mode toolbar and preview (Ctrl+Shift+L does the
+   * same). Hidden by default; `config: { tools: true }` starts with them.
+   */
+  setTools(on) {
+    const chrome = this.requireEditor().chrome;
+    if (chrome) chrome.setTools(on);
   }
 
   /**

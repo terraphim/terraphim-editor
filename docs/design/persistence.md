@@ -57,7 +57,7 @@ A modal `<dialog>` titled "Markdown" showing `editor.exportDocument()` (the acti
 
 Escape, the close button or a click on the backdrop closes it, and focus returns to where it was (the `M↓` control). The export is taken each time the dialog opens.
 
-**Plain mode.** The plain editor already shows the rendered preview, but the export (the Markdown without annotations and ghosted text) is just as useful there, so the plain toolbar gets a File group with Open, Save and Markdown (FontAwesome icons with screen-reader labels). Save and open therefore work the same in both modes, and Ctrl+S / Ctrl+O work everywhere.
+**Plain mode.** The plain editor already shows the rendered preview, but the export (the Markdown without annotations and ghosted text) is just as useful there, so the plain toolbar gets a File group with Open, Save and Markdown (FontAwesome icons with screen-reader labels). Save and open therefore work the same in both modes, and Ctrl+S / Ctrl+O work everywhere. Since #86 the plain toolbar is hidden until its tools are shown (Ctrl+Shift+L; see `docs/design/write-on-chrome.md`), so in plain mode the keyboard shortcuts are the default path and `M↓` in Write_On the default way to the export dialog.
 
 ## Shortcuts
 

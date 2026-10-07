@@ -71,7 +71,12 @@
  * Plain mode: a "View" button group (Text | Blocks) in the toolbar. Write_On
  * mode has no Blocks control: the toolbar is hidden there by write-on.css,
  * and entering Write_On switches back to the text surface (the Blocks view
- * resumes when plain mode returns). Blocks is not part of the Write_On spec.
+ * resumes when plain mode returns with the tools shown). Blocks is not part of the Write_On spec.
+ * Plain mode hides the toolbar too unless its tools are shown (Ctrl+Shift+L,
+ * issue #86), so hiding the tools does the same: back to the text surface,
+ * and Blocks resumes when the tools are shown again. A stored Blocks
+ * preference waits for the tools in the same way. setView() itself is not
+ * gated by the tools (it is in Write_On).
  *
  * Keyboard (the list uses a roving tabindex):
  *   ArrowUp / ArrowDown / Home / End   move between blocks
@@ -172,16 +177,19 @@ class BlocksView {
     // Drafts kept after an outside change overlapped an open block editor.
     this.drafts = [];
     this.nextDraftId = 1;
-    // Blocks was showing when Write_On mode took over.
+    // Blocks was showing when Write_On mode, or hiding the plain-mode tools,
+    // took over.
     this.resumeAfterWriteOn = false;
 
     this.build();
     this.offChange = this.surface.onChange((change) => this.onSurfaceChange(change));
     this.listen(document, 'te:mode-change', (e) => this.onModeChange(e));
+    this.listen(document, 'te:tools-change', (e) => this.onToolsChange(e));
 
-    // Restore the viewer's last view (never in Write_On mode).
+    // Restore the viewer's last view (never in Write_On mode, nor while the
+    // plain-mode tools, and so the view toggle, are hidden).
     if (BlocksView.loadPreference() === 'blocks') {
-      if (this.writeOnActive()) this.resumeAfterWriteOn = true;
+      if (this.writeOnActive() || !this.toolsVisible()) this.resumeAfterWriteOn = true;
       else this.setView('blocks', { persist: false, focus: false });
     }
   }
@@ -640,6 +648,12 @@ class BlocksView {
     return !!(chrome && typeof chrome.isWriteOn === 'function' && chrome.isWriteOn());
   }
 
+  /** Whether the toolbar (with the view toggle) is shown in plain mode. */
+  toolsVisible() {
+    const chrome = this.editor.chrome;
+    return !(chrome && typeof chrome.toolsVisible === 'function') || chrome.toolsVisible();
+  }
+
   /**
    * Show 'text' (the editing surface) or 'blocks'. The caret follows: the
    * block containing the surface selection gets focus, and on the way back
@@ -711,7 +725,21 @@ class BlocksView {
         this.resumeAfterWriteOn = true;
         this.setView('text', { persist: false, focus: false });
       }
-    } else if (mode === 'plain' && this.resumeAfterWriteOn) {
+    } else if (mode === 'plain' && this.resumeAfterWriteOn && this.toolsVisible()) {
+      this.resumeAfterWriteOn = false;
+      this.setView('blocks', { persist: false, focus: false });
+    }
+  }
+
+  /** Hiding the plain-mode tools hides the view toggle: see the header. */
+  onToolsChange(e) {
+    if (!e.detail || e.detail.editor !== this.editor) return;
+    if (!e.detail.visible) {
+      if (this.isActive()) {
+        this.resumeAfterWriteOn = true;
+        this.setView('text', { persist: false, focus: false });
+      }
+    } else if (this.resumeAfterWriteOn && !this.writeOnActive()) {
       this.resumeAfterWriteOn = false;
       this.setView('blocks', { persist: false, focus: false });
     }

@@ -74,9 +74,9 @@ Drafting is mostly choosing. Ordinary editors make you delete the version you ar
       The same text as a list of cards (headings, paragraphs, lists, quotes). Edit in place, add, delete or move blocks with Alt+Up and Alt+Down; alternatives and ghosts move with them, and a half-typed draft is never lost.
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/plain.png" alt="Plain mode: source and live preview">
+      <img src="docs/images/plain.png" alt="Plain mode with the toolbar and live preview shown">
       <h3>Plain mode</h3>
-      A classic source pane with a live Markdown preview, a formatting toolbar and a <code>/</code> command palette. Click the word counter to switch between plain and Write_On.
+      A plain text editor: the text and the word counter, nothing more. The formatting shortcuts and the <code>/</code> command palette work as they are; Ctrl+Shift+L shows the classic formatting toolbar and live Markdown preview (pictured). Click the word counter to switch between plain and Write_On.
     </td>
   </tr>
   <tr>
@@ -88,7 +88,7 @@ Drafting is mostly choosing. Ordinary editors make you delete the version you ar
     <td width="50%" valign="top">
       <img src="docs/images/markdown-export.png" alt="The Markdown export dialog">
       <h3>Markdown export</h3>
-      <code>M↓</code> (or the toolbar's Markdown button) shows the clean Markdown: the active alternatives, without ghosted text, the overflow or the annotation block, ready to copy or download.
+      <code>M↓</code> (or the toolbar's Markdown button, Ctrl+Shift+L in plain mode) shows the clean Markdown: the active alternatives, without ghosted text, the overflow or the annotation block, ready to copy or download.
     </td>
   </tr>
 </table>
@@ -152,7 +152,7 @@ scripts/browser-tests.sh        # browser tests in headless Chrome (needs Chrome
 4. **Ghost a sentence.** Select it and press **Ctrl+/**. Press it again with the caret inside to revive it.
 5. **Stash a tangent.** Select a paragraph and press **Ctrl+Shift+X**; open **XYZ** at the bottom right to see it.
 6. **Ask the Lab.** Click **LAB**, choose "Mark hedges and filler", then try **Tighten more** and **Make the cuts**. **Ctrl+Z** undoes the whole trim.
-7. **Rearrange.** Switch to **Blocks** in plain mode and move a paragraph with **Alt+Down**.
+7. **Rearrange.** In plain mode press **Ctrl+Shift+L** for the toolbar, switch to **Blocks** and move a paragraph with **Alt+Down**.
 8. **Save.** Press **Ctrl+S** (or click the floppy). In Chrome and Edge the first save asks where to put the `.md` file and later saves write to it; in Firefox and Safari it downloads. Opening it again (**Ctrl+O**, the folder icon, or dropping the file on the editor) restores every alternative, ghost and stash, and unsaved work survives a reload as a draft the editor offers to restore.
 
 ## Keyboard shortcuts
@@ -168,6 +168,7 @@ Formatting and selection shortcuts use Ctrl on every platform (not Cmd); undo, r
 | Ctrl+K / Ctrl+L | Inline code / link |
 | Ctrl+H | Heading |
 | `/` | Command palette |
+| Ctrl+Shift+L | Show or hide the toolbar and preview (plain mode) |
 | Ctrl+Z / Ctrl+Y (or Cmd) | Undo / redo |
 | Ctrl+S / Ctrl+O (or Cmd) | Save / open a file (replaces the browser's own) |
 

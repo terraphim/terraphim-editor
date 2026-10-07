@@ -62,12 +62,18 @@ blocks sensibly:
 - **Plain mode:** a "View" button group (Text | Blocks) is added to the
   toolbar after the formatting buttons. It uses FontAwesome icons
   (`fa-align-left`, `fa-layer-group`), `aria-pressed` and the primary variant
-  for the active view.
+  for the active view. Since #86 plain mode hides the toolbar unless its
+  tools are shown (Ctrl+Shift+L, `chrome.setTools(true)`, `config.tools`),
+  so the toggle is reachable only with them. Hiding the tools while Blocks
+  is showing switches back to the text surface and Blocks resumes when they
+  are shown again; a stored Blocks preference also waits for the tools. The
+  stored preference is unchanged by this. `setView('blocks')` is not gated
+  by the tools.
 - **Write_On mode:** there is no Blocks control. Write_On is the
   distraction-free writing surface defined by the spec, and its toolbar is
   hidden by `write-on.css`. Entering Write_On while Blocks is showing
   switches back to the text surface (with the caret on the focused block).
-  The Blocks view comes back when plain mode returns. Calling
+  The Blocks view comes back when plain mode returns with its tools shown. Calling
   `setView('blocks')` while in Write_On does nothing. `blocks.css` also
   hides the view and its toggle under `body[data-mode="write-on"]` as a
   safeguard.

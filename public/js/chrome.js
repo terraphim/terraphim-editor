@@ -2,8 +2,9 @@
  * Write_On mode toggle and corner chrome (issue #7, spec R-2.1, R-7.1-R-7.3)
  * ==========================================================================
  *
- * The plain editor is the default. The only addition in plain mode is a dim
- * `N words M chars` counter in the top-left corner. Clicking the counter
+ * The plain editor is the default. Plain mode shows the text and a dim
+ * `N words M chars` counter in the top-left corner, nothing more (R-2.1,
+ * R-7.1; owner decision on issue #86). Clicking the counter
  * toggles Write_On mode, which sets `data-mode="write-on"` on the editor's
  * root (`editor.root`, the `.te-app` element: #app or an embed container,
  * issue #77; the scope used by public/css/tokens.css and
@@ -33,6 +34,18 @@
  * editor.saveDocument() and te:open / te:markdown are only dispatched.
  * Every mode change dispatches te:mode-change {mode: 'plain' | 'write-on'}.
  *
+ * Tools (issue #86)
+ * -----------------
+ * The legacy formatting toolbar and the split live preview are not shown in
+ * plain mode. They are still rendered (the preview keeps rendering, and the
+ * formatting shortcuts and the `/` palette keep working without them), and
+ * Ctrl+Shift+L, pressed anywhere in the editor, or setTools(on) shows them
+ * again. The chrome mirrors the state as `data-tools="on" | "off"` on the
+ * editor's root; public/css/write-on.css hides both unless it is "on".
+ * Write_On hides them regardless. `config.tools: true` starts with them
+ * shown. The toggle is not persisted. Every change dispatches
+ * te:tools-change {visible}.
+ *
  * Toggle persistence (per document)
  * ---------------------------------
  * The mode is stored in localStorage under
@@ -54,6 +67,9 @@
  */
 
 const WRITE_ON_STORAGE_PREFIX = 'terraphim-editor:write-on:';
+
+/** Shows or hides the toolbar and preview in plain mode (issue #86). */
+const TOOLS_TOGGLE_KEY = 'ctrl+shift+l';
 
 /** Selection shortcuts from R-7.3; the editor shortcuts come from config.js. */
 const WRITE_ON_SELECTION_SHORTCUTS = [
@@ -129,6 +145,7 @@ class WriteOnChrome {
     this.mount = options.mount || (editor.input && editor.input.closest('.editor-container')) || document.body;
     this.destroyed = false;
     this.mode = 'plain';
+    this.tools = null;
     this.ownsBodyMode = false;
     // Only the full page (the editor rendered into #app, or a standalone
     // editor) puts Write_On on <body>; an embedded editor keeps it on its
@@ -139,6 +156,7 @@ class WriteOnChrome {
 
     this.build();
     this.offChange = editor.surface ? editor.surface.onChange(() => this.refresh()) : () => {};
+    this.setTools(!!(editor.config && editor.config.tools === true), { silent: true });
     this.documentChanged();
   }
 
@@ -255,6 +273,20 @@ class WriteOnChrome {
 
     root.append(counter, corners, this.buildShortcutReference(listen));
     this.mount.appendChild(root);
+
+    // The tools toggle, from anywhere inside the editor (the surface, a
+    // toolbar button, the preview). Exactly Ctrl+Shift+L: Shift is matched
+    // as teConfigShortcutMatches does, so Ctrl+L stays the link shortcut.
+    // Capture phase, and the event stops here so no other handler sees it.
+    const keyScope = this.editor.root || this.mount;
+    keyScope.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.defaultPrevented) return;
+      if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return;
+      if ((e.key || '').toLowerCase() !== 'l') return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleTools();
+    }, { signal: this.signal, capture: true });
   }
 
   /** The shortcut reference: every R-7.3 shortcut and every config.js shortcut. */
@@ -270,7 +302,10 @@ class WriteOnChrome {
 
   /** The Editor section: the palette, plus save and open (issue #76). */
   editorShortcuts() {
-    const items = [{ key: '/', desc: 'Command palette' }];
+    const items = [
+      { key: '/', desc: 'Command palette' },
+      { key: TOOLS_TOGGLE_KEY, desc: 'Show or hide the toolbar and preview' },
+    ];
     if (typeof window.TePersistence === 'function') {
       items.push({ key: 'ctrl+s', desc: 'Save' }, { key: 'ctrl+o', desc: 'Open' });
     }
@@ -465,6 +500,25 @@ class WriteOnChrome {
     if (changed) this.emit('te:mode-change', { mode: next });
   }
 
+  toolsVisible() {
+    return this.tools === true;
+  }
+
+  toggleTools() {
+    this.setTools(!this.toolsVisible());
+  }
+
+  /** Show or hide the plain-mode toolbar and preview (see header). */
+  setTools(on, { silent = false } = {}) {
+    if (this.destroyed) return;
+    const next = !!on;
+    const changed = next !== this.tools;
+    this.tools = next;
+    const root = this.editor.root;
+    if (root && root !== document.body) root.dataset.tools = next ? 'on' : 'off';
+    if (changed && !silent) this.emit('te:tools-change', { visible: next });
+  }
+
   /** Remove the chrome DOM, the change subscription and the body mode. */
   destroy() {
     if (this.destroyed) return;
@@ -474,7 +528,10 @@ class WriteOnChrome {
       this.ownsBodyMode = false;
     }
     const root = this.editor.root;
-    if (root && root !== document.body) delete root.dataset.mode;
+    if (root && root !== document.body) {
+      delete root.dataset.mode;
+      delete root.dataset.tools;
+    }
     this.destroyed = true;
     this.offChange();
     this.root.remove();
@@ -485,3 +542,4 @@ window.WriteOnChrome = WriteOnChrome;
 window.countsFor = countsFor;
 window.documentModelAvailable = documentModelAvailable;
 window.WRITE_ON_STORAGE_PREFIX = WRITE_ON_STORAGE_PREFIX;
+window.TOOLS_TOGGLE_KEY = TOOLS_TOGGLE_KEY;

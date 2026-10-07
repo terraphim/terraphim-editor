@@ -5,14 +5,44 @@
  * Consumes the tokens in public/css/tokens.css; no colours, fonts or radii
  * are hard-coded here. The chrome DOM is built by public/js/chrome.js.
  *
- * Plain mode (default): the existing editor plus the dim word/char counter
- * in the top-left corner. The corner controls carry the `hidden` attribute.
+ * Plain mode (default): the text and the dim word/char counter in the
+ * top-left corner, nothing more (R-2.1, R-7.1; issue #86). The toolbar and
+ * the preview pane are hidden unless the chrome sets data-tools="on" on the
+ * editor root (Ctrl+Shift+L, chrome.setTools(), config.tools). The corner
+ * controls carry the `hidden` attribute.
  *
  * Write_On mode (data-mode="write-on" on the editor root, .te-app, and on
  * <body> on the full page only; issue #77): full-bleed dark page, the
  * writing surface as a centred ~70ch column, no toolbar, no preview pane,
  * and the corner controls of R-7.2.
  */
+
+/* ---- Plain mode: text and counter only (R-2.1, R-7.1; issue #86) ----
+   Keyed on the absence of data-tools="on", so the toolbar and the preview
+   are hidden by default; the Write_On rules below hide them regardless. */
+
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .toolbar,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .editor-container [slot="end"] {
+    display: none;
+}
+
+/* As in Write_On: a block host leaves only the writing surface in flow. */
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) sl-split-panel {
+    display: block !important;
+    height: 100%;
+}
+
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) sl-split-panel::part(divider) {
+    display: none;
+}
+
+/* The surface fills the editor, taking the band the toolbar used to
+   reserve, so a click anywhere below the text lands in it. */
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .editor-container,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .editor-container [slot="start"],
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .markdown-input.te-surface {
+    height: 100%;
+}
 
 /* ---- Write_On page layout (R-7.1) ---- */
 
@@ -79,7 +109,7 @@
 }
 
 /* Top-left counter: dim monospace, visible in both modes. In plain mode it
-   sits in the 20px band above the toolbar. */
+   sits in the 20px band above the text. */
 .te-chrome-counter {
     position: fixed;
     top: 1px;

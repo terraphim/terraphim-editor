@@ -121,6 +121,8 @@ async fn test_view_toggle_preference_and_destroy() {
     let result = run_steps(&[
         r##"
           if (!bv) return 'no blocks view';
+          // The toggle is in the toolbar, shown in plain mode with the tools (#86).
+          ed.chrome.setTools(true);
           const group = document.querySelector('.toolbar .te-view-toggle');
           if (!group) return 'no view toggle in the toolbar';
           const blocksBtn = group.querySelector('[data-view="blocks"]');
@@ -162,8 +164,17 @@ async fn test_view_toggle_preference_and_destroy() {
           const fresh = new MarkdownEditor(window.EditorConfig);
           fresh.initialize();
           window.__teEditor = fresh;
-          if (!fresh.blocks || fresh.blocks.view !== 'blocks') out.push('preference not restored');
+          // The tools (and the toggle) start hidden, so Blocks waits for them.
+          if (!fresh.blocks || fresh.blocks.view !== 'text') out.push('blocks restored without the toggle');
+          fresh.chrome.setTools(true);
+          if (fresh.blocks.view !== 'blocks') out.push('preference not restored');
           if (document.querySelectorAll('.te-view-toggle').length !== 1) out.push('toggle duplicated');
+          // Hiding the tools goes back to the text surface; showing resumes.
+          fresh.chrome.setTools(false);
+          if (fresh.blocks.view !== 'text' || !teTest.visible(fresh.surface.root)) out.push('blocks kept without the toggle');
+          if (localStorage.getItem(BLOCKS_VIEW_STORAGE_KEY) !== 'blocks') out.push('hiding the tools changed the preference');
+          fresh.chrome.setTools(true);
+          if (fresh.blocks.view !== 'blocks') out.push('blocks not resumed with the tools');
           // The old view is inert after destroy().
           bv.setView('text');
           if (fresh.blocks.view !== 'blocks') out.push('old view affected the new one');

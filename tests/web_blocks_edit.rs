@@ -79,6 +79,10 @@ async fn test_insert_delete_and_write_on_mode() {
           bv.setView('blocks');
           if (bv.view !== 'text') out.push('blocks allowed in write-on');
           chrome.toggle();
+          // Plain mode hides the toolbar, and so the view toggle, until the
+          // tools are shown (#86): Blocks waits for them.
+          if (bv.view !== 'text') out.push('blocks resumed without the toggle');
+          chrome.setTools(true);
           if (bv.view !== 'blocks') out.push('blocks not resumed in plain mode');
         "##,
     ])

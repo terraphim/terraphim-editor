@@ -54,7 +54,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 
 | Req | Video | Editor: implementation → test | Editor | Zed: surface → test | Zed |
 |---|---|---|---|---|---|
-| R-2.1 Plain mode; counter toggles Write_On | 0:00–0:11 | `chrome.js` WriteOnChrome toggle → `web_chrome::test_counter_click_toggles_write_on_and_every_corner_control` | **Partial**: plain mode keeps the old toolbar and preview (`docs/design/write-on-chrome.md:10`; `web_chrome::test_plain_mode_shows_only_the_counter` asserts the toolbar is visible) | none; settings only | Not possible |
+| R-2.1 Plain mode; counter toggles Write_On | 0:00–0:11 | `chrome.js` WriteOnChrome toggle and `setTools`, `write-on.css` plain-mode rules → `web_chrome::test_plain_mode_shows_only_the_counter` (only the text and the counter are visible), `web_chrome::test_counter_click_toggles_write_on_and_every_corner_control`, `web_chrome::test_plain_mode_keeps_formatting_shortcuts_and_the_palette`, `web_chrome::test_tools_toggle_reveals_toolbar_preview_and_export`, `web_embed::test_embed_plain_mode_hides_the_tools_until_asked` | Done (#86: toolbar and preview hidden in plain mode, back with Ctrl+Shift+L; `docs/design/write-on-chrome.md`) | none; settings only | Not possible |
 | R-2.2 Span-anchored alternatives, original first, one active | 0:30–0:53 | crate `model.rs` Span, `document.rs` add_span / set_active → `lifecycle::add_alternative_validates_and_deduplicates`, `web_alt_panel::test_selection_add_up_down_edit_and_undo` | Done | "Replace with X" code actions on KG terms → T `code_action_tests::offers_every_other_synonym_on_the_fixture_doc` | Partial: KG synonyms only; stored spans and the active index are never surfaced |
 | R-2.3 Word / sentence / paragraph | 0:22, 2:08–2:15 | `SpanKind`, `indicators.js` → `web_indicators::test_word_headline_sentence_and_paragraph_geometry` | Done (paragraph spans tested from fixtures, not created through the UI) | word/phrase KG terms only | Partial |
 | R-2.4 Hover + Up/Down cycles in place | 0:40–0:48 | `indicators.js` onCycleKey → `web_cycling::test_hover_and_arrows_cycle_with_wrap_and_one_undo_step_each` | Done | code-action menu picks | Not possible (no key handling) |
@@ -81,10 +81,10 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 | R-6.3 Stash selection | 3:59–4:06 | `stashRange` → `web_overflow::test_stash_is_a_move_and_one_undo_step` | Done | none | Missing (possible as a code action) |
 | R-6.4 Pull back (Ctrl+Enter, drag) | 4:22–4:26 | `pullBack` → `web_overflow::test_ctrl_enter_and_drop_insert_at_the_caret` | Done | none | Missing / drag Not possible |
 | R-6.5 Overflow persisted | inferred | `Annotations.overflow` → `web_overflow::test_panel_text_persists_is_not_exported…` | Done | preserved on block rewrite | Untested |
-| R-7.1 Dark centred 70ch layout | frames | `tokens.css`, `write-on.css` → `web_chrome::test_counter_click_toggles_write_on…` | Done in Write_On (70ch not asserted; see R-2.1) | Zed centred layout | Not possible |
+| R-7.1 Dark centred 70ch layout | frames | `tokens.css`, `write-on.css` → `web_chrome::test_counter_click_toggles_write_on…`, `web_chrome::test_plain_mode_shows_only_the_counter` (no toolbar in plain mode) | Done (70ch not asserted; no plain-mode toolbar since #86) | Zed centred layout | Not possible |
 | R-7.2 Corner controls | 0:03, 4:29 | `chrome.js` build → `web_chrome::test_counter_click_toggles_write_on_and_every_corner_control` | Done; X/LinkedIn Out of scope (§1) | Zed's own save and open | Not possible |
 | R-7.3 Context menu, 4 items + shortcuts | 2:38 | `TeSelectionMenu` + plug-ins → `web_ghosts::test_menu_keyboard_navigation_and_plugins`, `web_overflow::test_stash…` | Done (the AI item only on KG terms, or on any selection once a host provider is registered, #83) | code-action menu | Not possible |
-| R-7.4 No shortcut collisions | inferred | `config.js`, `editor_config.toml`, `selection-menu.js` (Ctrl+/, Ctrl+Shift+A/G/X), `teConfigShortcutMatches` in `editor.js` (exact modifiers, Shift included) → `web_shortcuts::test_configured_and_write_on_shortcuts_are_disjoint`, `web_shortcuts::test_config_shortcut_does_not_fire_on_write_on_shift_chord`, `web_shortcuts::test_config_shortcuts_need_their_exact_modifiers` | Done (#85): configured keys from both files are disjoint from the live menu keys, the shortcut reference and the panel, cycling and pull-back keys, normalised with Shift; a config `ctrl+x` no longer fires on Ctrl+Shift+X | extension binds no keys | N/A |
+| R-7.4 No shortcut collisions | inferred | `config.js`, `editor_config.toml`, `selection-menu.js` (Ctrl+/, Ctrl+Shift+A/G/X), `teConfigShortcutMatches` in `editor.js` (exact modifiers, Shift included) → `web_shortcuts::test_configured_and_write_on_shortcuts_are_disjoint`, `web_shortcuts::test_config_shortcut_does_not_fire_on_write_on_shift_chord`, `web_shortcuts::test_config_shortcuts_need_their_exact_modifiers`, `web_shortcuts::test_tools_toggle_needs_exactly_ctrl_shift_l` | Done (#85): configured keys from both files are disjoint from the live menu keys, the shortcut reference, the panel, cycling and pull-back keys and the plain-mode Ctrl+Shift+L tools toggle (#86), normalised with Shift; a config `ctrl+x` no longer fires on Ctrl+Shift+X | extension binds no keys | N/A |
 | R-8.1 Lab popover | 4:52–4:59 | `lab.js` TeLabPopover → `web_lab::test_each_action_marks_exactly_the_engine_spans_and_clear_works` | Done | trim rows in the code-action menu; mark actions not offered | Partial |
 | R-8.2 Six mark actions, never rewrite | 5:03–5:15 | `terraphim_lab` → `invariants::labels_and_kinds_cover_all_six_actions`, `invariants::no_action_mutates_the_input`, `web_lab::test_each_action_marks…` | Done | Lab diagnostics + "Apply fix: X" → CT `lab::one_code_per_mark_kind_with_the_engine_reason`, T `command_tests::lab_mark_publishes_one_action_with_fixes` | Partial: only via settings and a save; off-tone untested |
 | R-8.3 Five trim levels | 5:19–5:58 | `trim.js`, `trim.rs` → `web_trim::test_each_level_card_and_preview_equal_the_engine`, `trim::levels_are_nested` | Done | "Trim: Original … Cut in half ~50%" → T `trim_review_tests::the_menu_offers_five_levels_and_the_review_actions`, `trim-review-proof.py` | Done (in Zed once PR #31 pins rc.2) |
@@ -100,7 +100,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 
 | | Done | Partial | Missing | Not possible | Untested | Out of scope / N/A |
 |---|---|---|---|---|---|---|
-| terraphim-editor (41) | 40 | 1 (R-2.1) | 0 | n/a | 0 | X/LinkedIn per §1 (inside R-7.2) |
+| terraphim-editor (41) | 41 | 0 | 0 | n/a | 0 | X/LinkedIn per §1 (inside R-7.2) |
 | Zed (41) | 5 (R-2.6, R-8.3, R-8.4, R-8.5, R-9.1) | 10 (R-8.2 among them) | 7 | 17 | 1 (R-6.5) | 1 (R-7.4) |
 
 ## Gaps and the smallest fixes
@@ -109,7 +109,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 1. ~~**R-8.7:** add a provider seam (trait or JS interface) for alternatives, with the thesaurus as the first implementation. Decision 12.4 already expects it.~~ Done in #83.
 2. ~~**R-3.5:** style plain `#` headings in Write_On, and hide the marker.~~ Done in #84.
 3. ~~**R-7.4:** add a test asserting the configured and Write_On shortcuts are disjoint, with Shift taken into account.~~ Done in #85.
-4. **R-2.1 / R-7.1:** decide whether plain mode should drop the legacy toolbar and preview (a recorded deviation today).
+4. **R-2.1 / R-7.1:** resolved (owner decision 2026-10-07, #86): plain mode shows only the text and the counter; the toolbar and preview come back with Ctrl+Shift+L.
 
 There are also unasserted details: panel widths and placement, the 70ch measure, the cursive tab face, several colours, the underline staying unchanged on hover, a dot hover not enabling cycling, and paragraph spans created through the UI.
 

@@ -98,7 +98,10 @@ fn test_configured_and_write_on_shortcuts_are_disjoint() {
             'ctrl+z', 'ctrl+shift+z', 'ctrl+y', 'meta+z', 'meta+shift+z', 'meta+y',
             // Opening the selection menu from the keyboard.
             'contextmenu', 'shift+f10',
+            // The plain-mode tools toggle (issue #86).
+            'ctrl+shift+l',
           ].map(norm);
+          if (TOOLS_TOGGLE_KEY !== 'ctrl+shift+l') out.push('tools toggle key ' + TOOLS_TOGGLE_KEY);
           const writeOn = new Set(menuKeys.concat(reference, direct));
           for (const k of configured) {{
             if (writeOn.has(k)) out.push('collision: ' + k);
@@ -185,6 +188,52 @@ fn test_config_shortcuts_need_their_exact_modifiers() {
           attempt('ctrl+]', ']', { ctrlKey: true }, 'hello [world]');
           attempt('ctrl+shift+]', ']', { ctrlKey: true, shiftKey: true }, 'hello [world]');
           attempt('ctrl+alt+]', ']', { ctrlKey: true, altKey: true }, 'hello world');
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_tools_toggle_needs_exactly_ctrl_shift_l() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const ed = window.__teEditor;
+          const s = ed.surface;
+          const chrome = ed.chrome;
+          const out = [];
+          for (const mode of ['plain', 'write-on']) {
+            chrome.setMode(mode);
+            chrome.setTools(false);
+            // Ctrl+Shift+L, in either case, toggles the tools and leaves the text.
+            for (const key of ['L', 'l']) {
+              s.setText('hello world');
+              s.focus();
+              s.setSelectionOffsets(6, 11);
+              const prevented = teTest.key(s.root, key, { ctrlKey: true, shiftKey: true, code: 'KeyL' });
+              if (!prevented) out.push(mode + ' ctrl+shift+' + key + ': default not prevented');
+              if (!chrome.toolsVisible()) out.push(mode + ' ctrl+shift+' + key + ': tools not on');
+              if (s.getText() !== 'hello world') out.push(mode + ' ctrl+shift+' + key + ': text ' + JSON.stringify(s.getText()));
+              chrome.setTools(false);
+            }
+            // Any other modifier set leaves the tools alone.
+            for (const [label, key, opts] of [
+              ['ctrl+alt+shift+l', 'L', { ctrlKey: true, altKey: true, shiftKey: true }],
+              ['ctrl+meta+shift+l', 'L', { ctrlKey: true, metaKey: true, shiftKey: true }],
+              ['meta+shift+l', 'L', { metaKey: true, shiftKey: true }],
+              ['shift+l', 'L', { shiftKey: true }],
+              ['ctrl+l', 'l', { ctrlKey: true }],
+            ]) {
+              s.setText('hello world');
+              s.focus();
+              s.setSelectionOffsets(6, 11);
+              teTest.key(s.root, key, Object.assign({ code: 'KeyL' }, opts));
+              if (chrome.toolsVisible()) out.push(mode + ' ' + label + ' toggled the tools');
+              chrome.setTools(false);
+            }
+          }
+          chrome.setMode('plain');
           return out.join('; ');
         })()"##,
     );

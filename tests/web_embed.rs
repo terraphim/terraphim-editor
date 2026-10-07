@@ -541,3 +541,54 @@ async fn test_single_instance_destroy_and_legacy_initialize() {
     .await;
     assert_eq!(legacy, "");
 }
+
+#[wasm_bindgen_test]
+async fn test_embed_plain_mode_hides_the_tools_until_asked() {
+    fresh_embed("# Embedded\n\nSome words here.").await;
+    let result = run_steps(&[
+        r##"
+          const E = window.__teEmbed;
+          // Plain mode (#86): the text and the counter, no toolbar or preview.
+          if (teTest.visible(E.container.querySelector('.toolbar'))) out.push('toolbar visible');
+          if (teTest.visible(E.container.querySelector('.markdown-preview'))) out.push('preview visible');
+          if (!teTest.visible(s.root)) out.push('surface hidden');
+          if (!teTest.visible(E.container.querySelector('.te-chrome-counter'))) out.push('counter hidden');
+          if (E.toolsVisible()) out.push('tools on by default');
+          if (E.container.dataset.tools !== 'off') out.push('container data-tools ' + E.container.dataset.tools);
+          // Formatting shortcuts still work on the embed's surface.
+          s.setSelectionOffsets(2, 10);
+          teTest.key(s.root, 'b', { ctrlKey: true });
+          if (!E.getValue().startsWith('# **Embedded**')) out.push('ctrl+b ' + JSON.stringify(E.getValue()));
+          // The wrapper shows them; the preview is current.
+          E.setTools(true);
+          if (!E.toolsVisible()) out.push('setTools(true)');
+          if (!teTest.visible(E.container.querySelector('.toolbar'))) out.push('toolbar not shown');
+          if (!teTest.visible(E.container.querySelector('.markdown-preview'))) out.push('preview not shown');
+          window.teFlushPreview();
+          if (!E.container.querySelector('.markdown-preview').innerHTML.includes('<strong>Embedded</strong>')) out.push('preview stale');
+          // The host's decoy toolbar and preview are never touched.
+          const decoy = document.getElementById('te-decoy');
+          if (!teTest.visible(decoy.querySelector('.toolbar')) || !teTest.visible(decoy.querySelector('.markdown-preview'))) out.push('decoy hidden');
+          E.setTools(false);
+          if (teTest.visible(E.container.querySelector('.toolbar'))) out.push('setTools(false)');
+        "##,
+        DECOY_CHECK_JS,
+    ])
+    .await;
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_embed_config_tools_starts_with_the_toolbar_and_preview() {
+    fresh_embed_with("Words.", "{ tools: true }").await;
+    let result = run_steps(&[r##"
+          const E = window.__teEmbed;
+          if (!E.toolsVisible()) out.push('config.tools ignored');
+          if (!teTest.visible(E.container.querySelector('.toolbar'))) out.push('toolbar hidden');
+          if (!teTest.visible(E.container.querySelector('.markdown-preview'))) out.push('preview hidden');
+          E.destroy();
+          window.__teEmbed = null;
+        "##])
+    .await;
+    assert_eq!(result, "");
+}

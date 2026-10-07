@@ -50,8 +50,26 @@ fn test_plain_mode_shows_only_the_counter() {
           if (fired.length) out.push('plain-mode clicks dispatched ' + fired.join(','));
           if (document.body.dataset.mode !== undefined) out.push('plain-mode click changed mode');
           if (document.querySelector('.te-chrome-shortcuts')?.open) out.push('plain-mode click opened reference');
-          // The plain editor itself is unchanged.
-          if (!teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar hidden in plain mode');
+          // R-2.1 / R-7.1 (owner decision on #86): plain mode is the text
+          // and the counter, nothing more. No toolbar, no preview pane.
+          if (teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar visible in plain mode');
+          if (teTest.visible(document.querySelector('.markdown-preview'))) out.push('preview visible in plain mode');
+          if (!teTest.visible(teTest.surface().root)) out.push('surface not visible');
+          if (teTest.chrome().toolsVisible()) out.push('tools on by default');
+          // Inside the editor nothing else takes up room: every visible box
+          // larger than 1px (screen-reader-only regions are 1px) outside a
+          // closed dialog holds, or is inside, the surface or the counter.
+          const surfaceRoot = teTest.surface().root;
+          const extra = Array.from(window.__teEditor.root.querySelectorAll('*'))
+            .filter((el) => {{
+              if (!teTest.visible(el) || el.closest('sl-dialog:not([open]), dialog:not([open])')) return false;
+              const r = el.getBoundingClientRect();
+              if (r.width <= 1 || r.height <= 1) return false;
+              return !el.contains(surfaceRoot) && !surfaceRoot.contains(el) &&
+                !el.contains(counter) && !counter.contains(el);
+            }})
+            .map((el) => el.tagName.toLowerCase() + '.' + el.className);
+          if (extra.length) out.push('visible besides text and counter: ' + extra.join(', '));
           // Counter text follows the surface: words as the editor defines
           // them (issue #59; an emoji is not a word), Unicode code points
           // for chars.
@@ -149,13 +167,154 @@ fn test_counter_click_toggles_write_on_and_every_corner_control() {
           if (document.body.dataset.mode !== undefined) out.push('body mode after toggle back ' + document.body.dataset.mode);
           if (counter.getAttribute('aria-pressed') !== 'false') out.push('aria-pressed not false');
           for (const name of {CHROME_CONTROLS_JS}) if (teTest.visible(teTest.control(name))) out.push('still visible: ' + name);
-          if (!teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar not restored');
-          if (!teTest.visible(document.querySelector('.markdown-preview'))) out.push('preview not restored');
+          // Back in plain mode: still only the text and the counter (#86).
+          if (teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar visible after toggle back');
+          if (teTest.visible(document.querySelector('.markdown-preview'))) out.push('preview visible after toggle back');
           document.removeEventListener('te:mode-change', onMode);
           if (modes.join(',') !== 'write-on,plain') out.push('mode events ' + modes.join(','));
           return out.join('; ');
         }})()"##
     ));
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_plain_mode_keeps_formatting_shortcuts_and_the_palette() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const s = teTest.surface();
+          if (teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar visible');
+          // Every formatting shortcut from config.js still wraps the selection.
+          for (const sc of window.EditorConfig.shortcuts) {
+            const [mod, key] = sc.key.split('+');
+            s.setText('one two');
+            s.setSelectionOffsets(4, 7);
+            if (!teTest.key(s.root, key, { ctrlKey: mod === 'ctrl' })) out.push(sc.key + ' not handled');
+            const want = 'one ' + sc.prefix + 'two' + sc.suffix;
+            if (s.getText() !== want) out.push(sc.key + ': ' + JSON.stringify(s.getText()));
+          }
+          // The slash command palette still opens and applies a command.
+          const menu = teTest.menu();
+          s.setText('Intro\n');
+          s.setSelectionOffsets(6);
+          teTest.key(s.root, '/');
+          if (menu.style.display !== 'block') out.push('palette not shown');
+          teTest.key(menu, 'Enter');
+          const cmd = window.EditorConfig.commands[0];
+          if (s.getText() !== 'Intro\n' + cmd.prefix + 'text' + cmd.suffix) out.push('palette ' + JSON.stringify(s.getText()));
+          // The preview keeps rendering while hidden, so showing it is current.
+          s.setText('# Live');
+          if (!teTest.preview().includes('<h1>Live</h1>')) out.push('hidden preview not rendered');
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_tools_toggle_reveals_toolbar_preview_and_export() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const ed = window.__teEditor;
+          const chrome = teTest.chrome();
+          const s = teTest.surface();
+          const toolbar = () => document.querySelector('.toolbar');
+          const preview = () => document.querySelector('.markdown-preview');
+          const seen = [];
+          const rec = (e) => seen.push(e.detail.visible + (e.detail.editor === ed ? '' : '!editor'));
+          document.addEventListener('te:tools-change', rec);
+          // Ctrl+Shift+L, from the surface, shows the toolbar and the preview.
+          s.focus();
+          const before = s.getText();
+          if (!teTest.key(s.root, 'L', { ctrlKey: true, shiftKey: true })) out.push('toggle key not handled');
+          if (!chrome.toolsVisible()) out.push('tools not on');
+          if (ed.root.dataset.tools !== 'on') out.push('root data-tools ' + ed.root.dataset.tools);
+          if (!teTest.visible(toolbar())) out.push('toolbar not shown');
+          if (!teTest.visible(preview())) out.push('preview not shown');
+          // The text is unchanged by the toggle.
+          if (s.getText() !== before) out.push('toggle changed the text');
+          // The toolbar's Markdown button opens the export dialog.
+          const tb = document.querySelector('.toolbar [data-te-file="markdown"]');
+          if (!tb) out.push('no toolbar Markdown button');
+          else {
+            s.setText('Exported words.');
+            tb.click();
+            const d = document.querySelector('.te-files-markdown');
+            if (!d || !d.open) out.push('export dialog not open');
+            else if (d.querySelector('textarea').value !== ed.exportDocument()) out.push('export text ' + JSON.stringify(d.querySelector('textarea').value));
+            if (d) d.close();
+          }
+          // Write_On is unchanged: no toolbar or preview even with tools on.
+          chrome.setMode('write-on');
+          if (teTest.visible(toolbar())) out.push('toolbar visible in Write_On');
+          if (teTest.visible(preview())) out.push('preview visible in Write_On');
+          chrome.setMode('plain');
+          if (!teTest.visible(toolbar())) out.push('tools not kept after Write_On');
+          // The same key hides them again; so does setTools(false).
+          teTest.key(s.root, 'l', { ctrlKey: true, shiftKey: true });
+          if (chrome.toolsVisible() || teTest.visible(toolbar()) || teTest.visible(preview())) out.push('second toggle did not hide');
+          chrome.setTools(true);
+          chrome.setTools(true); // no event when nothing changes
+          chrome.setTools(false);
+          document.removeEventListener('te:tools-change', rec);
+          if (seen.join(',') !== 'true,false,true,false') out.push('events ' + seen.join(','));
+          // Ctrl+L alone is still the link shortcut, not the toggle.
+          s.setText('x');
+          s.setSelectionOffsets(0, 1);
+          teTest.key(s.root, 'l', { ctrlKey: true });
+          if (chrome.toolsVisible()) out.push('ctrl+l toggled tools');
+          if (s.getText() !== '[x](url)') out.push('ctrl+l ' + JSON.stringify(s.getText()));
+          // The shortcut reference lists the toggle.
+          if (!document.querySelector('.te-chrome-shortcut[data-key="ctrl+shift+l"]')) out.push('toggle not in the reference');
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_export_dialog_is_reachable_in_plain_mode() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const ed = window.__teEditor;
+          if (teTest.chrome().isWriteOn()) out.push('not plain');
+          ed.surface.setText('Plain words for export.');
+          // The export flow itself (the same one M-down and the toolbar use).
+          ed.persistence.showMarkdown();
+          const d = document.querySelector('.te-files-markdown');
+          if (!d || !d.open) return out.concat('export dialog not open').join('; ');
+          if (d.querySelector('textarea').value !== ed.exportDocument()) out.push('export text');
+          if (!d.querySelector('textarea').value.includes('Plain words for export.')) out.push('export misses the text');
+          d.close();
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_config_tools_starts_with_the_toolbar_and_preview() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          window.__teEditor.destroy();
+          if (document.querySelector('.te-app').dataset.tools !== undefined) out.push('destroy left data-tools');
+          const ed = new MarkdownEditor(Object.assign({}, window.EditorConfig, { tools: true }));
+          ed.initialize();
+          window.__teEditor = ed;
+          if (!ed.chrome.toolsVisible()) out.push('config.tools ignored');
+          if (!teTest.visible(document.querySelector('.toolbar'))) out.push('toolbar hidden');
+          if (!teTest.visible(document.querySelector('.markdown-preview'))) out.push('preview hidden');
+          return out.join('; ');
+        })()"##,
+    );
     assert_eq!(result, "");
 }
 
