@@ -230,7 +230,11 @@ async fn test_rapid_input_renders_once_after_window() {
     assert!(preview_pending());
     assert!(!preview_html(&document).contains("Final heading"));
 
-    sleep(delay + 100).await;
+    // Once nothing is pending, no further render can come.
+    assert!(
+        wait_until(|| !preview_pending()).await,
+        "the trailing render never ran"
+    );
     let fires = observed_renders();
     assert_eq!(fires.len(), 1, "exactly one trailing render: {fires:?}");
     assert_eq!(preview_render_count(), 1, "exactly one trailing render");
@@ -268,7 +272,10 @@ async fn test_each_input_restarts_the_window() {
         dispatch_input(&surface);
         sleep(30).await;
     }
-    sleep(DELAY + 100).await;
+    assert!(
+        wait_until(|| !preview_pending()).await,
+        "the trailing render never ran"
+    );
     let fires = observed_renders();
     assert!(!fires.is_empty(), "the burst must render");
     for fire in &fires {
@@ -318,7 +325,10 @@ async fn test_preview_delay_is_configurable() {
     surface.set_text_content(Some("# Short"));
     dispatch_input(&surface);
     assert!(preview_pending());
-    sleep(20 + 100).await;
+    assert!(
+        wait_until(|| !preview_pending()).await,
+        "the delayed render never ran"
+    );
     assert_eq!(preview_render_count(), 2);
     assert!(preview_html(&document).contains("<h1>Short</h1>"));
 
@@ -364,7 +374,10 @@ async fn test_native_typing_on_surface_renders_once_after_debounce() {
         "typing must not render synchronously"
     );
     assert!(preview_pending());
-    sleep(preview_delay() + 100).await;
+    assert!(
+        wait_until(|| !preview_pending()).await,
+        "the debounced render never ran"
+    );
     assert_eq!(preview_render_count(), 1);
     assert!(preview_html(&document).contains("<h1>Typed title</h1>"));
 }

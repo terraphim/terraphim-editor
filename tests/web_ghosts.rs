@@ -304,7 +304,10 @@ async fn test_ghost_follows_typing_elsewhere_and_inside() {
     );
     assert_eq!(before, "", "{before}");
     // The trailing debounce confirms against the model (one read, no change).
-    sleep(200).await;
+    assert!(
+        wait_until(|| js_number("teGh.ed().ghosts.pending() ? 0 : 1") == 1.0).await,
+        "the debounced confirmation never ran"
+    );
     problems(
         r##"(() => {
           const out = [];
@@ -319,7 +322,10 @@ async fn test_ghost_follows_typing_elsewhere_and_inside() {
           return out.join('\n');
         })()"##,
     );
-    sleep(50).await;
+    assert!(
+        wait_until(|| js_number("teGh.ed().ghosts.pending() ? 0 : 1") == 1.0).await,
+        "the frame refresh never ran"
+    );
     problems(
         r##"(() => {
           const out = [];

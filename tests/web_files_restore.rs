@@ -44,7 +44,8 @@ async fn test_draft_is_restored_or_discarded_after_a_reload() {
         if (ed.persistence.dirty) out.push('dirty before restoring');
         // A clean tick while the notice is up leaves the stored draft alone.
         ed.persistence.schedule();
-        await teFiles.wait(120);
+        if (ed.persistence.timer === null) out.push('no clean tick scheduled');
+        if (!(await teTest.until(() => ed.persistence.timer === null))) out.push('clean tick never ran');
         if (!stored() || stored().text !== want) out.push('clean tick replaced the pending draft');
         // Restore.
         notice.querySelector('[data-action="restore"]').click();
@@ -74,7 +75,7 @@ async fn test_draft_is_restored_or_discarded_after_a_reload() {
         const past = Date.now() - 60000;
         ed.persistence.load(teFixtures.plain.md, 'dated.md', null, past, size);
         teFiles.type(ed, ' Draft words.');
-        await teFiles.wait(120);
+        await teTest.until(() => ed.persistence.timer === null);
         const d = JSON.parse(localStorage.getItem(window.TE_DRAFT_PREFIX + 'file:dated.md|' + size + '|' + past) || 'null');
         if (!d) return out.concat('no draft for dated.md').join('; ');
         if (d.name !== 'dated.md') out.push('draft name ' + d.name);
@@ -91,7 +92,8 @@ async fn test_draft_is_restored_or_discarded_after_a_reload() {
         const future = Date.now() + 60000;
         ed.persistence.load(teFixtures.plain.md, 'later.md', null, future, size);
         teFiles.type(ed, ' Older draft.');
-        await teFiles.wait(120);
+        const laterKey = window.TE_DRAFT_PREFIX + 'file:later.md|' + size + '|' + future;
+        if (!(await teTest.until(() => ed.persistence.timer === null && localStorage.getItem(laterKey) !== null))) out.push('no draft for later.md');
         ed.persistence.load(teFixtures.plain.md, 'later.md', null, future, size);
         if (shown()) out.push('offered a draft older than the file');
         // The same text as the file is never offered.

@@ -425,6 +425,8 @@ class TePersistence {
   openDialog(dialog, focusEl) {
     const back = document.activeElement;
     this.on(dialog, 'close', () => {
+      // A dialog replaced by a new one (showMarkdown) leaves focus there.
+      if (dialog.dataset.teReplaced) return;
       if (back && back.isConnected && typeof back.focus === 'function') back.focus();
     }, { once: true });
     if (typeof dialog.showModal === 'function') dialog.showModal();
@@ -1188,8 +1190,10 @@ class TePersistence {
     const ev = this.emit('te:markdown', {}, true);
     if (ev.defaultPrevented) return null;
     if (this.markdownDialog) {
-      // One export view at a time; the close event is asynchronous.
+      // One export view at a time; the close event is asynchronous, so the
+      // old view is marked to keep its focus return off the new one.
       const old = this.markdownDialog;
+      old.dataset.teReplaced = 'true';
       old.close();
       this.removeDialog(old);
     }

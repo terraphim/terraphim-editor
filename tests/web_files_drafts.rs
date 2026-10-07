@@ -40,14 +40,14 @@ async fn test_dirty_state_follows_edits_undo_annotations_and_save() {
           if (!ctl.classList.contains('te-dirty') || !tb.classList.contains('te-dirty')) out.push('no dot');
           if (ctl.getAttribute('aria-label') !== 'Save document (unsaved changes)') out.push('label ' + ctl.getAttribute('aria-label'));
           // After the autosave delay the draft holds the serialised document.
-          await teFiles.wait(150);
+          await teTest.until(() => p.timer === null && draft());
           const d = draft();
           if (!d || d.text !== p.serialise() || !d.text.includes(' Typed.')) out.push('draft ' + JSON.stringify(d && d.text.slice(-30)));
           if (d && !(d.savedAt > 0 && d.v === 1)) out.push('draft fields ' + JSON.stringify(d));
           // Undo back to the opened text clears the flag on the next tick.
           teTest.key(ed.surface.root, 'z', { ctrlKey: true });
           if (ed.surface.getText().includes(' Typed.')) out.push('undo did not undo');
-          await teFiles.wait(150);
+          await teTest.until(() => p.timer === null && !p.dirty);
           if (p.dirty) out.push('dirty after undo');
           if (document.title !== 'Drafts test') out.push('title after undo ' + JSON.stringify(document.title));
           if (ctl.classList.contains('te-dirty') || ctl.getAttribute('aria-label') !== 'Save document') out.push('dot after undo');
@@ -56,7 +56,7 @@ async fn test_dirty_state_follows_edits_undo_annotations_and_save() {
           const ghosted = ed.ghosts.ghost(2, 9);
           if (!ghosted || ghosted.ok === false) out.push('ghost failed ' + JSON.stringify(ghosted));
           ed.surface.root.dispatchEvent(new KeyboardEvent('keyup', { key: '/', bubbles: true }));
-          await teFiles.wait(150);
+          await teTest.until(() => p.timer === null && p.dirty);
           if (!p.dirty) out.push('ghost did not mark dirty');
           if (!draft().text.includes('"ghosts"')) out.push('ghost not in the draft');
           // Saving records a clean state.
@@ -78,7 +78,7 @@ async fn test_dirty_state_follows_edits_undo_annotations_and_save() {
           if (p.key !== 'host.md' || p.fileName !== 'host.md' || p.handle !== null) out.push('host open key ' + p.key);
           if (teTest.visible(document.querySelector('.te-files-notice'))) out.push('notice after a host open');
           teFiles.type(ed, ' Host edit.');
-          await teFiles.wait(150);
+          await teTest.until(() => p.timer === null && localStorage.getItem(window.TE_DRAFT_PREFIX + 'host.md') !== null);
           if (!p.dirty) out.push('host edit not dirty');
           const hostDraft = JSON.parse(localStorage.getItem(window.TE_DRAFT_PREFIX + 'host.md') || 'null');
           if (!hostDraft || !hostDraft.text.includes(' Host edit.')) out.push('host draft not under host.md');

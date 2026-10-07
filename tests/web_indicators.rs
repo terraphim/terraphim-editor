@@ -218,8 +218,14 @@ async fn test_indicators_follow_reanchored_spans_while_typing() {
         })()"##,
     );
     assert_eq!(early, "");
-    // Real timers: the rest of the trailing debounce plus a few frames.
-    sleep(600 + 150).await;
+    // Real timers: the rest of the trailing debounce, then its layout frame.
+    assert!(
+        wait_until(|| js_number(
+            "(() => { const l = teInd.layer(); return !l.pending() && !l.frame ? 1 : 0; })()"
+        ) == 1.0)
+        .await,
+        "the debounced refresh or its layout never ran"
+    );
     let result = js_string(
         r##"(() => {
           const out = [];

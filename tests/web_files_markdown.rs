@@ -70,19 +70,29 @@ async fn test_markdown_dialog_shows_the_export_with_copy_and_download() {
             if ((await teFiles.read(cap.list[0])) !== exported) out.push('downloaded text differs from the export');
           }
           if (!d.querySelector('[role="status"]').textContent.includes('notes-export.md')) out.push('download status');
-          // Escape (requestClose) closes it and focus returns to M-down.
+          // Escape (requestClose) closes it at once; the dialog is removed
+          // and focus returns to M-down on its close event, which is queued.
           if (typeof d.requestClose === 'function') d.requestClose(); else d.close();
-          await teFiles.wait(30);
+          if (d.open) out.push('still open after Escape');
+          await teTest.until(() => !d.isConnected);
           if (document.querySelector('.te-files-markdown')) out.push('dialog left after Escape');
           if (document.activeElement !== ctl) out.push('focus did not return: ' + (document.activeElement && document.activeElement.className));
-          // M-down twice gives one dialog. (The close event is queued, so
-          // the steps above and below wait a little after closing.)
+          // M-down twice gives one dialog, also once the first one's queued
+          // close event has run.
           ctl.click();
+          const first = document.querySelector('.te-files-markdown');
+          let firstClosed = false;
+          first.addEventListener('close', () => { firstClosed = true; }, { once: true });
           ctl.click();
-          await teFiles.wait(30);
+          if (!(await teTest.until(() => firstClosed))) out.push('first dialog never closed');
           if (document.querySelectorAll('.te-files-markdown').length !== 1) out.push('dialogs ' + document.querySelectorAll('.te-files-markdown').length);
-          document.querySelector('.te-files-markdown .te-files-close').click();
-          await teFiles.wait(30);
+          const shown = document.querySelector('.te-files-markdown');
+          // The replaced dialog's close event does not take focus back from
+          // the new one.
+          if (document.activeElement !== shown.querySelector('textarea')) out.push('focus left the new dialog: ' + (document.activeElement && document.activeElement.className));
+          shown.querySelector('.te-files-close').click();
+          if (shown.open) out.push('still open after the close button');
+          await teTest.until(() => !shown.isConnected);
           if (document.querySelector('.te-files-markdown')) out.push('close button left the dialog');
           // Plain mode: the toolbar's Markdown button opens the same view.
           document.querySelector('.te-chrome-counter').click();
@@ -93,12 +103,13 @@ async fn test_markdown_dialog_shows_the_export_with_copy_and_download() {
           if (!d2 || !d2.open || d2.querySelector('textarea').value !== exported) out.push('plain-mode dialog');
           // Edits show up the next time it opens.
           d2.close();
-          await teFiles.wait(30);
+          if (!(await teTest.until(() => !d2.isConnected))) out.push('plain-mode dialog not removed');
           teFiles.type(ed, ' Fresh words.');
           tb.click();
           if (!document.querySelector('.te-files-markdown textarea').value.includes('Fresh words.')) out.push('stale export');
-          document.querySelector('.te-files-markdown').close();
-          await teFiles.wait(30);
+          const d3 = document.querySelector('.te-files-markdown');
+          d3.close();
+          if (!(await teTest.until(() => !d3.isConnected))) out.push('dialog left at the end');
         } finally {
           document.removeEventListener('te:markdown', rec);
           cap.stop();

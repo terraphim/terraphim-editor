@@ -33,7 +33,7 @@ async fn test_two_files_named_alike_keep_separate_drafts() {
           const id1 = p.draftId;
           if (!id1 || !id1.startsWith('fs:')) return 'draft id ' + id1;
           teFiles.type(ed, ' Unsaved one.');
-          await teFiles.wait(120);
+          await teTest.until(() => p.timer === null);
           const d1 = JSON.parse(localStorage.getItem(window.TE_DRAFT_PREFIX + id1) || 'null');
           if (!d1 || !d1.text.includes('Unsaved one.')) out.push('no draft for the first notes.md');
           if (localStorage.getItem(window.TE_DRAFT_PREFIX + 'notes.md') !== null) out.push('draft keyed by the bare name');
@@ -105,8 +105,9 @@ async fn test_embedded_shortcuts_act_only_with_focus_in_the_editor() {
           teTest.control('markdown').click();
           const area = document.querySelector('.te-files-markdown textarea');
           if (!teTest.key(area, 's', { ctrlKey: true })) out.push('Ctrl+S in the export dialog not handled');
-          document.querySelector('.te-files-markdown').close();
-          await teFiles.wait(30);
+          const dlg = document.querySelector('.te-files-markdown');
+          dlg.close();
+          if (!(await teTest.until(() => !dlg.isConnected))) out.push('export dialog not removed');
           document.querySelector('.te-chrome-counter').click();
           // The standalone page (index.html) takes them anywhere.
           ed = teFiles.reinit({ standalone: true });

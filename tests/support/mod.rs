@@ -87,6 +87,20 @@ document.addEventListener('click', (e) => {
   if (a instanceof HTMLAnchorElement && a.hasAttribute('download')) e.preventDefault();
 }, true);
 window.teTest = {
+  // Resolve true as soon as `done()` holds, polling on real timers, or false
+  // once the deadline passes. For asynchronous UI (a dialog's close event,
+  // a debounced tick) instead of a fixed sleep: a loaded host can deliver
+  // the event after any fixed sleep. The deadline only bounds a failing
+  // run; a passing one returns when the condition holds. The numbers are
+  // UNTIL_DEADLINE_MS and UNTIL_POLL_MS, installed from Rust.
+  async until(done, ms = window.__teUntil.deadline) {
+    const end = performance.now() + ms;
+    while (!done()) {
+      if (performance.now() > end) return false;
+      await new Promise((r) => setTimeout(r, window.__teUntil.poll));
+    }
+    return true;
+  },
   surface() { return window.__teEditor.surface; },
   root() { return window.__teEditor.surface.root; },
   key(target, key, opts) {
@@ -200,6 +214,28 @@ pub async fn sleep(ms: u32) {
         .expect("timer promise should resolve");
 }
 
+/// How long [`wait_until`] and `teTest.until` poll before giving up. Only a
+/// failing run waits this long.
+pub const UNTIL_DEADLINE_MS: u32 = 2000;
+/// The polling interval of [`wait_until`] and `teTest.until`.
+pub const UNTIL_POLL_MS: u32 = 5;
+
+/// Wait until `done()` holds, polling on real timers, for at most
+/// [`UNTIL_DEADLINE_MS`]; returns whether it held. Use it for asynchronous UI
+/// (a debounced render, a queued event) instead of a fixed sleep, which a
+/// loaded host can outlast. A fixed sleep remains right only where a test
+/// checks that something does not happen.
+pub async fn wait_until(mut done: impl FnMut() -> bool) -> bool {
+    let end = now() + f64::from(UNTIL_DEADLINE_MS);
+    while !done() {
+        if now() > end {
+            return false;
+        }
+        sleep(UNTIL_POLL_MS).await;
+    }
+    true
+}
+
 pub fn now() -> f64 {
     web_sys::window().unwrap().performance().unwrap().now()
 }
@@ -264,6 +300,9 @@ pub fn load_editor_scripts(document: &Document) {
         .unwrap()
         .append_child(&style)
         .unwrap();
+    js_eval(&format!(
+        "window.__teUntil = {{ deadline: {UNTIL_DEADLINE_MS}, poll: {UNTIL_POLL_MS} }}; 0"
+    ));
     for source in [
         CONFIG_JS,
         CHROME_JS,
