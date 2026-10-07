@@ -84,7 +84,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 | R-7.1 Dark centred 70ch layout | frames | `tokens.css`, `write-on.css` → `web_chrome::test_counter_click_toggles_write_on…` | Done in Write_On (70ch not asserted; see R-2.1) | Zed centred layout | Not possible |
 | R-7.2 Corner controls | 0:03, 4:29 | `chrome.js` build → `web_chrome::test_counter_click_toggles_write_on_and_every_corner_control` | Done; X/LinkedIn Out of scope (§1) | Zed's own save and open | Not possible |
 | R-7.3 Context menu, 4 items + shortcuts | 2:38 | `TeSelectionMenu` + plug-ins → `web_ghosts::test_menu_keyboard_navigation_and_plugins`, `web_overflow::test_stash…` | Done (the AI item only on KG terms) | code-action menu | Not possible |
-| R-7.4 No shortcut collisions | inferred | `config.js`, `selection-menu.js` (new keys Ctrl+/, Ctrl+Shift+A/G/X) → `web_ghosts::test_menu_keyboard_navigation_and_plugins` shows only that Ctrl+B still bolds with the menu shortcuts active | **Untested**: no test asserts the configured and Write_On shortcuts are disjoint (by inspection they are; config shortcuts ignore Shift, a latent risk) | extension binds no keys | N/A |
+| R-7.4 No shortcut collisions | inferred | `config.js`, `editor_config.toml`, `selection-menu.js` (Ctrl+/, Ctrl+Shift+A/G/X), `teConfigShortcutMatches` in `editor.js` (exact modifiers, Shift included) → `web_shortcuts::test_configured_and_write_on_shortcuts_are_disjoint`, `web_shortcuts::test_config_shortcut_does_not_fire_on_write_on_shift_chord`, `web_shortcuts::test_config_shortcuts_need_their_exact_modifiers` | Done (#85): configured keys from both files are disjoint from the live menu keys, the shortcut reference and the panel, cycling and pull-back keys, normalised with Shift; a config `ctrl+x` no longer fires on Ctrl+Shift+X | extension binds no keys | N/A |
 | R-8.1 Lab popover | 4:52–4:59 | `lab.js` TeLabPopover → `web_lab::test_each_action_marks_exactly_the_engine_spans_and_clear_works` | Done | trim rows in the code-action menu; mark actions not offered | Partial |
 | R-8.2 Six mark actions, never rewrite | 5:03–5:15 | `terraphim_lab` → `invariants::labels_and_kinds_cover_all_six_actions`, `invariants::no_action_mutates_the_input`, `web_lab::test_each_action_marks…` | Done | Lab diagnostics + "Apply fix: X" → CT `lab::one_code_per_mark_kind_with_the_engine_reason`, T `command_tests::lab_mark_publishes_one_action_with_fixes` | Partial: only via settings and a save; off-tone untested |
 | R-8.3 Five trim levels | 5:19–5:58 | `trim.js`, `trim.rs` → `web_trim::test_each_level_card_and_preview_equal_the_engine`, `trim::levels_are_nested` | Done | "Trim: Original … Cut in half ~50%" → T `trim_review_tests::the_menu_offers_five_levels_and_the_review_actions`, `trim-review-proof.py` | Done (in Zed once PR #31 pins rc.2) |
@@ -100,7 +100,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 
 | | Done | Partial | Missing | Not possible | Untested | Out of scope / N/A |
 |---|---|---|---|---|---|---|
-| terraphim-editor (41) | 37 | 3 (R-2.1, R-3.5, R-8.7) | 0 | n/a | 1 (R-7.4) | X/LinkedIn per §1 (inside R-7.2) |
+| terraphim-editor (41) | 38 | 3 (R-2.1, R-3.5, R-8.7) | 0 | n/a | 0 | X/LinkedIn per §1 (inside R-7.2) |
 | Zed (41) | 5 (R-2.6, R-8.3, R-8.4, R-8.5, R-9.1) | 10 (R-8.2 among them) | 7 | 17 | 1 (R-6.5) | 1 (R-7.4) |
 
 ## Gaps and the smallest fixes
@@ -108,7 +108,7 @@ Editor paths are relative to this repository. "crate" is `crates/terraphim_alter
 **terraphim-editor**
 1. **R-8.7:** add a provider seam (trait or JS interface) for alternatives, with the thesaurus as the first implementation. Decision 12.4 already expects it.
 2. **R-3.5:** style plain `#` headings in Write_On, and hide the marker.
-3. **R-7.4:** add a test asserting the configured and Write_On shortcuts are disjoint, with Shift taken into account.
+3. ~~**R-7.4:** add a test asserting the configured and Write_On shortcuts are disjoint, with Shift taken into account.~~ Done in #85.
 4. **R-2.1 / R-7.1:** decide whether plain mode should drop the legacy toolbar and preview (a recorded deviation today).
 
 There are also unasserted details: panel widths and placement, the 70ch measure, the cursive tab face, several colours, the underline staying unchanged on hover, a dot hover not enabling cycling, and paragraph spans created through the UI.

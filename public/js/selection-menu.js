@@ -77,10 +77,12 @@
  * Shortcuts (R-7.4): `ctrl+/` matches Ctrl (not Cmd) with `/` (by `key`, or
  * by `code` "Slash"; Shift is ignored for punctuation so layouts where `/`
  * needs Shift work). Letter shortcuts need the exact Shift state. config.js binds
- * ctrl+b/i/k/l/h; MarkdownEditor matches those as `ctrl+<key>` ignoring
- * Shift, so a future ctrl+a/g/x entry there would also fire on the R-7.3
- * Ctrl+Shift item. The command palette ignores `/` with Ctrl, and the
- * surface only takes Ctrl/Cmd+Z/Y. See docs/design/ghosts-and-menu.md.
+ * ctrl+b/i/k/l/h; MarkdownEditor matches those with the exact modifiers,
+ * Shift included (teConfigShortcutMatches in editor.js), so a ctrl+a/g/x
+ * entry there would not fire on the R-7.3 Ctrl+Shift item. The command
+ * palette ignores `/` with Ctrl, and the surface only takes Ctrl/Cmd+Z/Y.
+ * tests/web_shortcuts.rs asserts the two sets are disjoint. See
+ * docs/design/ghosts-and-menu.md.
  *
  * Load order: after indicators.js (the registry) and before editor.js,
  * which instantiates both classes in MarkdownEditor.initialize().

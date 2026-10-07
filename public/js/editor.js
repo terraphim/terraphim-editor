@@ -1298,6 +1298,26 @@ function teTextElement(tag, text, className) {
   return el;
 }
 
+/**
+ * Does keydown `e` match a configured shortcut such as 'ctrl+b' or
+ * 'ctrl+shift+u' (R-7.4)? The modifiers must be exactly those named, Shift
+ * included for letters and digits, so a config 'ctrl+x' never fires on the
+ * R-7.3 Ctrl+Shift+X. Shift is ignored for other keys, which some layouts
+ * need Shift to type. The key is matched by `e.key` only, so the letter the
+ * layout produces is the one that counts.
+ */
+function teConfigShortcutMatches(e, key) {
+  const parts = String(key).toLowerCase().split('+').filter(Boolean);
+  const want = parts.pop();
+  if (!want) return false;
+  const mods = new Set(parts);
+  if (mods.has('ctrl') !== e.ctrlKey || mods.has('alt') !== e.altKey || mods.has('meta') !== e.metaKey) {
+    return false;
+  }
+  if ((e.key || '').toLowerCase() !== want) return false;
+  return !/^[a-z0-9]$/.test(want) || mods.has('shift') === e.shiftKey;
+}
+
 class MarkdownEditor {
   constructor(config) {
     this.config = config;
@@ -1495,8 +1515,7 @@ class MarkdownEditor {
     // Setup keyboard shortcuts
     this.input.addEventListener('keydown', (e) => {
       if (e.isComposing) return;
-      const key = `${e.ctrlKey ? 'ctrl+' : ''}${e.key.toLowerCase()}`;
-      const shortcut = this.shortcuts.find(s => s.key === key);
+      const shortcut = this.shortcuts.find(s => teConfigShortcutMatches(e, s.key));
 
       if (shortcut) {
         e.preventDefault();
