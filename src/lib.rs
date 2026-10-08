@@ -15,9 +15,9 @@ pub use document::{
 pub use document::{set_active_alternative, SwapEdit, SwapOutcome};
 // Overflow panel: stash, pull back, panel text (issue #12).
 pub use document::{
-    append_overflow, document_overflow, rebase_overflow, replay_document_overflow,
-    replay_overflow_json, set_document_overflow, set_overflow_json, stash_document_range,
-    OverflowError, Rebased, StashOutcome,
+    append_overflow, document_overflow, overflow_pull_back_text, pull_back_separated,
+    rebase_overflow, replay_document_overflow, replay_overflow_json, set_document_overflow,
+    set_overflow_json, stash_document_range, OverflowError, PullBack, Rebased, StashOutcome,
 };
 
 // Knowledge-graph alternatives through terraphim_lsp_core (issue #13).

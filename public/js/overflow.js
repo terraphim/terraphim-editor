@@ -59,15 +59,21 @@
  *
  * Pull back (R-6.4) is a COPY: the text goes into the page and stays in the
  * overflow, so nothing can be lost (the spec calls it "use"; the author
- * deletes it from the panel when done). Ctrl+Enter in the text area inserts
- * the selected panel text, or the current line when nothing is selected, at
- * the document caret (at the end of a document selection, which is never
- * replaced), as one undo step through the normal edit path. Focus and the
+ * deletes it from the panel when done; terraphim-lsp copies too). Ctrl+Enter
+ * in the text area inserts the selected panel text, or the current line when
+ * nothing is selected, without its own line breaks at either end, at the
+ * document caret (at the end of a document selection, which is never
+ * replaced), as one undo step through the normal edit path. It is separated
+ * exactly as terraphim-lsp separates a pulled paragraph (the model's
+ * `overflow_pull_back_text`): as it is in the middle of a line; at the start
+ * or end of a line, or on a blank line, a paragraph of its own with one
+ * blank line on each side, in the document's line ending. Focus and the
  * panel selection stay in the panel.
  *
- * Drag. Dragging selected panel text into the page drops it at the drop
- * point (EditorSurface's own drop handling: one undo step) as a copy: the
- * drag allows only `copy`, so the text area never deletes its text.
+ * Drag. Dragging selected panel text into the page pulls it back the same
+ * way at the drop point (one undo step); the drag allows only `copy`, so the
+ * text area never deletes its text. Text dropped from anywhere else is
+ * inserted by EditorSurface as it is.
  * Dragging a page selection onto the panel stashes it (a move, the same
  * single undo step as Ctrl+Shift+X); the drop is accepted as `copy` so the
  * browser never deletes the page text behind the model's back.
@@ -92,6 +98,7 @@ class TeOverflowPanel {
     this.timer = null;
     this.returnFocus = null;
     this.pageDrag = null;
+    this.panelDrag = null;
     this.readOnly = false;
     this.unregisterItem = () => {};
 
@@ -208,10 +215,15 @@ class TeOverflowPanel {
         this.pullBack();
       }
     });
-    // Panel text dragged out is copied, never moved out of the panel.
+    // Panel text dragged out is copied, never moved out of the panel; in
+    // the page it is pulled back (separated) at the drop point.
     on(this.area, 'dragstart', (e) => {
       if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+      const start = Math.min(this.area.selectionStart, this.area.selectionEnd);
+      const end = Math.max(this.area.selectionStart, this.area.selectionEnd);
+      this.panelDrag = start === end ? null : { start, end, text: this.area.value.slice(start, end) };
     });
+    on(this.area, 'dragend', () => { this.panelDrag = null; });
     // A page selection dragged onto the panel is stashed.
     if (this.surface) {
       on(this.surface.root, 'dragstart', () => {
@@ -221,6 +233,9 @@ class TeOverflowPanel {
           : { start: sel.start, end: sel.end, text: this.surface.getText().slice(sel.start, sel.end) };
       });
       on(this.surface.root, 'dragend', () => { this.pageDrag = null; });
+      // Captured before EditorSurface's own drop handling, which inserts
+      // the dropped text as it is.
+      on(this.surface.root, 'drop', (e) => this.onPageDrop(e), { capture: true });
     }
     on(this.root, 'dragover', (e) => {
       if (!this.pageDrag || !this.canStash()) return;
@@ -469,23 +484,53 @@ class TeOverflowPanel {
 
   /**
    * Ctrl+Enter (R-6.4): copy the panel selection (or current line) into the
-   * page at the document caret, as one undo step. Focus and the panel
-   * selection stay in the panel. Returns { start, end } of the inserted text
-   * in the page, or null when there is nothing to insert.
+   * page at the document caret, separated as terraphim-lsp separates it, as
+   * one undo step. Focus and the panel selection stay in the panel. Returns
+   * { start, end } of the inserted text in the page, or null when there is
+   * nothing to insert.
    */
   pullBack() {
     if (this.destroyed || !this.surface) return null;
     const picked = this.pullBackText();
     if (!picked) return null;
+    return this.pullBackAt(this.surface.getSelectionOffsets().end, picked);
+  }
+
+  /** Copy `picked` ({ text, start, end } of the panel) into the page at `at`. */
+  pullBackAt(at, picked) {
     const { selectionStart, selectionEnd, selectionDirection } = this.area;
     const focused = document.activeElement === this.area;
-    const at = this.surface.getSelectionOffsets().end;
-    const edit = this.surface.replaceRange(at, at, picked.text, { source: 'overflow' });
+    let start = at;
+    let text = picked.text;
+    const api = this.api();
+    if (api && typeof api.overflow_pull_back_text === 'function') {
+      // The model reads the overflow: panel input still waiting goes first.
+      this.flush();
+      try {
+        ({ start, text } = api.overflow_pull_back_text(at, picked.start, picked.end));
+      } catch (err) {
+        console.warn('Could not pull back:', err);
+        return null;
+      }
+    }
+    const edit = this.surface.replaceRange(start, start, text, { source: 'overflow' });
     if (focused) {
       this.area.focus({ preventScroll: true });
       this.area.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
     }
     return { start: edit.start, end: edit.start + edit.insertedText.length };
+  }
+
+  /** Selected panel text dropped in the page: pulled back at the drop point. */
+  onPageDrop(e) {
+    const drag = this.panelDrag;
+    this.panelDrag = null;
+    if (!drag) return;
+    const data = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+    if (data !== drag.text || this.area.value.slice(drag.start, drag.end) !== drag.text) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    this.pullBackAt(this.surface.dropOffset(e), drag);
   }
 
   onPanelDrop(e) {

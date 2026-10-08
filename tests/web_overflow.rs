@@ -201,15 +201,81 @@ async fn test_ctrl_enter_and_drop_insert_at_the_caret() {
         if (ov.area.selectionStart !== 4 || ov.area.selectionEnd !== 13) out.push('panel selection lost');
         s.undo();
         if (s.getText() !== 'Alpha beta gamma.\n') out.push('undo ' + JSON.stringify(s.getText()));"#,
-        // Nothing selected: the current line. The caret is where undo left it.
+        // Nothing selected: the current line. At the start of a line it is a
+        // paragraph of its own, separated as terraphim-lsp separates it.
         r#"const ov = ed.overflow;
         s.setSelectionOffsets(0);
         ov.area.focus();
         ov.area.setSelectionRange(1, 1);
         ov.pullBack();
-        if (s.getText() !== 'OneAlpha beta gamma.\n') out.push('line ' + JSON.stringify(s.getText()));
-        s.undo();"#,
-        // Panel text dragged out is a copy; dropping inserts at the drop point.
+        if (s.getText() !== 'One\n\nAlpha beta gamma.\n') out.push('line ' + JSON.stringify(s.getText()));
+        if (teOv.api().document_overflow() !== 'One\nTwo words') out.push('overflow changed');
+        s.undo();
+        if (s.getText() !== 'Alpha beta gamma.\n') out.push('undo line ' + JSON.stringify(s.getText()));"#,
+        // At the end of a line the text no longer glues to the next line
+        // ("stuff.Pass me"): one blank line on each side, as in terraphim-lsp.
+        r#"const ov = ed.overflow;
+        ed.openDocument('Some stuff.\nPass me a paperclip.\n');
+        ed.chrome.setMode('write-on');
+        ov.open();
+        teOv.type(ov.area, 'Para.\n\nOther.');
+        ov.flush();
+        s.setSelectionOffsets(11);
+        ov.area.focus();
+        ov.area.setSelectionRange(0, 5);
+        T.depth = s.historyIndex;
+        ov.pullBack();
+        if (s.getText() !== 'Some stuff.\n\nPara.\n\nPass me a paperclip.\n') out.push('line end ' + JSON.stringify(s.getText()));
+        if (teOv.api().document_body() !== s.getText()) out.push('model body differs');
+        if (s.historyIndex !== T.depth + 1) out.push('not one undo step');
+        if (teOv.api().document_overflow() !== 'Para.\n\nOther.') out.push('overflow changed');
+        s.undo();
+        if (s.getText() !== 'Some stuff.\nPass me a paperclip.\n') out.push('undo ' + JSON.stringify(s.getText()));"#,
+        // The surface keeps "\n" line ends (it normalises a CRLF file on
+        // open), so the separators it gets are "\n" too.
+        r#"const ov = ed.overflow;
+        ed.openDocument('A.\r\nB.\r\n');
+        ed.chrome.setMode('write-on');
+        ov.open();
+        teOv.type(ov.area, 'Para.\n\nOther.');
+        ov.flush();
+        s.setSelectionOffsets(2);
+        ov.area.focus();
+        ov.area.setSelectionRange(0, 5);
+        ov.pullBack();
+        if (s.getText() !== 'A.\n\nPara.\n\nB.\n') out.push('crlf file ' + JSON.stringify(s.getText()));
+        if (teOv.api().document_body() !== s.getText()) out.push('model body differs');
+        ed.openDocument('Some stuff.\nPass me a paperclip.\n');
+        ed.chrome.setMode('write-on');
+        ov.open();
+        teOv.type(ov.area, 'Para.\n\nOther.');
+        ov.flush();"#,
+        // Selected panel text dragged into the page is pulled back the same
+        // way at the drop point, a copy. The drop lands on the surface root,
+        // where EditorSurface's own drop listener sits: the text goes in once.
+        r#"const ov = ed.overflow;
+        ov.area.setSelectionRange(7, 13);
+        const dt = new DataTransfer();
+        dt.setData('text/plain', 'Other.');
+        const start = new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt });
+        ov.area.dispatchEvent(start);
+        if (start.defaultPrevented) out.push('panel drag cancelled');
+        const rect = s.getCaretRect(17);
+        T.depth = s.historyIndex;
+        s.root.dispatchEvent(new DragEvent('drop', {
+          bubbles: true, cancelable: true, dataTransfer: dt,
+          clientX: rect.left + 0.5, clientY: rect.top + rect.height / 2,
+        }));
+        if (s.getText() !== 'Some stuff.\nPass Other.me a paperclip.\n') out.push('panel drop ' + JSON.stringify(s.getText()));
+        if (s.historyIndex !== T.depth + 1) out.push('panel drop not one undo step');
+        if (teOv.api().document_overflow() !== 'Para.\n\nOther.') out.push('panel drop changed the overflow');
+        s.undo();
+        ed.openDocument(window.__teSrc);
+        ed.chrome.setMode('write-on');
+        ov.open();
+        teOv.type(ov.area, 'One\nTwo words');
+        ov.flush();"#,
+        // Text dropped from elsewhere is inserted as it is at the drop point.
         // (A script-made DataTransfer is read-only for effectAllowed outside
         // a trusted drag, so the copy-only effect cannot be asserted here;
         // the dragstart must at least not be cancelled.)

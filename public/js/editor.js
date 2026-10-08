@@ -980,9 +980,18 @@ class EditorSurface {
   }
 
   onDrop(e) {
+    // A drop already handled (Overflow panel text pulled back) is not
+    // inserted a second time.
+    if (e.defaultPrevented) return;
     e.preventDefault();
     const data = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
     if (!data) return;
+    const offset = this.dropOffset(e);
+    this.replaceRange(offset, offset, data, { source: 'drop' });
+  }
+
+  /** The text offset a drag event points at (the selection start if none). */
+  dropOffset(e) {
     let offset = null;
     if (document.caretRangeFromPoint) {
       const range = document.caretRangeFromPoint(e.clientX, e.clientY);
@@ -990,8 +999,7 @@ class EditorSurface {
         offset = this.pointToOffset(range.startContainer, range.startOffset);
       }
     }
-    if (offset === null || offset < 0) offset = this.getSelectionOffsets().start;
-    this.replaceRange(offset, offset, data, { source: 'drop' });
+    return offset === null || offset < 0 ? this.getSelectionOffsets().start : offset;
   }
 
   onCopy(e, cut) {

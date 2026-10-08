@@ -1720,6 +1720,9 @@ pub enum OverflowError {
     PreservedBlock,
     /// A stash needs a non-empty range.
     EmptyRange,
+    /// A pull back found no text: the overflow selection (or the line at the
+    /// overflow caret) is empty or blank.
+    NothingToPull,
     /// The range does not fit the body (see [`EditError`]).
     Edit(EditError),
 }
@@ -1732,18 +1735,19 @@ impl std::fmt::Display for OverflowError {
                  Overflow cannot be saved until it is repaired",
             ),
             Self::EmptyRange => f.write_str("nothing selected to stash"),
+            Self::NothingToPull => f.write_str("no Overflow text to pull back"),
             Self::Edit(error) => write!(f, "{error}"),
         }
     }
 }
 
 impl OverflowError {
-    /// `"preserved-block"`, `"empty"`, `"invalid-range"`, `"stale"` or
-    /// `"other"`, for JavaScript.
+    /// `"preserved-block"`, `"empty"` (also for nothing to pull back),
+    /// `"invalid-range"`, `"stale"` or `"other"`, for JavaScript.
     pub fn kind(&self) -> &'static str {
         match self {
             Self::PreservedBlock => "preserved-block",
-            Self::EmptyRange => "empty",
+            Self::EmptyRange | Self::NothingToPull => "empty",
             Self::Edit(EditError::InvalidRange { .. }) => "invalid-range",
             Self::Edit(EditError::StaleAnchor(_)) => "stale",
             Self::Edit(_) => "other",
@@ -1790,6 +1794,61 @@ impl StashOutcome {
         }
         value
     }
+}
+
+/// The text a pull back inserts, and where (see
+/// [`DocumentSession::pull_back_text`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullBack {
+    /// Where the text goes into the body (UTF-16).
+    pub start: usize,
+    /// The text to insert: the pulled overflow text with its separators.
+    pub text: String,
+}
+
+/// `paragraph` as a pull back inserts it into `body` at byte `at`, exactly
+/// as terraphim_lsp_core's `pull_back` does (`separated`, terraphim-ai
+/// #3472), so the editor and terraphim-lsp agree. In the middle of a line
+/// it goes in as it is. At the start or end of a line, or on a blank line,
+/// it becomes a paragraph of its own: set off from the text before and
+/// after it by one blank line (counting the blank lines already there), in
+/// the document's line ending.
+pub fn pull_back_separated(body: &str, at: usize, paragraph: &str) -> String {
+    let (before, after) = body.split_at(at);
+    let at_start = before.is_empty() || before.ends_with('\n');
+    let at_end = after.is_empty() || after.starts_with(['\r', '\n']);
+    if !at_start && !at_end {
+        return paragraph.to_string();
+    }
+    let eol = if body.contains("\r\n") { "\r\n" } else { "\n" };
+    let lead = match (before.is_empty(), at_start) {
+        (true, _) => 0,
+        (false, true) => 2usize.saturating_sub(line_breaks(before.chars().rev())),
+        (false, false) => 2,
+    };
+    let trail = match (after.is_empty(), at_end) {
+        (true, _) => 0,
+        (false, true) => 2usize.saturating_sub(line_breaks(after.chars())),
+        (false, false) => 2,
+    };
+    format!("{}{paragraph}{}", eol.repeat(lead), eol.repeat(trail))
+}
+
+/// The line breaks at the start of `chars`, up to two (`\r` is part of a
+/// `\r\n` break, not a break of its own).
+fn line_breaks(chars: impl Iterator<Item = char>) -> usize {
+    let mut breaks = 0;
+    for c in chars {
+        match c {
+            '\n' => breaks += 1,
+            '\r' => {}
+            _ => break,
+        }
+        if breaks == 2 {
+            break;
+        }
+    }
+    breaks
 }
 
 /// `current` with `text` appended as a new entry: directly when `current`
@@ -1941,6 +2000,54 @@ impl DocumentSession {
         })
     }
 
+    /// Pull back (R-6.4): the text that copying overflow text into the body
+    /// at `at` (UTF-16) inserts, and where. The overflow text is the range
+    /// `from..to` (UTF-16; the panel selection) or, when it is empty, the
+    /// line at `from`, without its own line breaks at either end. It is
+    /// separated as terraphim-lsp separates a pulled paragraph (see
+    /// [`pull_back_separated`]); `at` inside a `\r\n` pair counts as after
+    /// it. A copy: neither the body nor the overflow changes here; the
+    /// editor inserts the text through its normal edit path, one undo step.
+    pub fn pull_back_text(
+        &self,
+        at: usize,
+        from: usize,
+        to: usize,
+    ) -> Result<PullBack, OverflowError> {
+        let overflow = &self.doc.annotations.overflow;
+        let (Some(mut start), Some(mut end)) = (
+            utf16_to_byte(overflow, from.min(to)),
+            utf16_to_byte(overflow, from.max(to)),
+        ) else {
+            return Err(OverflowError::Edit(EditError::InvalidRange {
+                start: from,
+                end: to,
+            }));
+        };
+        if start == end {
+            start = overflow[..start].rfind('\n').map_or(0, |i| i + 1);
+            end += overflow[end..].find('\n').unwrap_or(overflow.len() - end);
+        }
+        let picked = overflow[start..end].trim_matches(['\r', '\n']);
+        if picked.trim().is_empty() {
+            return Err(OverflowError::NothingToPull);
+        }
+        let body = &self.doc.body;
+        let Some(mut at_byte) = utf16_to_byte(body, at) else {
+            return Err(OverflowError::Edit(EditError::InvalidRange {
+                start: at,
+                end: at,
+            }));
+        };
+        if at_byte > 0 && body[..at_byte].ends_with('\r') && body[at_byte..].starts_with('\n') {
+            at_byte += 1;
+        }
+        Ok(PullBack {
+            start: utf16_len(&body[..at_byte]),
+            text: pull_back_separated(body, at_byte, picked),
+        })
+    }
+
     /// Replays a recorded overflow change (see [`rebase_overflow`]) and
     /// returns the outcome. Refused while a malformed block is
     /// preserved.
@@ -1991,6 +2098,19 @@ pub fn set_document_overflow(text: &str) -> JsValue {
 pub fn stash_document_range(start: u32, end: u32) -> Result<JsValue, JsValue> {
     with_session(|s| s.stash(start as usize, end as usize))
         .map(|outcome| to_js(&outcome.to_json()))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// The text a pull back (R-6.4, a copy) inserts at `at` (UTF-16) and where:
+/// the overflow range `from..to` (UTF-16; when empty, the line at `from`),
+/// separated as terraphim-lsp separates it. Returns `{ start, text }` and
+/// changes nothing; throws when there is nothing to pull back or for an
+/// invalid offset or range. `TeOverflowPanel.pullBack` inserts `text` at
+/// `start` through the normal edit path.
+#[wasm_bindgen]
+pub fn overflow_pull_back_text(at: u32, from: u32, to: u32) -> Result<JsValue, JsValue> {
+    with_session(|s| s.pull_back_text(at as usize, from as usize, to as usize))
+        .map(|pull| to_js(&json!({ "start": pull.start, "text": pull.text })))
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
@@ -3254,6 +3374,180 @@ mod tests {
         assert_eq!(redo("edited"), applied("edited\n\nchunk"));
         // An unrelated change is never forced over the current text.
         assert_eq!(rebase_overflow("mine", "x", "y"), kept("mine"));
+    }
+
+    // ----- pull back (R-6.4): a copy, separated as terraphim_lsp_core does --
+
+    /// The body after copying `overflow`'s `from..to` (UTF-16) into `body` at
+    /// `at`, as the editor does it: the computed text inserted through the
+    /// normal edit path. The overflow never changes.
+    fn pulled_with(body: &str, overflow: &str, at: usize, from: usize, to: usize) -> String {
+        let mut session = DocumentSession::new();
+        session.open(body);
+        session.set_overflow(overflow).unwrap();
+        let pull = session.pull_back_text(at, from, to).unwrap();
+        assert_eq!(session.body(), body, "computing the text changes nothing");
+        session.apply_edit(pull.start, 0, &pull.text).unwrap();
+        assert_eq!(session.overflow(), overflow, "a copy");
+        session.body().to_string()
+    }
+
+    /// The body after pulling the overflow paragraph "Para." into `body` at
+    /// UTF-16 offset `at` (terraphim_lsp_core's `pulled` helper).
+    fn pulled(body: &str, at: usize) -> String {
+        pulled_with(body, "Para.", at, 0, 5)
+    }
+
+    // The expected bodies below are terraphim_lsp_core's own (terraphim-ai
+    // #3472, tests/overflow_export.rs, the `pulled` helper and pull_back_*
+    // tests), so the editor and terraphim-lsp separate a pulled paragraph
+    // byte for byte the same.
+
+    #[test]
+    fn pull_back_mid_line_inserts_inline() {
+        assert_eq!(pulled("Start end.", 5), "StartPara. end.");
+        assert_eq!(pulled("Start end.", 6), "Start Para.end.");
+    }
+
+    #[test]
+    fn pull_back_at_a_line_start_makes_its_own_paragraph() {
+        assert_eq!(
+            pulled("First line.\nSecond line.", 12),
+            "First line.\n\nPara.\n\nSecond line."
+        );
+        assert_eq!(pulled("Body.", 0), "Para.\n\nBody.");
+    }
+
+    #[test]
+    fn pull_back_at_a_line_end_makes_its_own_paragraph() {
+        assert_eq!(pulled("Body.", 5), "Body.\n\nPara.");
+        assert_eq!(pulled("A line.\nNext.", 7), "A line.\n\nPara.\n\nNext.");
+        // The defect this fixes: a caret at the end of a line glued the
+        // pulled text to the next line ("stuff.Pass me").
+        assert_eq!(
+            pulled("Some stuff.\nPass me a paperclip.", 11),
+            "Some stuff.\n\nPara.\n\nPass me a paperclip."
+        );
+    }
+
+    #[test]
+    fn pull_back_between_paragraphs_keeps_one_blank_line_each_side() {
+        let expected = "One.\n\nPara.\n\nTwo.";
+        assert_eq!(
+            pulled("One.\n\nTwo.", 4),
+            expected,
+            "end of the first paragraph"
+        );
+        assert_eq!(pulled("One.\n\nTwo.", 5), expected, "on the blank line");
+        assert_eq!(pulled("One.\n\nTwo.", 6), expected, "start of the second");
+    }
+
+    #[test]
+    fn pull_back_into_an_empty_body_is_the_paragraph() {
+        assert_eq!(pulled("", 0), "Para.");
+    }
+
+    #[test]
+    fn pull_back_follows_crlf_line_endings_and_never_splits_a_pair() {
+        let expected = "A.\r\n\r\nPara.\r\n\r\nB.";
+        assert_eq!(pulled("A.\r\nB.", 4), expected);
+        assert_eq!(pulled("A.\r\nB.", 3), expected, "between the CR and the LF");
+        assert_eq!(pulled("A.\r\n\r\nB.", 2), expected);
+    }
+
+    #[test]
+    fn pull_back_of_a_multi_line_paragraph_keeps_its_lines() {
+        assert_eq!(
+            pulled_with("Head.\nTail.", "Line one\nline two", 6, 0, 17),
+            "Head.\n\nLine one\nline two\n\nTail."
+        );
+    }
+
+    #[test]
+    fn pull_back_takes_the_selection_or_the_current_line() {
+        // A selection inside a paragraph: just that text.
+        assert_eq!(
+            pulled_with("Start end.", "Keep this, move this.", 5, 11, 21),
+            "Startmove this. end."
+        );
+        // Nothing selected: the line at the overflow caret.
+        assert_eq!(
+            pulled_with("Body.", "One.\n\nTwo.", 5, 8, 8),
+            "Body.\n\nTwo."
+        );
+        // A selection's own line breaks at either end do not go in.
+        assert_eq!(
+            pulled_with("Body.", "One.\n\nTwo.", 5, 4, 10),
+            "Body.\n\nTwo."
+        );
+    }
+
+    #[test]
+    fn pull_back_shifts_later_spans_past_the_separators() {
+        // terraphim_lsp_core's pull_back_shifts_later_spans_past_the_separators.
+        let mut doc = Document::new("Alpha beta gamma delta.\nSecond line here.");
+        let id = doc.add_span(SpanKind::Word, 6, 10).unwrap();
+        doc.add_alternative(&id, "bravo", Source::Human, None)
+            .unwrap();
+        let id = doc.add_span(SpanKind::Word, 31, 35).unwrap();
+        doc.add_alternative(&id, "row", Source::Human, None)
+            .unwrap();
+        let mut session = DocumentSession::new();
+        session.open(&write(&doc));
+        session.set_overflow("Para.").unwrap();
+        let pull = session.pull_back_text(24, 0, 5).unwrap();
+        session.apply_edit(pull.start, 0, &pull.text).unwrap();
+        assert_eq!(
+            session.body(),
+            "Alpha beta gamma delta.\n\nPara.\n\nSecond line here."
+        );
+        // "beta" is before the insertion; "line" moves past the eight units
+        // inserted ("\nPara.\n\n").
+        let spans = &session.document().annotations.spans;
+        assert_eq!(
+            (spans[0].anchor.start, spans[0].anchor.text.as_str()),
+            (6, "beta")
+        );
+        assert_eq!(
+            (spans[1].anchor.start, spans[1].anchor.text.as_str()),
+            (39, "line")
+        );
+    }
+
+    #[test]
+    fn pull_back_offsets_are_utf16() {
+        // "Café 🎉." is 8 UTF-16 units; the overflow holds an astral character.
+        assert_eq!(
+            pulled_with("Café 🎉.", "Ünïcode 🎉 note", 8, 0, 15),
+            "Café 🎉.\n\nÜnïcode 🎉 note"
+        );
+        let mut session = DocumentSession::new();
+        session.open("🎉 x");
+        session.set_overflow("Para.").unwrap();
+        assert_eq!(session.pull_back_text(2, 0, 5).unwrap().start, 2);
+        // An offset inside a surrogate pair is refused.
+        assert!(session.pull_back_text(1, 0, 5).is_err());
+    }
+
+    #[test]
+    fn pull_back_refusals_change_nothing() {
+        let mut session = DocumentSession::new();
+        session.open("Body.");
+        session.set_overflow("One.\n\n\nTwo.").unwrap();
+        // Nothing to pull: a blank line, or an empty overflow.
+        assert_eq!(
+            session.pull_back_text(0, 5, 5).unwrap_err(),
+            OverflowError::NothingToPull
+        );
+        // Ranges past the end of the overflow or the body.
+        assert!(session.pull_back_text(0, 0, 99).is_err());
+        assert!(session.pull_back_text(9, 0, 4).is_err());
+        session.set_overflow("").unwrap();
+        assert_eq!(
+            session.pull_back_text(0, 0, 0).unwrap_err(),
+            OverflowError::NothingToPull
+        );
+        assert_eq!(session.body(), "Body.");
     }
 
     #[test]

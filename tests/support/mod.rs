@@ -36,7 +36,8 @@ pub use terraphim_editor::{
 pub use terraphim_editor::set_active_alternative;
 // Overflow panel (issue #12).
 pub use terraphim_editor::{
-    document_overflow, replay_document_overflow, set_document_overflow, stash_document_range,
+    document_overflow, overflow_pull_back_text, replay_document_overflow, set_document_overflow,
+    stash_document_range,
 };
 
 pub const CONFIG_JS: &str = include_str!("../../public/js/config.js");
@@ -624,6 +625,13 @@ pub fn install_document_bindings() {
         "stash_document_range",
         Closure::<dyn FnMut(u32, u32) -> Result<JsValue, JsValue>>::new(stash_document_range)
             .into_js_value(),
+    );
+    install(
+        "overflow_pull_back_text",
+        Closure::<dyn FnMut(u32, u32, u32) -> Result<JsValue, JsValue>>::new(
+            overflow_pull_back_text,
+        )
+        .into_js_value(),
     );
     install(
         "replay_document_overflow",
