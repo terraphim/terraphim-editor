@@ -50,5 +50,6 @@ jobs:
       - run: bash scripts/ci/run.sh cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: bash scripts/ci/run.sh cargo test --locked --workspace
       - run: bash scripts/ci/tools.sh
+      - run: bash scripts/browser-tests-load-test.sh
       - run: bash scripts/ci/browser-tests.sh
       - run: bash scripts/ci/run.sh --tools trunk build --release --locked

@@ -312,8 +312,8 @@ The Rust model is the source of truth: every edit goes to it first, and the surf
 |---|---|
 | `trunk serve` | Development server with live rebuild at <http://127.0.0.1:8080> |
 | `cargo test --workspace` | Rust unit and integration tests |
-| `scripts/browser-tests.sh` | Every browser test binary in headless Chrome, one at a time, with a time and load table; waits for the machine to settle and skips the benchmarks under heavy load (exit code 3) |
-| `wasm-pack test --headless --chrome --test web_kg` | A single browser test binary |
+| `scripts/browser-tests.sh` | Every browser test binary in headless Chrome, one at a time, with a time and load table. Before each binary it waits (saying what for) for the load to drop below a limit (20 on Linux, three quarters of the CPUs on macOS); it skips the benchmarks under heavy load (exit code 3) and, locally, stops without running the rest if the load stays high for 5 minutes (exit code 4; on CI it only warns). Use it for every local browser run (see CLAUDE.md, "Browser tests") |
+| `scripts/browser-tests.sh web_kg` | A single browser test binary, load-guarded |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Lints (also run with `--target wasm32-unknown-unknown --lib --tests`) |
 | `cargo bench` | Criterion benchmarks |
 | `scripts/release-dist.sh` | Regenerate the committed release copy in `dist/` |

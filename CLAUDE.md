@@ -41,7 +41,7 @@ The `scripts/build-dist.sh` hook writes to `$TRUNK_STAGING_DIR`, its first argum
 
 ```bash
 cargo test --workspace                 # native unit, golden-file and span-model tests
-wasm-pack test --headless --chrome     # browser tests (real Chrome, nothing mocked)
+scripts/browser-tests.sh               # browser tests (real Chrome, nothing mocked), one binary at a time, load-guarded
 cargo bench --no-run                   # compile the criterion benches
 cargo bench                            # run them (native only)
 ```
@@ -49,6 +49,21 @@ cargo bench                            # run them (native only)
 The browser tests are split across binaries (`tests/web.rs`, `web_chrome.rs`, `web_persistence.rs`, `web_bench.rs`, plus `tokens.rs`, sharing `tests/support/mod.rs`) because wasm-bindgen-test gives each binary one 20 s budget. Native golden files live in `tests/fixtures/persistence/` (`UPDATE_GOLDENS=1` rewrites them; review the diff).
 
 Run one test: `cargo test <name>`.
+
+#### Browser tests: always through `scripts/browser-tests.sh`
+
+Run the browser binaries locally with `scripts/browser-tests.sh` (all of them, or `scripts/browser-tests.sh web web_chrome`), not with a bare `wasm-pack test`. wasm-bindgen-test gives each binary a fixed 20 s budget. When it runs out, the runner's next WebDriver call gets only the remainder ("execute/sync timed out after 5.0s") and ChromeDriver is killed. Before every binary the script waits for the one-minute load average to drop below `BROWSER_TESTS_MAX_LOAD`: 20 on Linux, and on macOS three quarters of the logical CPUs, at least 4 (8 on an 11-core laptop). While it waits it prints the load, the limit and the busiest processes every 30 s. After `BROWSER_TESTS_LOAD_WAIT` seconds (default 300) it stops, lists the binaries it did not run as NOT RUN and exits 4; it never runs them under load. On CI (`CI`, `GITEA_ACTIONS` or `BROWSER_TESTS_CI`, which `scripts/ci/browser-tests.sh` sets) the guard only warns: one capped wait before the first binary, then every binary runs and the run never exits 4, because the CI runner is fine at loads up to 23. `scripts/browser-tests-load-test.sh` checks the guard against the real load without starting a browser.
+
+The evidence (issue #110): on the CI runner, over 25 runs (37746–37790, 1,158 binary runs, load average 2.1–23.2), no binary used more than 3.24 s of its 20 s budget:
+
+| Binary | Test time max | Test time median | Wall median (with build) |
+|---|---|---|---|
+| web_bench | 3.24 s | 2.40 s | 7 s |
+| web_bench_logged | 1.41 s | 1.15 s | 5 s |
+| web_chrome | 1.29 s | 0.15 s | 4 s |
+| every other binary | ≤ 0.91 s | ≤ 0.83 s | 4–5 s |
+
+The 17–21 s runs, timeouts and SIGKILLs seen on a shared laptop came from other processes, typically several agents' headless Chrome sessions pushing the load to 10–17. In that state even an untouched binary went from 5 s to 21 s. Do not split binaries or raise timeouts for local slowness; read the per-binary times (`<bin>: ok (Ns wall, finished in Xs, load L)`) from the CI job log first.
 
 Coverage: `cargo llvm-cov --workspace` measures the native tests. The Rust that runs only in the browser (the `#[wasm_bindgen]` exports) and `public/js` are measured by `bash scripts/ci/wasm-coverage.sh [suite...]`: wasm-bindgen-test coverage on nightly for the Rust, V8 precise coverage over the DevTools protocol for the JavaScript. It needs a nightly with the wasm32 target and llvm-tools, and a clang of the same LLVM major version (`brew install llvm@N`). Output goes to `target/wasm-coverage/` (`summary.txt`, `js-summary.txt`, `coverage.lcov`). It does not gate CI.
 

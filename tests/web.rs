@@ -1,6 +1,6 @@
 //! Browser tests for the editor: initialisation, Markdown conversion, the
 //! debounced preview and the controller lifecycle. Run with
-//! `wasm-pack test --headless --chrome`.
+//! `scripts/browser-tests.sh web` (see CLAUDE.md, "Browser tests").
 //!
 //! These tests drive the real Rust entry point and the real JavaScript
 //! controller (`public/js/config.js` and `public/js/editor.js`, injected as
