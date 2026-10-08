@@ -59,9 +59,14 @@
  * closes (Escape included): changed text edits the alternative, empty text
  * deletes it, and text in the empty last line is added (whitespace-only is
  * ignored). Typed text is never silently lost: destroy() does not edit the
- * document, it reports uncommitted text as `te:alt-drafts` and returns it. The last line is always empty: Enter there adds the
- * typed text as a new alternative, which appears at once in the document
- * as a new dot (R-4.3). Each line has a leading glyph from the `source`
+ * document, it reports uncommitted text as `te:alt-drafts` and returns it.
+ * The last line is always empty, and a new alternative is typed there live
+ * (issue #106, R-4.3, video 1:24-1:30): the first character adds it and
+ * makes it active, so the document shows it at once with a new dot, and
+ * each further keystroke updates the document. Enter (which then offers a
+ * fresh empty line), leaving the line or closing the panel keeps it as ONE
+ * undo step; Escape cancels it and brings back the previous active
+ * alternative and its text. Each line has a leading glyph from the `source`
  * field: a dim dot for the original and the author's lines, a robot
  * (FontAwesome `fa-robot`) for AI lines; the active line is brighter with a
  * lavender glyph (R-4.4).
@@ -74,8 +79,11 @@
  * reorder the focused line (never above the original). Ctrl/Cmd+Z and
  * Ctrl/Cmd+Shift+Z / Ctrl+Y undo and redo the document while the focused
  * line has no uncommitted typing. Tabs: Left/Right/Home/End (automatic
- * activation). Escape closes and returns focus to whatever opened the panel
- * (the surface with its selection, or the chrome control).
+ * activation). Escape closes (cancelling a new alternative being typed) and
+ * returns focus to what last opened or showed the panel: the surface with
+ * its selection when that was the text, a shortcut, the menu, a dot or
+ * Ctrl+Shift+G (even with the panel first opened from `●●●`), so Ctrl+Z
+ * works straight away; the chrome control when it was `●●●`.
  *
  * Model first
  * -----------
@@ -194,6 +202,14 @@ class TeAlternativesPanel {
     this.returnFocus = null;
     this.frame = 0;
     this.retargetFrame = 0;
+    // The new alternative being typed in the add line (issue #106), or null:
+    // { spanId, index, base } where base is the surface history entry from
+    // before it began (so its steps can be folded into one, or undone).
+    this.live = null;
+    // Set while a live addition is being changed: the model step moves the
+    // surface selection, which blurs the line being typed in, and that blur
+    // must not end the addition.
+    this.liveBusy = false;
     // Diagnostics for tests.
     this.renderCount = 0;
 
@@ -219,7 +235,12 @@ class TeAlternativesPanel {
       if (!d.spanId) return;
       // Not cancelled: the default action (issue #9) still jumps to the
       // alternative; the panel only shows the span, keeping focus where it is.
-      this.open({ spanId: String(d.spanId) }, { focus: false });
+      // A dot is in the text, so Escape goes back to the text, where the
+      // jump leaves the caret (no saved selection), even when focus is in a
+      // panel line opened from `●●●`.
+      this.open({ spanId: String(d.spanId) }, { focus: false, fromControl: true });
+      this.returnFocus = this.surface.root;
+      this.savedSelection = null;
     }, { signal });
     document.addEventListener('te:mode-change', (e) => {
       const d = e.detail || {};
@@ -285,6 +306,8 @@ class TeAlternativesPanel {
     list.setAttribute('aria-label', 'Alternatives, one per line');
     list.addEventListener('keydown', (e) => this.onLineKeyDown(e), { signal });
     list.addEventListener('focusout', (e) => this.onLineBlur(e), { signal });
+    list.addEventListener('input', (e) => this.onLineInput(e), { signal });
+    list.addEventListener('compositionend', (e) => this.onLineInput(e), { signal });
     list.addEventListener('click', (e) => this.onListClick(e), { signal });
 
     const hint = document.createElement('p');
@@ -371,11 +394,21 @@ class TeAlternativesPanel {
     if (this.destroyed || !this.modelAvailable()) return false;
     this.ensureWriteOn();
     const wasOpen = this.opened;
-    if (!wasOpen && !options.fromControl) {
-      const active = document.activeElement;
-      this.returnFocus = active && this.surface.root.contains(active) ? this.surface.root : active;
-    }
     if (!wasOpen) this.savedSelection = this.surface.getSelectionOffsets();
+    if (!options.fromControl) {
+      // Opened, or shown again, from anywhere but the panel itself: from
+      // the text (a shortcut, the menu, a dot, Ctrl+Shift+G showing a span),
+      // Escape goes back to the text with this selection, so Ctrl+Z works
+      // straight away, even when the panel was first opened from the `●●●`
+      // control; from a chrome control, back to that control.
+      const active = document.activeElement;
+      if (!wasOpen || !(active && this.root.contains(active))) {
+        const chromeRoot = this.editor.chrome && this.editor.chrome.root;
+        const fromChrome = !!active && !!chromeRoot && chromeRoot.contains(active);
+        this.returnFocus = fromChrome ? active : this.surface.root;
+        if (!fromChrome) this.savedSelection = this.surface.getSelectionOffsets();
+      }
+    }
     this.resolve(where);
     this.opened = true;
     this.root.hidden = false;
@@ -393,7 +426,9 @@ class TeAlternativesPanel {
   close({ restoreFocus = true } = {}) {
     if (!this.opened) return;
     // Typed text is never silently lost: the focused line is committed
-    // (Escape, Ctrl+Shift+A, the chrome control, leaving Write_On mode).
+    // (Escape, Ctrl+Shift+A, the chrome control, leaving Write_On mode), and
+    // a new alternative being typed is kept as one undo step.
+    this.finishLive();
     this.commitFocused();
     this.opened = false;
     this.root.hidden = true;
@@ -853,22 +888,209 @@ class TeAlternativesPanel {
     if (input.classList.contains('te-alt-input--new')) return this.commitNewLine(input);
     if (input.value === input.dataset.committed) return false;
     const index = Number(input.closest('.te-alt-line').dataset.index);
-    this.editAlternative(index, input.value);
-    return true;
+    return this.editAlternative(index, input.value) !== null;
   }
 
   /**
-   * Commit the trailing empty line exactly as Enter does: its text is added
-   * as an alternative (or creates the pending span with it), one undo step.
-   * Whitespace-only text is ignored. Returns true if something was added.
+   * Commit text put in the add line without typing (typing makes it live,
+   * see onLineInput): it is added as an alternative (or creates the pending
+   * span with it) and made active, as one undo step. Whitespace-only text is
+   * ignored. Returns true if something was added.
    */
   commitNewLine(input) {
     const value = input.value;
     if (!value.trim()) return false;
     // Cleared first, so the re-render does not carry it over as a draft.
     input.value = '';
-    this.addAlternative(value);
+    // History trimming waits until the steps are folded (see liftLimit).
+    const limit = this.liftLimit();
+    const base = this.historyTop();
+    if (this.addActive(value) !== -1) this.foldSince(base);
+    this.restoreLimit(limit);
     return true;
+  }
+
+  // ---------------------------------------------------------------------
+  // The new alternative, live while it is typed (issue #106, R-4.3)
+  // ---------------------------------------------------------------------
+  //
+  // The first character typed in the add line adds the alternative (or
+  // creates the pending span with it) and makes it active, so the document
+  // shows it at once; each further keystroke edits it, model first, and the
+  // document follows. Focus moves to its line, which stays the one being
+  // typed in. Enter, leaving the line, the arrows, a tab change or closing
+  // the panel keep it, with every step folded into ONE undo step. Escape
+  // cancels it: the steps are undone, so the alternative goes and the
+  // previous active one and its text come back. Emptying the line (or
+  // leaving only spaces) cancels it the same way and leaves the add line
+  // with what was typed.
+
+  /** The surface history entry now on top (where a live addition began). */
+  historyTop() {
+    return this.surface.history[this.surface.historyIndex] || null;
+  }
+
+  /** How many history steps were recorded after entry `base` (-1: gone). */
+  stepsSince(base) {
+    const at = this.surface.history.indexOf(base);
+    return at === -1 ? -1 : this.surface.historyIndex - at;
+  }
+
+  /** Fold the steps recorded after `base` into one undo step. */
+  foldSince(base) {
+    const steps = this.stepsSince(base);
+    if (steps > 1) this.surface.squashHistory(steps, 'alternatives');
+    return steps;
+  }
+
+  /**
+   * Add `value` and make it active. Returns its line index, or -1 when the
+   * model refused (a duplicate, an overlap; the status line says why).
+   */
+  addActive(value) {
+    const change = this.addAlternative(value);
+    if (!change || !this.span) return -1;
+    const index = this.span.alts.findIndex((a, i) => i > 0 && a.text === value);
+    if (index === -1) return -1;
+    this.setActiveIndex(index);
+    return index;
+  }
+
+  /** Line index of a line input (the add line: lines().length). */
+  lineIndexOf(input) {
+    if (input.classList.contains('te-alt-input--new')) return this.lines().length;
+    return Number(input.closest('.te-alt-line').dataset.index);
+  }
+
+  onLineInput(e) {
+    if (this.destroyed || !this.opened || this.rendering || e.isComposing) return;
+    const input = e.target;
+    if (!(input instanceof HTMLInputElement) || input.readOnly) return;
+    if (input.classList.contains('te-alt-input--new')) {
+      if (!this.live) this.startLive(input);
+      return;
+    }
+    if (this.live && this.lineIndexOf(input) === this.live.index) this.updateLive(input);
+  }
+
+  startLive(input) {
+    const value = input.value;
+    const t = this.target || {};
+    if (!value.trim() || (!t.spanId && !t.pending)) return;
+    const caret = [input.selectionStart, input.selectionEnd];
+    // History trimming waits until the addition is folded, from before its
+    // first step, so `base` (and the state before it) is never shifted out,
+    // even when the history is already at its limit.
+    const limit = this.liftLimit();
+    const base = this.historyTop();
+    input.value = '';
+    const index = this.whileBusy(() => this.addActive(value));
+    if (index === -1) {
+      // Refused: the typed text stays in the add line.
+      this.restoreLimit(limit);
+      this.restoreLine(this.lines().length, value, caret);
+      return;
+    }
+    this.live = { spanId: this.span.id, index, base, refused: null, limit };
+    this.restoreLine(index, null, caret);
+  }
+
+  updateLive(input) {
+    const value = input.value;
+    const caret = [input.selectionStart, input.selectionEnd];
+    if (!value.trim()) {
+      this.cancelLive({ keep: value, caret });
+      return;
+    }
+    if (value === input.dataset.committed) return;
+    const { index } = this.live;
+    const change = this.whileBusy(() => this.editAlternative(index, value));
+    // A refused edit (a duplicate) keeps the typed text in the line; the
+    // model keeps the last text it accepted until the line is fixed.
+    this.live.refused = change ? null : value;
+    this.restoreLine(index, value, caret);
+  }
+
+  whileBusy(fn) {
+    const was = this.liveBusy;
+    this.liveBusy = true;
+    try {
+      return fn();
+    } finally {
+      this.liveBusy = was;
+    }
+  }
+
+  /**
+   * Keep the live addition as it is: one undo step. If the line still holds
+   * text the model refused, the line is put back to the text it kept, and
+   * the status line says so.
+   */
+  finishLive() {
+    if (!this.live) return;
+    const { base, index, refused } = this.live;
+    this.endLive();
+    this.foldSince(base);
+    this.surface.trimHistory();
+    if (refused !== null) {
+      const input = this.lineInputs()[index];
+      const kept = input ? input.dataset.committed : '';
+      if (input) input.value = kept;
+      this.setStatus(`“${refused}” is already in the list; kept “${kept}”.`, true);
+    }
+  }
+
+  /** Forget the live addition (trimming resumes after the fold). */
+  endLive() {
+    this.surface.historyLimit = this.live.limit;
+    this.live = null;
+  }
+
+  /** Stop history trimming; returns the limit to restore. */
+  liftLimit() {
+    const limit = this.surface.historyLimit;
+    this.surface.historyLimit = Infinity;
+    return limit;
+  }
+
+  /** Put the history limit back and apply it. */
+  restoreLimit(limit) {
+    this.surface.historyLimit = limit;
+    this.surface.trimHistory();
+  }
+
+  /**
+   * Undo the live addition (Escape, or an emptied line). `keep` is put back
+   * in the add line, which gets focus with `caret`.
+   */
+  cancelLive({ keep = '', caret = null } = {}) {
+    if (!this.live) return;
+    const { base } = this.live;
+    this.endLive();
+    const steps = this.foldSince(base);
+    if (steps >= 1) {
+      this.surface.undo();
+      // Cancelled, not undone: redo does not bring it back.
+      this.surface.forgetRedo();
+    }
+    this.surface.trimHistory();
+    this.flush();
+    if (this.opened) this.restoreLine(this.lines().length, keep, caret);
+  }
+
+  /** Focus line `index`, optionally with `value`, and put the caret back. */
+  restoreLine(index, value, caret) {
+    const inputs = this.lineInputs();
+    const input = inputs[Math.max(0, Math.min(index, inputs.length - 1))];
+    if (!input) return;
+    if (value !== null && value !== undefined && input.value !== value) input.value = value;
+    input.focus();
+    const end = input.value.length;
+    try {
+      input.setSelectionRange(Math.min(caret ? caret[0] : end, end), Math.min(caret ? caret[1] : end, end));
+    } catch (err) {
+      // Not every input type supports selection ranges.
+    }
   }
 
   /** Commit the focused line, if any (see commitLine). */
@@ -910,6 +1132,10 @@ class TeAlternativesPanel {
     if (this.destroyed || !this.opened || this.rendering) return;
     const input = e.target;
     if (!(input instanceof HTMLInputElement) || !input.isConnected) return;
+    if (this.liveBusy) return;
+    if (this.live && !input.classList.contains('te-alt-input--new') && this.lineIndexOf(input) === this.live.index) {
+      this.finishLive();
+    }
     if (input.value === (input.dataset.committed || '')) return;
     // Leaving a line commits it, the empty line included (a tab, the
     // document, another line). The commit re-renders the list, so focus
@@ -937,6 +1163,14 @@ class TeAlternativesPanel {
     const index = isNew ? this.lines().length : Number(input.closest('.te-alt-line').dataset.index);
     const count = this.lines().length;
     const plain = !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    if (e.key === 'Enter' && plain && !e.altKey && this.live && this.live.refused !== null && index === this.live.index) {
+      // Enter does not keep text the model refused: the line stays live
+      // until it is changed (or Escape cancels it).
+      e.preventDefault();
+      this.setStatus(`“${this.live.refused}” is already in the list.`, true);
+      return;
+    }
+    if ((e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown') && plain) this.finishLive();
     if (e.key === 'Enter' && plain && !e.altKey) {
       e.preventDefault();
       if (isNew) {
@@ -979,8 +1213,10 @@ class TeAlternativesPanel {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      // close() commits the focused line: Escape never discards typing
-      // (undo reverses the commit).
+      // A new alternative being typed is cancelled (issue #106). Otherwise
+      // close() commits the focused line: Escape never discards an edit of
+      // an existing line (undo reverses the commit).
+      if (this.live) this.cancelLive();
       this.close({ restoreFocus: true });
       return;
     }
@@ -995,6 +1231,8 @@ class TeAlternativesPanel {
     const undo = key === 'z' && !e.shiftKey && !e.altKey;
     const redo = (key === 'z' && e.shiftKey && !e.altKey) || (key === 'y' && !e.shiftKey && !e.altKey);
     if (!undo && !redo) return;
+    // A live addition is one step: undo removes all of it.
+    this.finishLive();
     const input = e.target instanceof HTMLInputElement ? e.target : null;
     // Typing not yet committed is the input's own to undo.
     if (input && input.value !== (input.dataset.committed || '')) return;
@@ -1025,6 +1263,7 @@ class TeAlternativesPanel {
   /** Switch granularity (R-4.2) around the reference point. */
   setTab(kind, { focusTab = false } = {}) {
     if (!TE_ALT_KINDS.includes(kind)) throw new Error(`Unknown tab ${kind}`);
+    this.finishLive();
     this.commitFocused();
     this.tab = kind;
     if (this.opened) {
@@ -1047,6 +1286,8 @@ class TeAlternativesPanel {
    */
   destroy() {
     if (this.destroyed) return [];
+    // A live addition is already in the document: keep it as one step.
+    this.finishLive();
     const drafts = this.pendingDrafts();
     if (drafts.length && this.surface.root) {
       this.surface.root.dispatchEvent(new CustomEvent('te:alt-drafts', {

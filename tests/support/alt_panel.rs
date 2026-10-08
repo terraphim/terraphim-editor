@@ -22,6 +22,42 @@ window.teAlt = {
     input.value = value;
     return teTest.key(input, 'Enter');
   },
+  // Type `text` into `input` key by key, as the browser does: keydown, then
+  // (unless cancelled) the character inserted at the caret and an `input`
+  // event (insertText), then keyup.
+  typeKeys(input, text) {
+    input.focus();
+    for (const ch of text) {
+      const target = document.activeElement;
+      const down = new KeyboardEvent('keydown', { key: ch, bubbles: true, cancelable: true });
+      target.dispatchEvent(down);
+      if (!down.defaultPrevented) {
+        const a = target.selectionStart;
+        const b = target.selectionEnd;
+        target.value = target.value.slice(0, a) + ch + target.value.slice(b);
+        target.setSelectionRange(a + ch.length, a + ch.length);
+        target.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+      }
+      target.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }));
+    }
+  },
+  // Backspace `n` times in the focused input.
+  backspace(n = 1) {
+    for (let i = 0; i < n; i += 1) {
+      const target = document.activeElement;
+      const down = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true });
+      target.dispatchEvent(down);
+      if (!down.defaultPrevented) {
+        const a = target.selectionStart;
+        const b = target.selectionEnd;
+        const from = a === b ? Math.max(0, a - 1) : a;
+        target.value = target.value.slice(0, from) + target.value.slice(b);
+        target.setSelectionRange(from, from);
+        target.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+      }
+      target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Backspace', bubbles: true }));
+    }
+  },
   dotsOf(id) {
     return document.querySelectorAll('.te-indicators [data-span-id="' + id + '"] .te-ind-dot').length;
   },

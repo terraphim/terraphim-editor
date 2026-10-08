@@ -473,6 +473,28 @@ class EditorSurface {
     return true;
   }
 
+  /**
+   * Enforce historyLimit now (dropping the oldest steps), after it was
+   * lifted for a while (the alternatives panel lifts it during a live
+   * addition, issue #106, so the steps it folds cannot be shifted out).
+   */
+  trimHistory() {
+    const extra = this.history.length - this.historyLimit;
+    if (extra <= 0) return;
+    const drop = Math.min(extra, this.historyIndex);
+    if (drop <= 0) return;
+    this.history.splice(0, drop);
+    this.historyIndex -= drop;
+  }
+
+  /**
+   * Drop the steps redo would replay (the alternatives panel uses it after
+   * undoing a cancelled addition, issue #106, so it cannot be redone).
+   */
+  forgetRedo() {
+    this.history.length = this.historyIndex + 1;
+  }
+
   canUndo() {
     return this.historyIndex > 0;
   }
