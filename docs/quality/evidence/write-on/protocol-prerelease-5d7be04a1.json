@@ -1,0 +1,185 @@
+{
+  "verdicts": [
+    {
+      "check": "initialize: server answers with capabilities",
+      "verdict": "PASS",
+      "detail": "terraphim-lsp"
+    },
+    {
+      "check": "initialize: code-action kinds advertised",
+      "verdict": "PASS",
+      "detail": "refactor.rewrite, quickfix, refactor.terraphim.trim, refactor.terraphim.ghost, refactor.terraphim.lab, refactor.terraphim.alternative, refactor.terraphim.overflow, source.terraphim.export"
+    },
+    {
+      "check": "initialize: hover, folding, pull diagnostics, save sync advertised",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "initialize: terraphim.export and terraphim.lab.mark advertised",
+      "verdict": "PASS",
+      "detail": "terraphim.alternative.add, terraphim.lab.mark, terraphim.lab.clear, terraphim.trim.preview, terraphim.trim.clear, terraphim.trim.keep, terraphim.trim.make_cuts, terraphim.trim.next, terraphim.export"
+    },
+    {
+      "check": "didOpen -> pull diagnostics: stored ghost faded (Unnecessary tag)",
+      "verdict": "PASS",
+      "detail": "[\"ghosted\"]"
+    },
+    {
+      "check": "hover on a stored span: alternatives with provenance",
+      "verdict": "PASS",
+      "detail": "**paperclip** |  | paperclip |  | **Alternatives** (word span) | - paperclip (original, active) | - binder clip (human)"
+    },
+    {
+      "check": "hover on a KG term: synonyms labelled kg",
+      "verdict": "PASS",
+      "detail": "**choice** |  | decision |  | **KG synonyms** | - choice (kg, active) | - decision (kg) | - judgment (kg) | - option (kg)"
+    },
+    {
+      "check": "codeAction (no filter) at a stored span: every kind family present",
+      "verdict": "PASS",
+      "detail": "refactor.terraphim.alternative, refactor.terraphim.ghost, refactor.terraphim.lab, refactor.terraphim.overflow, refactor.terraphim.trim, source.terraphim.export"
+    },
+    {
+      "check": "codeAction: Replace with a stored alternative offered",
+      "verdict": "PASS",
+      "detail": "Replace with binder clip (human)"
+    },
+    {
+      "check": "codeAction: 7 Lab actions (6 marks + clear) offered",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "codeAction: Export clean Markdown is command-only",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Replace with stored alternative: edit applied, body and active updated",
+      "verdict": "PASS",
+      "detail": "active=1; title=Replace with binder clip (human)"
+    },
+    {
+      "check": "Replace: the previous alternative is offered back",
+      "verdict": "PASS",
+      "detail": "Replace with paperclip (original)"
+    },
+    {
+      "check": "Ghost it: edit applied, new ghost faded in pulled diagnostics",
+      "verdict": "PASS",
+      "detail": "ghost hints=2; actions=['Ghost it']"
+    },
+    {
+      "check": "Revive: edit applied, only the original ghost remains",
+      "verdict": "PASS",
+      "detail": "ghost hints=1"
+    },
+    {
+      "check": "Lab mark (off-tone): command result and pulled lab-off-tone hints",
+      "verdict": "PASS",
+      "detail": "marks=4; result={\"action\": \"off_tone\", \"marks\": 4}"
+    },
+    {
+      "check": "Lab mark: pull client was asked to refresh",
+      "verdict": "PASS",
+      "detail": "refreshes=1"
+    },
+    {
+      "check": "Lab clear: marks removed",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Stash: refused over a stored span (no action offered)",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Stash: sentence moved out of the body into the overflow",
+      "verdict": "PASS",
+      "detail": "overflow='Honestly the launch was awesome and the guys did cool stuff.'"
+    },
+    {
+      "check": "Stash: span and ghost preserved",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "Pull back: offered with an excerpt",
+      "verdict": "PASS",
+      "detail": "Pull back: \u00abHonestly the launch was awesome and the\u2026\u00bb"
+    },
+    {
+      "check": "Pull back: text moved back, overflow emptied",
+      "verdict": "PASS",
+      "detail": "overflow=None"
+    },
+    {
+      "check": "Export: client asked to create <stem>.clean.md (applyEdit with CreateFile) and show it",
+      "verdict": "PASS",
+      "detail": "{\"uri\": \"<work>/verify/work/notes.clean.md\", \"written\": true}"
+    },
+    {
+      "check": "Export: file content is clean (ghost cut, no block, no overflow)",
+      "verdict": "PASS",
+      "detail": "Every choice is a judgment. | A caf\u00e9 visit is an honour. | Honestly the launch was awesome and the guys did cool stuff.Pass "
+    },
+    {
+      "check": "foldingRange: one region over the annotation block",
+      "verdict": "PASS",
+      "detail": "[{\"endLine\": 44, \"kind\": \"region\", \"startLine\": 4}]"
+    },
+    {
+      "check": "didSave: one versioned applyEdit re-anchors the block",
+      "verdict": "PASS",
+      "detail": "stale=55 -> 94, true=94"
+    },
+    {
+      "check": "didSave: edit touched only the block (body unchanged)",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "didSave again: idempotent, no second edit (no loop)",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "shutdown: replies null",
+      "verdict": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "exit notification: process exits while stdin is still open (LSP 3.17 exit)",
+      "verdict": "FAIL",
+      "detail": "exit=None after 3 s"
+    },
+    {
+      "check": "after stdin is closed: process exits 0",
+      "verdict": "PASS",
+      "detail": "exit=0"
+    }
+  ],
+  "server_stderr": [],
+  "apply_edits_seen": [
+    {
+      "label": null,
+      "applied": true,
+      "detail": "documentChanges"
+    },
+    {
+      "label": null,
+      "applied": true,
+      "detail": "documentChanges"
+    }
+  ],
+  "show_document": [
+    {
+      "external": false,
+      "takeFocus": true,
+      "uri": "<work>/verify/work/notes.clean.md"
+    }
+  ],
+  "log_messages": []
+}
