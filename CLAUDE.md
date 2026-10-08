@@ -50,6 +50,8 @@ The browser tests are split across binaries (`tests/web.rs`, `web_chrome.rs`, `w
 
 Run one test: `cargo test <name>`.
 
+Coverage: `cargo llvm-cov --workspace` measures the native tests. The Rust that runs only in the browser (the `#[wasm_bindgen]` exports) and `public/js` are measured by `bash scripts/ci/wasm-coverage.sh [suite...]`: wasm-bindgen-test coverage on nightly for the Rust, V8 precise coverage over the DevTools protocol for the JavaScript. It needs a nightly with the wasm32 target and llvm-tools, and a clang of the same LLVM major version (`brew install llvm@N`). Output goes to `target/wasm-coverage/` (`summary.txt`, `js-summary.txt`, `coverage.lcov`). It does not gate CI.
+
 ### Linting and Formatting
 ```bash
 cargo fmt --all -- --check
@@ -76,7 +78,7 @@ cargo clippy --workspace
 ### JavaScript layer (`public/js/`)
 - `editor.js`: `EditorSurface` (contenteditable `plaintext-only` span-aware surface: UTF-16 offsets, decorations, its own undo/redo history, canonical DOM so `textContent` is the document) and `MarkdownEditor` (toolbar, shortcuts, `/` command palette, help dialog, document API wrappers `openDocument`/`saveDocument`/`exportDocument`/`counts`/`annotations`).
 - `chrome.js`: Write_On mode toggle and corner chrome; dispatches `te:*` CustomEvents (see `docs/design/write-on-chrome.md`).
-- `config.js`: `EditorConfig` with shortcuts, commands and initial content. `shortcuts.js` and `public/shortcuts.json` are inlined/legacy; `editor_config.toml` is not read by the code.
+- `config.js`: `EditorConfig` with shortcuts, commands and initial content. `editor_config.toml` is not read by the code.
 - `terraphim-editor.js`: embeddable `TeraphimEditor` wrapper used by the minified bundle.
 
 ### CSS (`public/css/`)

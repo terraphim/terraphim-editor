@@ -29,7 +29,8 @@ STYLE_IDS = {"lab-filler": 1, "lab-hedge": 2, "lab-hedge-phrase": 3, "lab-tone":
 
 
 def synonyms(path):
-    text = open(path, encoding="utf-8").read()
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
     line = next(
         (l.split("::", 1)[1] for l in text.splitlines() if l.strip().lower().startswith("synonyms::")),
         "",

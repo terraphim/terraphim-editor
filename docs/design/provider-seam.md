@@ -63,9 +63,10 @@ const off = editor.registerAlternativesProvider({
 // off() unregisters; editor.destroy() unregisters them all.
 ```
 
-* Registration adds an `ExternalProvider` (id and model) to the Rust
-  registry, so host providers keep their place in the order, after the
-  thesaurus and earlier registrations.
+* Registration adds an `ExternalProvider` (its id) to the Rust registry, so
+  host providers keep their place in the order, after the thesaurus and
+  earlier registrations. The model is recorded beside it, by id, and
+  `parse_supplied` gives it to every suggestion that names no model.
 * `editor.alternativesForSelection(ctx)` is what Ctrl+Shift+G and the menu
   item run. With no host provider it is exactly `kgAlternativesForSelection`
   and acts synchronously. Otherwise it awaits every host provider in

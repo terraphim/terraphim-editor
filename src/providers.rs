@@ -91,25 +91,18 @@ pub trait AlternativesProvider {
 }
 
 /// The registry entry for a provider that lives in JavaScript: its answers
-/// arrive in [`ProviderContext::supplied`], already awaited.
+/// arrive in [`ProviderContext::supplied`], already awaited. Its default
+/// model is not kept here: [`parse_supplied`] fills it in from the model
+/// registered with [`register_external_provider`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalProvider {
     id: String,
-    model: String,
 }
 
 impl ExternalProvider {
-    /// A host provider `id` whose suggestions default to `model`.
-    pub fn new(id: impl Into<String>, model: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            model: model.into(),
-        }
-    }
-
-    /// The model recorded when a suggestion names none.
-    pub fn model(&self) -> &str {
-        &self.model
+    /// The registry entry for the host provider `id`.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self { id: id.into() }
     }
 }
 
@@ -306,7 +299,7 @@ pub fn register_external_provider(id: &str, model: &str) -> Result<(), String> {
         return Err(format!("the provider id \"{id}\" is reserved"));
     }
     EXTERNAL_MODELS.with(|m| m.borrow_mut().insert(id.to_owned(), model.to_owned()));
-    register_provider(Box::new(ExternalProvider::new(id, model)));
+    register_provider(Box::new(ExternalProvider::new(id)));
     Ok(())
 }
 
