@@ -31,9 +31,12 @@
 #      (plain constants with ELF section names), and clang compiles them as an
 #      x86_64 ELF object, which llvm-cov reads.
 #
-# JavaScript: each suite's Chrome gets --remote-debugging-port through a
-# temporary webdriver.json (the runner reads it from the working directory),
-# and scripts/ci/js-coverage-cdp.py collects V8 precise coverage of the
+# JavaScript: each suite's Chrome gets --remote-debugging-port through
+# webdriver.json (the runner reads it from the working directory). The
+# repository's own webdriver.json (the window size the layout tests rely on)
+# is kept: scripts/ci/webdriver-merge.py adds the port to its arguments for
+# each suite, and the original is put back after each suite and on exit. Then
+# scripts/ci/js-coverage-cdp.py collects V8 precise coverage of the
 # public/js files the tests inject. WASM_COV_JS=0 turns this off.
 #
 # A suite that fails is run once more, as CI does, because the instrumented
@@ -195,10 +198,22 @@ PY
 
 : > "$OUT/suites.txt"
 JS="${WASM_COV_JS:-1}"
-if [ "$JS" = 1 ] && [ -e "$ROOT/webdriver.json" ]; then
-  die "$ROOT/webdriver.json exists; move it away or set WASM_COV_JS=0"
+# The repository's webdriver.json, if any, is saved once and put back after
+# every suite and on exit. WD_BASE is the saved copy, or empty when there was
+# none, so a stale backup from an earlier run is never restored.
+WD="$ROOT/webdriver.json" WD_SAVED="$OUT/webdriver.json.orig" WD_BASE=""
+restore_webdriver() {
+  if [ -n "$WD_BASE" ]; then cp -p "$WD_BASE" "$WD"; else rm -f "$WD"; fi ||
+    echo "wasm-coverage: could not restore $WD" >&2
+}
+if [ "$JS" = 1 ]; then
+  rm -f "$WD_SAVED" || die "cannot remove a stale $WD_SAVED"
+  if [ -e "$WD" ]; then
+    cp -p "$WD" "$WD_SAVED" || die "cannot save $WD"
+    WD_BASE="$WD_SAVED"
+  fi
+  trap restore_webdriver EXIT
 fi
-trap 'rm -f "$ROOT/webdriver.json"' EXIT
 trap 'exit 130' INT TERM
 rm -f "$OUT"/js-*.json
 
@@ -209,14 +224,15 @@ run_suite() {
   local s="$1" attempt="$2" port collector=""
   if [ "$JS" = 1 ]; then
     port="$(python3 -I -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
-    printf '{"goog:chromeOptions": {"args": ["--remote-debugging-port=%s"]}}\n' "$port" > "$ROOT/webdriver.json"
+    python3 -I "$ROOT/scripts/ci/webdriver-merge.py" "$WD_BASE" "--remote-debugging-port=$port" > "$WD" ||
+      die "cannot write $WD"
     python3 -I "$ROOT/scripts/ci/js-coverage-cdp.py" collect "$port" "$OUT/js-$s-$attempt.json" "$ROOT/public/js" &
     collector=$!
   fi
   LLVM_PROFILE_FILE="$OUT/prof/${s}_${attempt}_%m_%p.profraw" \
     cargo +"$TC" test --target "$TARGET" --test "$s" > "$OUT/run-$s.log" 2>&1
   local status=$?
-  rm -f "$ROOT/webdriver.json"
+  if [ "$JS" = 1 ]; then restore_webdriver; fi
   if [ -n "$collector" ]; then
     # The collector stops when the browser goes away; give it 10 s.
     for _ in 1 2 3 4 5 6 7 8 9 10; do
