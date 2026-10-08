@@ -32,7 +32,7 @@ terraphim_alternatives = { path = "crates/terraphim_alternatives" }
 terraphim_lab = { path = "crates/terraphim_lab" }
 # KG alternatives (issue #13): the pure terraphim_lsp core, pinned to an exact
 # released version from the private registry (no sibling path).
-terraphim_lsp_core = { version = "=1.21.3", registry = "terraphim" }
+terraphim_lsp_core = { version = "=1.23.0", registry = "terraphim" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.39"
@@ -57,8 +57,10 @@ harness = false
 [workspace]
 members = [".", "crates/terraphim_alternatives", "crates/terraphim_lab"]
 resolver = "2"
-# terraphim_lsp_core depends on terraphim_alternatives 0.1 from the registry.
-# Point that dependency at the workspace member (the published 0.1.0 is built
-# from it) so the build has exactly one copy of the span model and a/an rules.
+# terraphim_lsp_core depends on terraphim_alternatives 0.1 and terraphim_lab
+# 0.1 from the registry. Point those dependencies at the workspace members
+# (the published 0.1.0 releases are built from them) so the build has
+# exactly one copy of the span model, the a/an rules and the Lab engine.
 [patch.terraphim]
 terraphim_alternatives = { path = "crates/terraphim_alternatives" }
+terraphim_lab = { path = "crates/terraphim_lab" }

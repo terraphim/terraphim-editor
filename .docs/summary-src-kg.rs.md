@@ -1,7 +1,7 @@
 # Summary: src/kg.rs
 
 ## Purpose
-Knowledge-graph alternatives (#13): a thin bridge from the open document session to `terraphim_lsp_core` (pinned `=1.21.3`, private registry). No matching, thesaurus, capitalisation or a/an logic of its own.
+Knowledge-graph alternatives (#13): a thin bridge from the open document session to `terraphim_lsp_core` (pinned `=1.23.0`, private registry). No matching, thesaurus, capitalisation or a/an logic of its own.
 
 ## Key points
 - Thread-local `KgEngine` slot: `kg_load_thesaurus(json)` (bad JSON keeps the previous one), `kg_clear_thesaurus()`.

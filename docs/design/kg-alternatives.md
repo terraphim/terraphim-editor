@@ -9,26 +9,31 @@ the editor consumes them. Spec: `docs/requirements/alternative-control.md`
 
 All matching, the concept -> synonyms index, capitalisation and the a/an
 fix-up come from `terraphim_lsp_core` (terraphim/terraphim-ai#3409), pinned
-to `=1.21.3` from the private `terraphim` registry. `src/kg.rs` only adapts
+to `=1.23.0` from the private `terraphim` registry. `src/kg.rs` only adapts
 its results to the document session; there is no matcher, thesaurus parser,
 case rule or article rule in this repository.
 
-### One copy of the span model
+### One copy of the span model and Lab engine
 
-`terraphim_lsp_core` depends on `terraphim_alternatives` 0.1 from the
-registry, and the editor has the same crate as a workspace member. The root
-`Cargo.toml` patches the registry copy to the member:
+`terraphim_lsp_core` depends on `terraphim_alternatives` 0.1 and (since
+1.23.0) `terraphim_lab` 0.1 from the registry, and the editor has both
+crates as workspace members. The root `Cargo.toml` patches the registry
+copies to the members:
 
 ```toml
 [patch.terraphim]
 terraphim_alternatives = { path = "crates/terraphim_alternatives" }
+terraphim_lab = { path = "crates/terraphim_lab" }
 ```
 
-The published 0.1.0 is built from the member (their `src/` trees are
-identical), so the core and the editor share one annotation-block parser and
-one set of a/an rules, and `cargo tree -d` lists no `terraphim_*` crate
-twice. When the member's version moves past what the core accepts, publish
-it and bump the core first; the patch then keeps applying.
+The published 0.1.0 releases are built from the members. Their `src/`
+trees are identical, except that the member's `terraphim_lab` `cuts.rs`
+has since taken a clippy-only change (`as_chunks` for `chunks_exact`, no
+change in behaviour). So the core and the editor share one
+annotation-block parser, one set of a/an rules and one Lab engine, and
+`cargo tree -d` lists no `terraphim_*` crate twice. When a member's version
+moves past what the core accepts, publish it and bump the core first; the
+patch then keeps applying.
 
 ## Loading a thesaurus
 
