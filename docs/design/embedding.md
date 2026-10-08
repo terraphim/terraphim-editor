@@ -80,7 +80,7 @@ Options: `value` (default empty), `wasmUrl`, `glueUrl`, `bindings`, `standalone`
 
 ### Plain mode on an embed (issue #86)
 
-Plain mode is the text and the word count, as on the full page: the toolbar and the preview are hidden until the tools are shown (`setTools(true)`, Ctrl+Shift+L, or `config: { tools: true }` for a host that wants the old split editor by default). They are still rendered, so the formatting shortcuts, the palette, the toolbar buttons' API (`markdownEditor.toolbar`) and the preview HTML keep working; the rules are scoped to the editor's `.te-app` container, so a host's own `.toolbar` or `.markdown-preview` is never hidden. See `docs/design/write-on-chrome.md`.
+Plain mode is the text and the word count, as on the full page: the toolbar and the preview are hidden until the tools are shown (`setTools(true)`, Ctrl+Shift+L, or `config: { tools: true }` for a host that wants the old split editor by default). They are still rendered, so the formatting shortcuts, the palette, the toolbar buttons' API (`markdownEditor.toolbar`) and the preview HTML keep working; the rules are scoped to the editor's `.te-app` container, so a host's own `.toolbar` or `.markdown-preview` is never hidden. Plain mode also wears the Write_On palette and column (issue #107), on the container only, so an embed is dark in both modes unless its tools are shown. See `docs/design/write-on-chrome.md`.
 
 `new TeraphimEditor(element, options).initialize()` still works: `initialize()` is an alias of `mount()`, which now also loads the module and renders the markup.
 

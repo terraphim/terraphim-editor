@@ -3,7 +3,9 @@
 //! attribute allow-list. Run with `wasm-pack test --headless --chrome`. Real
 //! scripts, real stylesheets, the real exported document API and the
 //! committed fixture `tests/fixtures/indicators/indicators.md`; nothing is
-//! mocked. The inline indicators themselves are in `tests/web_indicators.rs`.
+//! mocked. Also the paragraph rule following the column when a panel moves
+//! it (issue #107). The inline indicators themselves are in
+//! `tests/web_indicators.rs`.
 //! See `tests/web.rs` for why the browser tests are split across binaries.
 #![cfg(target_arch = "wasm32")]
 
@@ -153,4 +155,92 @@ fn test_decoration_attributes_are_limited_to_a_safe_allow_list() {
         })()"##,
     );
     assert_eq!(result, "");
+}
+
+/// R-3.4 (issue #107): the paragraph rule and its dot column stay in the left
+/// gutter when the column moves without changing size. Opening the
+/// alternatives panel shifts the column right (its margin, at 48rem and
+/// wider) and the Overflow panel shifts it left (its padding, at 60rem and
+/// wider); the rule must follow both ways, ending left of the paragraph's
+/// text. The acceptance test saw it left behind over the first letters.
+#[wasm_bindgen_test]
+async fn test_paragraph_rule_follows_the_column_when_a_panel_moves_it() {
+    setup();
+    let state = r##"(() => {
+      const p = teInd.rects('s4');
+      const rule = teInd.holder('s4').querySelector('.te-ind-rule').getBoundingClientRect();
+      const col = teInd.dotBox('s4');
+      const left = Math.min(...p.map((r) => r.left));
+      return JSON.stringify({ left, rule: rule.right, gap: left - rule.right, dots: col.right < rule.left, vw: window.innerWidth });
+    })()"##;
+    let in_gutter = || {
+        let s: serde_json::Value = serde_json::from_str(&js_string(state)).unwrap();
+        let gap = s["gap"].as_f64().unwrap();
+        gap > 0.0 && gap < 24.0 && s["dots"].as_bool().unwrap()
+    };
+    let text_left = || {
+        let s: serde_json::Value = serde_json::from_str(&js_string(state)).unwrap();
+        s["left"].as_f64().unwrap()
+    };
+    js_eval("teInd.open(); 0");
+    assert!(
+        in_gutter(),
+        "rule not in the gutter at the start: {}",
+        js_string(state)
+    );
+    let start = text_left();
+    let vw = js_number("window.innerWidth");
+    assert!(
+        vw >= 768.0,
+        "the alternatives panel moves the column only at 48rem and wider; the window is {vw}px"
+    );
+
+    js_eval("teTest.control('alternatives').click(); 0");
+    assert!(
+        js_eval("window.__teEditor.altPanel.isOpen()")
+            .as_bool()
+            .unwrap(),
+        "panel did not open"
+    );
+    let moved = text_left();
+    assert!(
+        moved > start + 1.0,
+        "opening the panel should move the text right: {start} -> {moved}"
+    );
+    assert!(
+        wait_until(in_gutter).await,
+        "rule left behind with the panel open: {}",
+        js_string(state)
+    );
+
+    js_eval("window.__teEditor.altPanel.close({ restoreFocus: false }); 0");
+    assert!(
+        (text_left() - start).abs() < 0.5,
+        "closing the panel should move the text back"
+    );
+    assert!(
+        wait_until(in_gutter).await,
+        "rule left behind after the panel closed: {}",
+        js_string(state)
+    );
+
+    // The Overflow panel narrows the column only at 60rem and wider.
+    if vw >= 960.0 {
+        js_eval("teTest.control('overflow').click(); 0");
+        assert!(
+            text_left() < start - 1.0,
+            "opening Overflow should move the text left"
+        );
+        assert!(
+            wait_until(in_gutter).await,
+            "rule left behind with Overflow open: {}",
+            js_string(state)
+        );
+        js_eval("window.__teEditor.overflow.close(); 0");
+        assert!(
+            wait_until(in_gutter).await,
+            "rule left behind after Overflow closed: {}",
+            js_string(state)
+        );
+    }
 }

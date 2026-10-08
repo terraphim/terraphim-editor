@@ -100,7 +100,9 @@ fn test_word_headline_sentence_and_paragraph_geometry() {
           if (!pd.every((r) => near(r.left, pd[0].left))) out.push('paragraph dots not in a column');
           if (!(pd[1].top > pd[0].bottom)) out.push('paragraph dots not stacked');
           if (!(pd[0].right < rule.left && rule.left - pd[0].right < 8)) out.push('dot column not just left of the rule');
-          if (!near(pd[0].top, rule.top)) out.push('dot column top ' + pd[0].top);
+          // Level with the rule's middle, as in the video at 2:00 (#107).
+          const colMid = (pd[0].top + pd[pd.length - 1].bottom) / 2;
+          if (!near(colMid, (rule.top + rule.bottom) / 2)) out.push('dot column not level with the rule middle: ' + colMid);
 
           // Overlay is out of flow: hiding it changes no layout.
           const overlay = document.querySelector('.te-indicators');

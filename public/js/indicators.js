@@ -50,8 +50,10 @@
  *   in an overlay (`.te-indicators`, aria-hidden, absolutely positioned and
  *   out of flow, so line height never changes) beside the surface. Positions
  *   come from the client rects of each span's *current* surface decoration,
- *   recomputed at most once per animation frame after a change, resize or
- *   scroll. Word rows are centred under the word; sentence and headline rows
+ *   recomputed at most once per animation frame after a change, resize,
+ *   scroll, or a change to the editor root's layout attributes (an
+ *   alternatives or Overflow panel opening moves the column without
+ *   resizing it, issue #107). Word rows are centred under the word; sentence and headline rows
  *   end at the right end of the underline; paragraphs get a rule in the left
  *   gutter and a dot column to its left. The first dot is the original;
  *   exactly one dot (the active alternative) is lit in the full accent.
@@ -337,6 +339,12 @@ class TeIndicatorLayer {
     if (typeof ResizeObserver === 'function') {
       this.resizeObserver = new ResizeObserver(relayout);
     }
+    // A panel opening or closing moves the column without resizing it
+    // (the alternatives panel's margin, the Overflow panel's padding), which
+    // no ResizeObserver sees; the attributes that drive those rules do.
+    if (typeof MutationObserver === 'function') {
+      this.rootObserver = new MutationObserver(relayout);
+    }
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(relayout).catch(() => {});
     }
@@ -400,10 +408,18 @@ class TeIndicatorLayer {
     host.appendChild(this.overlay);
     host.appendChild(this.descriptions);
     if (this.resizeObserver) this.resizeObserver.observe(this.surface.root);
+    const layoutRoot = this.editor.root || host.closest('.te-app');
+    if (this.rootObserver && layoutRoot) {
+      this.rootObserver.observe(layoutRoot, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-mode', 'data-tools', 'data-te-overflow'],
+      });
+    }
   }
 
   unmountOverlay() {
     if (this.resizeObserver) this.resizeObserver.disconnect();
+    if (this.rootObserver) this.rootObserver.disconnect();
     if (this.overlay) this.overlay.remove();
     if (this.descriptions) this.descriptions.remove();
     if (this.host) this.host.classList.remove('te-indicator-host');
@@ -432,6 +448,7 @@ class TeIndicatorLayer {
     this.offChange();
     this.offApply();
     if (this.resizeObserver) this.resizeObserver.disconnect();
+    if (this.rootObserver) this.rootObserver.disconnect();
     this.abortController.abort();
     this.removeAllSpans();
     this.unmountOverlay();

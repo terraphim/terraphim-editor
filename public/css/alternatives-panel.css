@@ -40,7 +40,12 @@
     width: var(--te-alt-panel-width);
     display: flex;
     flex-direction: column;
-    padding: 1.5rem 1.25rem 1.25rem;
+    /* As in the video at 1:15 to 1:35: the tabs sit just above the level of
+       the document's first line (the page's top margin), and the key hint at
+       the foot, clear of the bottom-left corner controls (1.25rem offset plus
+       a 1.75rem control, and air), as on the Overflow panel. */
+    padding: max(1.5rem, calc(var(--te-page-margin-top) - 2.5rem)) 1.25rem 4.25rem;
+    container-type: inline-size;
     background-color: var(--te-color-panel);
     border-right: 1px solid var(--te-color-panel-border);
     color: var(--te-color-text);
@@ -53,11 +58,17 @@
 
 /* ---- Tabs (R-4.2): cursive, active lavender, the others cream ---- */
 
+/* One line, as in the video (Word · Sentence · Paragraph is 70% of the
+   panel's width there). The display face is a stack, not a web font, so the
+   size follows the panel's content width (7cqi): the widest common fallback,
+   Bradley Hand Bold, still fits at the 12rem floor, and the size stops at
+   1.3125rem on wide panels. */
 .te-alt-tabs {
     display: flex;
     align-items: baseline;
-    gap: 0.25rem 0.75rem;
-    flex-wrap: wrap;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    white-space: nowrap;
     margin-bottom: 1.25rem;
 }
 
@@ -69,7 +80,7 @@
     background: none;
     color: var(--te-color-text);
     font-family: var(--te-font-display);
-    font-size: 1.3125rem;
+    font-size: min(1.3125rem, 7cqi);
     line-height: 1.2;
     cursor: pointer;
 }
@@ -95,6 +106,30 @@
     margin: 0 0 0.75rem;
     color: var(--te-color-text-dim);
     font-size: 0.8125rem;
+}
+
+/* The routine count ("Word: 5 alternatives, …") is announced but not shown:
+   the video has no status line. */
+.te-alt-status.te-alt-status--quiet {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* The tab panel fills the rest of the height so the hint can sit at its
+   foot. */
+.te-alt-tabpanel {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .te-alt-hint {

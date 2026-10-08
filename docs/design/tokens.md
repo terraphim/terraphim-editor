@@ -33,7 +33,7 @@ The values come from the spec text. The spec labels them "approximate; sample be
 ### Decisions and deviations
 
 - **Dim text is not ghost text.** Section 10 says "dim/ghost text is about body at 10% opacity". That level is right for ghosting (R-5.1), where text is supposed to fade back, but UI text such as the word count (R-7.2) and menu shortcut hints (R-7.3) has to stay readable. So there are two tokens. `--te-ghost-opacity: 0.1` is used only for ghosted spans. `--te-color-text-dim` is a solid colour, equal to body text at 60% over the page background, chosen to pass AA. Because it is a solid hex and not an opacity, its contrast can be checked and the test is deterministic.
-- **Fonts are stacks only.** Loading web fonts (JetBrains Mono, Caveat) would need another `<link>` and a network dependency, so it is deferred. Users who have the fonts installed get them, and everyone else gets the system monospace and cursive fallbacks.
+- **Fonts are stacks only.** Loading web fonts (JetBrains Mono, Caveat) would need another `<link>` and a network dependency, so it is deferred. Users who have the fonts installed get them, and everyone else gets the system monospace and cursive fallbacks. Owner decision (2026-10-08, issue #107): keep system fonts, no Caveat. This is an accepted deviation from the video: the alternatives panel's cursive tabs fall back to a system face (Bradley Hand on macOS), which is wider than Caveat, so the tabs are sized to the panel's width (`7cqi`) and render smaller than in the video to stay on one line (R-4.1, R-4.2).
 - **Panel border** `#262a4a` is an estimate of "1px lighter border". It is decorative and is not used to convey state.
 
 ## Scoping and preview

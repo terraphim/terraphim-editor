@@ -24,8 +24,9 @@ Issue: terraphim/terraphim-editor#14 (epic #1). Spec: `docs/requirements/alterna
 ## Popover
 
 - A non-modal `role="dialog"` labelled by its header: `The Lab guide…` (display face, accent) on the left, `what each idea does` (dim) on the right. It is never `showModal()`, because the writer keeps reading and editing while marks show.
-- The six actions are a `role="menu"` of `menuitemradio` buttons. `aria-checked` marks the action whose marks are shown, and a count sits at the right of that row. Each action has a FontAwesome icon.
-- Below the menu, a hint line explains what the focused or hovered action does (the "what each idea does" promise).
+- The six actions are a `role="menu"` of `menuitemradio` buttons. `aria-checked` marks the action whose marks are shown, and a count sits at the right of that row. The actions are text only, as in the video (issue #107).
+- Below the menu, a hint explains what the focused or hovered action does (the "what each idea does" promise). It is the menu's `aria-describedby` and is visually hidden, because the video shows no description line (4:56 to 5:30, issue #107).
+- The trim levels are one row of five equal buttons, the target (`~10%`) under the name, as in the video; the radio group's name, "Trim", is visually hidden for the same reason.
 - Then the trim slot: `<div class="te-lab-trim" data-slot="trim" hidden>`, which issue #15 fills and unhides.
 - Then the results, while an action is shown: a legend, the proposed fixes, and Clear marks. Each legend swatch is a live sample (`abc`) drawn with the mark's own class, so the legend always matches the text. If nothing is marked, the legend says `<label>: nothing to mark.`
 - Placement: `position: fixed`, horizontally centred on the pill and 10px above it. It is recomputed on open and on window resize.

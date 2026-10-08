@@ -6,7 +6,8 @@
  * are hard-coded here. The chrome DOM is built by public/js/chrome.js.
  *
  * Plain mode (default): the text and the dim word/char counter in the
- * top-left corner, nothing more (R-2.1, R-7.1; issue #86). The toolbar and
+ * top-left corner, nothing more (R-2.1, R-7.1; issue #86), on the same dark
+ * page and centred column as Write_On (the video at 0:00 to 0:05; #107). The toolbar and
  * the preview pane are hidden unless the chrome sets data-tools="on" on the
  * editor root (Ctrl+Shift+L, chrome.setTools(), config.tools). The corner
  * controls carry the `hidden` attribute.
@@ -29,26 +30,23 @@
 /* As in Write_On: a block host leaves only the writing surface in flow. */
 .te-app:not([data-mode="write-on"]):not([data-tools="on"]) sl-split-panel {
     display: block !important;
-    height: 100%;
+    height: auto;
 }
 
 .te-app:not([data-mode="write-on"]):not([data-tools="on"]) sl-split-panel::part(divider) {
     display: none;
 }
 
-/* The surface fills the editor, taking the band the toolbar used to
-   reserve, so a click anywhere below the text lands in it. */
-.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .editor-container,
-.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .editor-container [slot="start"],
-.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .markdown-input.te-surface {
-    height: 100%;
-}
-
-/* ---- Write_On page layout (R-7.1) ---- */
+/* ---- Page layout, Write_On and plain (R-7.1) ----
+   Plain mode lays the text out as Write_On does, as in the video at 0:05:
+   the centred column on the dark page, the counter top-left (issue #107).
+   The tools view (data-tools="on") keeps the Markdown editor's layout. */
 
 /* #app.te-app outranks the full page's inline #app rule. */
 .te-app[data-mode="write-on"],
-#app.te-app[data-mode="write-on"] {
+#app.te-app[data-mode="write-on"],
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]),
+#app.te-app:not([data-mode="write-on"]):not([data-tools="on"]) {
     height: auto;
     min-height: 100vh;
     padding: 0;
@@ -70,7 +68,8 @@
     display: none;
 }
 
-.te-app[data-mode="write-on"] .markdown-input.te-surface {
+.te-app[data-mode="write-on"] .markdown-input.te-surface,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .markdown-input.te-surface {
     width: auto;
     height: auto;
     min-height: calc(100vh - var(--te-page-margin-top) - 6rem);
@@ -81,7 +80,8 @@
     font-size: var(--te-font-size-body);
 }
 
-.te-app[data-mode="write-on"] .markdown-input.te-surface:empty::before {
+.te-app[data-mode="write-on"] .markdown-input.te-surface:empty::before,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .markdown-input.te-surface:empty::before {
     color: var(--te-color-text-dim);
     opacity: 1;
 }
@@ -108,8 +108,9 @@
     border-radius: 4px;
 }
 
-/* Top-left counter: dim monospace, visible in both modes. In plain mode it
-   sits in the 20px band above the text. */
+/* Top-left counter: dim monospace, visible in both modes, at the same place
+   in each (the video at 0:05 and 0:25). In the tools view it sits in the
+   20px band above the toolbar. */
 .te-chrome-counter {
     position: fixed;
     top: 1px;
@@ -139,7 +140,8 @@
     color: var(--te-color-accent);
 }
 
-.te-chrome-on .te-chrome-counter {
+.te-chrome-on .te-chrome-counter,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .te-chrome-counter {
     top: 1.25rem;
     left: 1.5rem;
     font-size: 0.8125rem;
@@ -371,7 +373,7 @@
     --te-ind-dot: 3px;           /* dot diameter */
     --te-ind-dot-gap: 3px;       /* spacing ~ one diameter (R-3.2) */
     --te-ind-row-offset: 2px;    /* dot row below the text box */
-    --te-ind-gutter: 0.625rem;   /* gutter rule distance from the text */
+    --te-ind-gutter: 1.25rem;    /* gutter rule distance from the text (video 2:00: ~20px) */
     position: relative;
 }
 
@@ -466,8 +468,9 @@
 }
 
 /* R-3.4: paragraph rule in the left gutter spanning the paragraph, with a
-   dot column immediately to its left. The holder is a zero-width box at
-   the text's left edge; its height is the paragraph's. */
+   dot column immediately to its left, level with the rule's middle (the
+   video at 2:00; docs/requirements/video-measurements.md). The holder is a
+   zero-width box at the text's left edge; its height is the paragraph's. */
 .te-app[data-mode="write-on"] .te-ind-para {
     position: absolute;
     width: 0;
@@ -484,7 +487,8 @@
 
 .te-app[data-mode="write-on"] .te-ind-para .te-ind-col {
     position: absolute;
-    top: 0;
+    top: 50%;
+    transform: translateY(-50%);
     right: calc(var(--te-ind-gutter) + 1px + var(--te-ind-dot-gap));
 }
 

@@ -71,10 +71,14 @@
 /* ---- Write_On theme (opt-in scope) ---- */
 
 /* The editor root (.te-app) carries the theme; the full page also sets the
-   attribute on <body> for its own background (chrome.pageMode). */
+   attribute on <body> for its own background (chrome.pageMode). Plain mode
+   wears the same palette and column, as the video's does from 0:00 to 0:05
+   (issue #107); only the Markdown tools view (data-tools="on": toolbar and
+   preview) keeps the light Shoelace look. */
 .te-app[data-mode="write-on"],
 .te-app.write-on,
-body[data-mode="write-on"] {
+body[data-mode="write-on"],
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) {
     min-height: 100vh;
     background-color: var(--te-color-bg);
     color: var(--te-color-text);
@@ -89,7 +93,8 @@ body[data-mode="write-on"] {
 .te-app[data-mode="write-on"] .te-surface,
 .te-app[data-mode="write-on"] .markdown-preview,
 .te-app.write-on .te-surface,
-.te-app.write-on .markdown-preview {
+.te-app.write-on .markdown-preview,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .te-surface {
     box-sizing: content-box;
     max-width: var(--te-measure);
     margin-inline: auto;
@@ -102,6 +107,7 @@ body[data-mode="write-on"] {
 }
 
 .te-app[data-mode="write-on"] ::selection,
-.te-app.write-on ::selection {
+.te-app.write-on ::selection,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) ::selection {
     background-color: var(--te-color-accent-soft);
 }

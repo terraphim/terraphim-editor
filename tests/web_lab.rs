@@ -282,3 +282,50 @@ fn test_keyboard_navigation_mode_change_and_destroy_cleanup() {
     );
     assert_eq!(result, "");
 }
+
+/// R-8.1, R-8.3 (issue #107), as in the video at 4:56 to 5:30: the five trim
+/// buttons sit in one row, each with its target under its name and nothing
+/// clipped; the actions are text only; the popover shows no description
+/// line and no "TRIM" label, but both remain the menu's description and the
+/// radio group's name.
+#[wasm_bindgen_test]
+fn test_popover_trim_row_and_hidden_texts_match_the_video() {
+    setup();
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          teLab.pill().click();
+          const pop = teLab.popover();
+          if (pop.hidden) return 'popover did not open';
+          const buttons = Array.from(pop.querySelectorAll('.te-trim-level'));
+          if (buttons.length !== 5) return buttons.length + ' trim buttons';
+          const rects = buttons.map((b) => b.getBoundingClientRect());
+          if (new Set(rects.map((r) => Math.round(r.top))).size !== 1) out.push('trim buttons wrap: ' + JSON.stringify(rects.map((r) => r.top)));
+          if (new Set(rects.map((r) => Math.round(r.width))).size !== 1) out.push('trim buttons unequal: ' + JSON.stringify(rects.map((r) => r.width)));
+          for (const b of buttons) {
+            for (const part of b.children) {
+              if (part.scrollWidth > part.clientWidth + 0.5) out.push('clipped: ' + part.textContent);
+            }
+            const name = b.querySelector('.te-trim-level-name').getBoundingClientRect();
+            const target = b.querySelector('.te-trim-level-target');
+            if (target && !(target.getBoundingClientRect().top >= name.bottom - 1)) out.push('target not under the name: ' + b.textContent);
+          }
+          // The actions are text only, as in the video.
+          if (pop.querySelector('.te-lab-action i')) out.push('action icons shown');
+          const pr = pop.getBoundingClientRect();
+          if (rects[0].left < pr.left || rects[4].right > pr.right) out.push('row overflows the popover');
+          // Hidden, not removed: the menu's description and the group's name.
+          const tiny = (el) => { const r = el.getBoundingClientRect(); return r.width <= 1 && r.height <= 1; };
+          const hint = pop.querySelector('.te-lab-hint'), label = pop.querySelector('.te-trim-label');
+          if (!tiny(hint)) out.push('description line visible');
+          if (!tiny(label)) out.push('TRIM label visible');
+          const menu = pop.querySelector('[role="menu"]');
+          if (document.getElementById(menu.getAttribute('aria-describedby')) !== hint || !hint.textContent) out.push('menu description lost');
+          const group = pop.querySelector('[role="radiogroup"]');
+          if (document.getElementById(group.getAttribute('aria-labelledby')) !== label || label.textContent !== 'Trim') out.push('group name lost');
+          teLab.pill().click();
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}

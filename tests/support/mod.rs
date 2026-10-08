@@ -258,12 +258,21 @@ pub struct FrameRect {
     pub width: f64,
 }
 
-/// The border box of `selector` in an iframe `width` by `height` CSS pixels
-/// holding `markup` and the real tokens and panel stylesheets, so `vw`, `vh`
-/// and the media queries resolve against that viewport rather than the test
-/// window.
-pub async fn rect_in_viewport(width: f64, height: f64, markup: &str, selector: &str) -> FrameRect {
-    let css = format!("{TOKENS_CSS}\n{ALT_PANEL_CSS}\n{OVERFLOW_CSS}");
+/// Run `script` (a function body with `d`, the frame's document, and `el`,
+/// the first `selector` element, in scope; it returns a string) in an iframe
+/// `width` by `height` CSS pixels holding `markup` and the real stylesheets,
+/// so `vw`, `vh`, container units and the media queries resolve against that
+/// viewport rather than the test window.
+pub async fn eval_in_viewport(
+    width: f64,
+    height: f64,
+    markup: &str,
+    selector: &str,
+    script: &str,
+) -> String {
+    let css = format!(
+        "{TOKENS_CSS}\n{WRITE_ON_CSS}\n{SELECTION_MENU_CSS}\n{LAB_CSS}\n{TRIM_CSS}\n{BLOCKS_CSS}\n{ALT_PANEL_CSS}\n{OVERFLOW_CSS}\n{PERSISTENCE_CSS}"
+    );
     let html = format!("<!doctype html><style>{css}</style><body>{markup}</body>");
     js_eval(&format!(
         r#"(() => {{
@@ -282,18 +291,30 @@ pub async fn rect_in_viewport(width: f64, height: f64, markup: &str, selector: &
         sel = js_string_literal(selector)
     );
     let loaded = wait_until(|| js_eval(&probe).as_bool() == Some(true)).await;
-    let rect = js_string(&format!(
+    let result = js_string(&format!(
         "(() => {{ const f = window.__teVwFrame; delete window.__teVwFrame; \
-         const el = f.contentDocument.querySelector({sel}); \
-         const r = el ? el.getBoundingClientRect() : null; f.remove(); \
-         return JSON.stringify(r ? [r.left, r.top, r.right, r.height, r.width] : []); }})()",
+         const d = f.contentDocument; const el = d.querySelector({sel}); \
+         try {{ return el ? String((() => {{ {script}\n }})()) : 'TE_NO_ELEMENT'; }} finally {{ f.remove(); }} }})()",
         sel = js_string_literal(selector)
     ));
-    let v: Vec<f64> = serde_json::from_str(&rect).unwrap();
     assert!(
-        loaded && v.len() == 5,
+        loaded && result != "TE_NO_ELEMENT",
         "{selector} did not render in the sized frame"
     );
+    result
+}
+
+/// The border box of `selector` in a sized iframe (see [`eval_in_viewport`]).
+pub async fn rect_in_viewport(width: f64, height: f64, markup: &str, selector: &str) -> FrameRect {
+    let rect = eval_in_viewport(
+        width,
+        height,
+        markup,
+        selector,
+        "const r = el.getBoundingClientRect(); return JSON.stringify([r.left, r.top, r.right, r.height, r.width]);",
+    )
+    .await;
+    let v: Vec<f64> = serde_json::from_str(&rect).unwrap();
     FrameRect {
         left: v[0],
         top: v[1],

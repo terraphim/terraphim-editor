@@ -8,6 +8,11 @@
 //! Interaction is simulated with real DOM events and native editing commands
 //! (`document.execCommand`); nothing is mocked.
 //!
+//! The browser window is 1140x900 (`webdriver.json` in the crate root, read
+//! by wasm-bindgen-test-runner): the size the acceptance test compares with
+//! the video (issue #107), wide enough for the 48rem and 60rem layout rules
+//! that move the column when a side panel opens.
+//!
 //! The browser tests are split across several test binaries
 //! (`tests/web*.rs`, sharing `tests/support`), because
 //! wasm-bindgen-test-runner gives each binary one fixed wall-clock budget

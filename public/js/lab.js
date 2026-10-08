@@ -82,15 +82,6 @@ const TE_LAB_HINTS = {
   hedges_and_filler: 'Marks hedges and filler words you could fade or cut.',
 };
 
-const TE_LAB_ICONS = {
-  typos_and_punctuation: 'fa-solid fa-spell-check',
-  weakest_sentences: 'fa-solid fa-feather',
-  long_sentences: 'fa-solid fa-ruler-horizontal',
-  convoluted_sentences: 'fa-solid fa-diagram-project',
-  off_tone: 'fa-solid fa-music',
-  hedges_and_filler: 'fa-solid fa-cloud',
-};
-
 /** Singular and plural names per mark kind, for the legend. */
 const TE_LAB_KINDS = {
   typo: ['typo', 'typos'],
@@ -226,12 +217,11 @@ class TeLabPopover {
       item.setAttribute('aria-checked', 'false');
       item.tabIndex = i === 0 ? 0 : -1;
       item.dataset.action = action.id;
-      const icon = el('i', TE_LAB_ICONS[action.id] || 'fa-solid fa-flask');
-      icon.setAttribute('aria-hidden', 'true');
+      // Text only, as in the video (4:56 to 5:30; issue #107).
       const label = el('span', 'te-lab-action-label', action.label);
       const count = el('span', 'te-lab-action-count');
       count.setAttribute('aria-hidden', 'true');
-      item.append(icon, label, count);
+      item.append(label, count);
       item.addEventListener('click', () => this.run(action.id), { signal });
       item.addEventListener('focus', () => this.showHint(action.id), { signal });
       item.addEventListener('mouseenter', () => this.showHint(action.id), { signal });

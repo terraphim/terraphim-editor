@@ -302,7 +302,10 @@ async fn test_write_on_in_an_embed_leaves_the_host_page_unstyled() {
           if (T.snap() !== T.before) out.push('host page restyled: ' + T.snap() + ' vs ' + T.before);
           // The editor itself takes the Write_On theme and layout.
           if (E.container.dataset.mode !== 'write-on') out.push('root data-mode');
-          if (getComputedStyle(E.container).backgroundColor === T.plainBg) out.push('root not themed');
+          // Plain mode already wears the video's palette (issue #107), so
+          // the root is the dark page in both modes.
+          if (getComputedStyle(E.container).backgroundColor !== 'rgb(10, 13, 28)') out.push('root not themed');
+          if (T.plainBg !== 'rgb(10, 13, 28)') out.push('plain root not themed: ' + T.plainBg);
           if (teTest.visible(E.container.querySelector('.toolbar'))) out.push('toolbar visible');
           if (!teTest.visible(E.container.querySelector('.te-chrome [data-control="overflow"]'))) out.push('corner controls hidden');
         "##,

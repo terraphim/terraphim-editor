@@ -93,3 +93,14 @@ Transcript times are from the recording's own transcript; frames were extracted 
 | Evidence index | 0:55–1:10, 1:50–2:00, 2:15–2:50, 4:10–5:35 | 0:55–1:11 and 1:40–1:52, 1:52–2:15, 2:15–2:52, 4:48–5:58 | as above; the Lab runs from "the last thing… the lab" (4:48) to "cut it in half" (5:58) |
 
 Frames checked and found right: F 0:05 (plain mode, counter only), F 0:25 (headline underline and dots), F 0:55 ("tension" underlined), F 1:45 ("struggle"), F 2:00–2:10 (paragraph gutter rule), F 2:35 (all corner controls), F 5:00 (Lab popover; "Shouldn't everything be obvious?" with its dots), F 5:35 (trim status card).
+
+## Acceptance-test visual defects (issue #107)
+
+Measured on native frames (3096x1952; CSS pixels are half the native ones).
+
+| Defect | Time | Observation |
+|---|---|---|
+| D1 plain mode | 0:00–0:05 | Plain mode is already the dark page: background about rgb(5, 9, 28), body text about rgb(236, 200, 181) (the recording's rendering of the `--te-color-bg` and `--te-color-text` tokens), text in the same centred column and at the same height as in Write_On; the counter top-left at y=60–70 native (30–35 CSS px), where Write_On has it at 0:25 |
+| D2 paragraph rule | 1:30, 2:00, 2:08 | The rule is 2–3 native px wide at x=728–731, the paragraph's text starts at x=769: a gap of about 40 native px (20 CSS px, hence `--te-ind-gutter: 1.25rem`). The dot column is at x=715–721, just left of the rule, at y=1645–1680 while the rule runs y=1466–1802: level with its middle, not its top |
+| D5 alternatives panel | 1:30 | The tabs are one line, x=48–440 of the 558px panel (70% of its width), y=365–399, just above the document's first line (y=445); the list follows at y=455; no status line; the key hint "return adds · esc closes" at y=1795, above the bottom-left icons (y=1870–1905). The UAT's "vertically centred" list is the list starting at the page's top margin, not centred in the panel |
+| D9 Lab popover | 4:56–5:30 (frame 5:00) | Header row, the six actions as text only (no icons), then one row of five equal trim buttons (about 230 native px each), each with the target under the name; no description line under the actions and no "TRIM" label. The popover is x=930–2165 (about 40% of the window) |

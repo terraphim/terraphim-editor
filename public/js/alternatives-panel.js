@@ -693,7 +693,9 @@ class TeAlternativesPanel {
     if (t.pending) {
       this.setStatus(`New ${t.pending.kind}: type a first alternative and press Enter.`);
     } else if (!this.statusSticky) {
-      this.setStatus(`${TE_ALT_KIND_LABEL[this.tab]}: ${total} alternatives, ${this.span.active + 1} of ${total} active.`);
+      // The routine count is for screen readers only: the video shows no
+      // status line (issue #107). Messages that ask for something stay visible.
+      this.setStatus(`${TE_ALT_KIND_LABEL[this.tab]}: ${total} alternatives, ${this.span.active + 1} of ${total} active.`, false, { quiet: true });
     }
     this.statusSticky = false;
     if (focused) {
@@ -760,8 +762,9 @@ class TeAlternativesPanel {
     return li;
   }
 
-  setStatus(message, sticky = false) {
+  setStatus(message, sticky = false, { quiet = false } = {}) {
     this.statusEl.textContent = message || '';
+    this.statusEl.classList.toggle('te-alt-status--quiet', quiet);
     if (sticky) this.statusSticky = true;
   }
 

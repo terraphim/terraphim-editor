@@ -565,3 +565,49 @@ fn test_chrome_degrades_to_surface_counts_without_the_document_api() {
     );
     assert_eq!(result, "");
 }
+
+/// R-2.1, R-7.1 (issue #107): plain mode wears the video's palette and
+/// layout from the start (0:00 to 0:05): the dark page, cream monospace text
+/// in the centred ~70ch column, and the counter where Write_On has it. Only
+/// the Markdown tools view (Ctrl+Shift+L) keeps the light editor.
+#[wasm_bindgen_test]
+fn test_plain_mode_has_the_video_palette_and_column() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const out = [];
+          const ed = window.__teEditor;
+          const root = ed.root, surface = teTest.surface().root;
+          const counter = document.querySelector('.te-chrome-counter');
+          const look = () => {
+            const r = getComputedStyle(root), s = getComputedStyle(surface), sr = surface.getBoundingClientRect(), c = counter.getBoundingClientRect();
+            return { bg: r.backgroundColor, color: s.color, font: s.fontFamily, size: s.fontSize, lh: s.lineHeight, max: s.maxWidth,
+                     centre: Math.abs(sr.left - (document.documentElement.clientWidth - sr.right)), top: s.paddingTop,
+                     counter: [Math.round(c.left), Math.round(c.top)], caret: s.caretColor };
+          };
+          if (ed.chrome.isWriteOn()) return 'started in Write_On';
+          const plain = look();
+          if (plain.bg !== 'rgb(10, 13, 28)') out.push('plain background ' + plain.bg);
+          if (plain.color !== 'rgb(232, 217, 196)') out.push('plain text colour ' + plain.color);
+          if (!/JetBrains Mono|IBM Plex Mono|monospace/.test(plain.font)) out.push('plain face ' + plain.font);
+          if (plain.max === 'none') out.push('plain column has no measure');
+          if (plain.centre > 2) out.push('plain column not centred: ' + plain.centre);
+          if (plain.caret !== 'rgb(140, 134, 230)') out.push('plain caret ' + plain.caret);
+          // Write_On changes the chrome, not the page.
+          ed.chrome.setMode('write-on');
+          const on = look();
+          for (const k of ['bg', 'color', 'font', 'size', 'lh', 'max', 'top']) {
+            if (on[k] !== plain[k]) out.push(k + ' differs: plain ' + plain[k] + ', Write_On ' + on[k]);
+          }
+          if (JSON.stringify(on.counter) !== JSON.stringify(plain.counter)) out.push('counter moves: ' + JSON.stringify([plain.counter, on.counter]));
+          ed.chrome.setMode('plain');
+          // The tools view is the light Markdown editor.
+          ed.chrome.setTools(true);
+          if (look().bg === 'rgb(10, 13, 28)') out.push('tools view is dark');
+          ed.chrome.setTools(false);
+          if (look().bg !== 'rgb(10, 13, 28)') out.push('plain not dark again after the tools view');
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}

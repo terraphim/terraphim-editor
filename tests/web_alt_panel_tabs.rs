@@ -2,12 +2,13 @@
 //! control, dots and tabs: the `●●●` control with ARIA, provenance glyphs and
 //! colours from a file's `source` fields, an AI addition undone, Ctrl+Z inside
 //! the panel and a draft keeping its own undo, tabs by keyboard, the overlap
-//! refusal, a pending sentence created and swapped, save and reopen, and a
-//! dot click opening the panel without taking focus. Split from
-//! `web_alt_panel.rs` to keep each binary inside its time budget. Run with
-//! `wasm-pack test --headless --chrome --test web_alt_panel_tabs`. Real
-//! scripts, the real exported document API and real documents; nothing is
-//! mocked.
+//! refusal, a pending sentence created and swapped, save and reopen, a dot
+//! click opening the panel without taking focus, and the video layout
+//! (one-line tabs, the quiet count, tab and hint placement; issue #107).
+//! Split from `web_alt_panel.rs` to keep each binary inside its time budget.
+//! Run with `wasm-pack test --headless --chrome --test web_alt_panel_tabs`.
+//! Real scripts, the real exported document API and real documents; nothing
+//! is mocked.
 #![cfg(target_arch = "wasm32")]
 
 mod support;
@@ -142,6 +143,90 @@ async fn test_chrome_dot_provenance_tabs_and_save() {
           if (seen === true) out.push('te:dot cancelled');
           if (P.root.contains(document.activeElement)) out.push('dot moved focus into the panel');
           if (!teAlt.inSync()) out.push('model out of step');
+        "##,
+    ])
+    .await;
+    assert_eq!(result, "");
+}
+
+/// The tab row as the panel builds it, for the sized-frame checks.
+const TABS_MARKUP: &str = r#"<aside class="te-alt-panel"><div class="te-alt-tabs" role="tablist"><button class="te-alt-tab">Word</button><button class="te-alt-tab">Sentence</button><button class="te-alt-tab">Paragraph</button></div></aside>"#;
+
+/// R-4.2, R-4.1 (issue #107), as in the video at 1:15 to 1:35: the three
+/// cursive tabs sit on one line at every panel width (the 12rem floor at a
+/// 900px window, 205px at 1140px, the 20rem cap at 2000px); the routine
+/// count is announced but not shown, while a message that asks for
+/// something stays visible; the tabs sit just above the document's first
+/// line and the key hint at the panel's foot, clear of the corner controls.
+#[wasm_bindgen_test]
+async fn test_tabs_one_line_quiet_count_and_video_layout() {
+    for vw in [900.0, 1140.0, 2000.0] {
+        let r = eval_in_viewport(
+            vw,
+            800.0,
+            TABS_MARKUP,
+            ".te-alt-tabs",
+            r#"const t = Array.from(el.children).map((x) => x.getBoundingClientRect());
+            const p = d.querySelector('.te-alt-panel'), cs = getComputedStyle(p);
+            const content = p.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+            return JSON.stringify({ tops: Array.from(new Set(t.map((r) => Math.round(r.top)))), row: t[2].right - t[0].left, content });"#,
+        )
+        .await;
+        let v: serde_json::Value = serde_json::from_str(&r).unwrap();
+        assert_eq!(
+            v["tops"].as_array().unwrap().len(),
+            1,
+            "tabs wrap at a {vw}px window: {r}"
+        );
+        assert!(
+            v["row"].as_f64().unwrap() <= v["content"].as_f64().unwrap() + 0.5,
+            "tab row wider than the panel at a {vw}px window: {r}"
+        );
+    }
+
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    install_alt_panel_helpers();
+    let fixture = js_string_literal(&provenance_fixture());
+    let first = format!(
+        r##"
+          ed.openDocument({fixture});
+          ed.chrome.setMode('write-on');
+          s.focus();
+          s.setSelectionOffsets(12, 12);
+          teTest.control('alternatives').click();
+          const P = teAlt.P();
+          if (!P.isOpen()) return 'chrome control did not open the panel';
+          const tabs = Object.values(P.tabs).map((t) => t.getBoundingClientRect());
+          if (new Set(tabs.map((r) => Math.round(r.top))).size !== 1) out.push('tabs wrap: ' + JSON.stringify(tabs.map((r) => r.top)));
+          // The routine count: announced, not shown.
+          const st = P.statusEl;
+          if (!/^Word: 3 alternatives, 1 of 3 active\.$/.test(st.textContent)) out.push('status text ' + st.textContent);
+          if (st.getAttribute('aria-live') !== 'polite' || st.getAttribute('role') !== 'status') out.push('status not live');
+          const sr = st.getBoundingClientRect();
+          if (sr.width > 1 || sr.height > 1) out.push('count is visible: ' + JSON.stringify([sr.width, sr.height]));
+          // The tabs sit just above the first line of the document.
+          const line = s.rangeForOffsets(0, 4).getClientRects()[0];
+          const tb = P.tablist.getBoundingClientRect();
+          if (!(tb.bottom <= line.top && line.top - tb.top < 64)) out.push('tabs not just above the first line: tabs ' + JSON.stringify([tb.top, tb.bottom]) + ' line ' + line.top);
+          // The hint at the panel's foot, above the bottom-left controls.
+          const hint = P.root.querySelector('.te-alt-hint').getBoundingClientRect();
+          const pr = P.root.getBoundingClientRect(), pad = parseFloat(getComputedStyle(P.root).paddingBottom);
+          if (Math.abs(hint.bottom - (pr.bottom - pad)) > 1) out.push('hint not at the foot: ' + hint.bottom + ' vs ' + (pr.bottom - pad));
+          if (hint.bottom > teTest.control('save').getBoundingClientRect().top) out.push('hint under the save control');
+          if (hint.top < P.list.getBoundingClientRect().bottom) out.push('hint overlaps the list');
+        "##
+    );
+    let result = run_steps(&[
+        first.as_str(),
+        // A message that asks for something stays visible.
+        r##"
+          const P = teAlt.P();
+          ed.altPanel.open({ start: 21, end: 31 });
+          const st = P.statusEl, sr = st.getBoundingClientRect();
+          if (!/type a first alternative/.test(st.textContent)) return 'no pending message: ' + st.textContent;
+          if (sr.width <= 1 || sr.height <= 1) out.push('message hidden');
+          P.close({ restoreFocus: false });
         "##,
     ])
     .await;
