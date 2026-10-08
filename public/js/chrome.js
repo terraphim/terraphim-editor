@@ -19,7 +19,7 @@
  *   bottom-left    floppy            save                 -> te:save (cancelable), then save and write the file
  *   bottom-left    folder            open                 -> te:open (cancelable), then pick and open a file
  *   bottom-centre  LAB               Lab                  -> te:lab
- *   bottom-right   XYZ               Overflow panel       -> te:overflow
+ *   bottom-right   XYZ               Overflow panel       -> te:overflow (also Ctrl+Shift+D, see overflow.js)
  *
  * Events are CustomEvents dispatched from the chrome root inside the
  * editor's root; they bubble, so listen on the root or on `document`.
@@ -70,6 +70,9 @@ const WRITE_ON_STORAGE_PREFIX = 'terraphim-editor:write-on:';
 
 /** Shows or hides the toolbar and preview in plain mode (issue #86). */
 const TOOLS_TOGGLE_KEY = 'ctrl+shift+l';
+
+/** Toggles the Overflow panel in Write_On mode, as the XYZ tooltip shows (R-6.1). */
+const OVERFLOW_TOGGLE_KEY = 'ctrl+shift+d';
 
 /** Selection shortcuts from R-7.3; the editor shortcuts come from config.js. */
 const WRITE_ON_SELECTION_SHORTCUTS = [
@@ -204,7 +207,8 @@ class WriteOnChrome {
       b.className = `te-chrome-control ${opts.className}`;
       b.dataset.control = opts.name;
       b.setAttribute('aria-label', opts.label);
-      b.title = opts.label;
+      b.title = opts.key ? `${opts.label} (${formatShortcutKey(opts.key)})` : opts.label;
+      if (opts.key) b.setAttribute('aria-keyshortcuts', formatShortcutKey(opts.key).replace('Ctrl', 'Control'));
       if (opts.icon) {
         const i = document.createElement('i');
         i.className = opts.icon;
@@ -267,7 +271,7 @@ class WriteOnChrome {
     const bottomRight = group('bottom-right');
     control(bottomRight, {
       name: 'overflow', className: 'te-chrome-overflow', text: 'XYZ',
-      label: 'Overflow panel',
+      label: 'Overflow panel', key: OVERFLOW_TOGGLE_KEY,
       onClick: () => this.emit('te:overflow'),
     });
 
@@ -305,6 +309,7 @@ class WriteOnChrome {
     const items = [
       { key: '/', desc: 'Command palette' },
       { key: TOOLS_TOGGLE_KEY, desc: 'Show or hide the toolbar and preview' },
+      { key: OVERFLOW_TOGGLE_KEY, desc: 'Show or hide the Overflow panel' },
     ];
     if (typeof window.TePersistence === 'function') {
       items.push({ key: 'ctrl+s', desc: 'Save' }, { key: 'ctrl+o', desc: 'Open' });

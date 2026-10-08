@@ -225,6 +225,12 @@
     font-size: 0.6875rem;
 }
 
+/* Lit lavender while the Overflow panel is open, as in the demo (4:05). */
+.te-chrome-overflow[aria-expanded="true"] {
+    border-color: var(--te-color-accent);
+    color: var(--te-color-accent);
+}
+
 /* ---- Shortcut reference (R-7.3), a native <dialog> ---- */
 
 .te-chrome-shortcuts {

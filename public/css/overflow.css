@@ -5,8 +5,12 @@
  * The DOM is built by public/js/overflow.js. Consumes the tokens in
  * public/css/tokens.css; no colours, fonts or radii are hard-coded here.
  *
- * A right-hand panel floating between the top-right keyboard glyph and the
- * bottom-right XYZ control, so neither corner control is covered. The title
+ * A full-height panel flush with the right edge, as in the demo (x=2536 to
+ * 3095 of 3096, top to bottom; docs/requirements/video-measurements.md).
+ * The top-right keyboard glyph and the bottom-right XYZ tag stay where they
+ * are, drawn over the panel (the chrome's z-index is above the panel's), and
+ * the panel's padding keeps its content clear of both; the XYZ tag is lit
+ * while the panel is open (write-on.css). The title
  * is the cursive display face in lavender; the text area uses the document's
  * monospace face; the footer hint is dim. While it is open
  * (<body data-te-overflow="open">) the writing column is centred in the
@@ -16,7 +20,7 @@
 /*
  * The same 18% of the window as the alternatives panel (R-6.1; measured in
  * docs/requirements/video-measurements.md), with the same clamp: the 12rem
- * floor keeps the title and its two buttons on one line and takes over below
+ * floor keeps the title and its close button on one line and takes over below
  * a 1067px window; the 20rem cap is reached at 1778px. Declared on :root so
  * the writing column's clearance below uses the same value. Below 40rem the
  * narrow-screen rule replaces the width.
@@ -27,18 +31,19 @@
 
 .te-overflow {
     position: fixed;
-    top: 3.75rem;
-    right: 1.25rem;
-    bottom: 4.25rem;
+    top: 0;
+    right: 0;
+    bottom: 0;
     z-index: 18;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     width: var(--te-overflow-width);
-    padding: 0.75rem 1rem 0.75rem;
+    /* Clear of the corner controls: 1.25rem offset plus a 1.75rem control,
+       and a little air, at the top and the bottom. */
+    padding: 3.75rem 1.25rem 4.25rem;
     background-color: var(--te-color-panel);
-    border: 1px solid var(--te-color-panel-border);
-    border-radius: var(--te-radius-popover);
+    border-left: 1px solid var(--te-color-panel-border);
     color: var(--te-color-text);
     font-family: var(--te-font-mono);
 }
@@ -150,13 +155,17 @@
     }
 }
 
-/* Narrow screens: the panel spans the width above the bottom controls. */
+/* Narrow screens: a bottom sheet across the full width and the lower half
+   of the window. The bottom corner controls stay on top of it, as they do on
+   the full-height panel, and the padding keeps the text clear of them. */
 @media (max-width: 40rem) {
     .te-overflow {
-        left: 0.75rem;
-        right: 0.75rem;
+        left: 0;
         width: auto;
         top: auto;
         height: 50vh;
+        padding-top: 1rem;
+        border-left: 0;
+        border-top: 1px solid var(--te-color-panel-border);
     }
 }

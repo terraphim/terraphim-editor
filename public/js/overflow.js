@@ -9,7 +9,13 @@
  * "Overflow" title in the cursive display face, lavender) holding one
  * free-form monospace text area (R-6.1, R-6.2). It is toggled by the XYZ
  * corner control (the chrome dispatches `te:overflow`), which gets
- * `aria-expanded` and `aria-controls`.
+ * `aria-expanded` and `aria-controls`, and by Ctrl+Shift+D (exactly those
+ * modifiers; the chrome's OVERFLOW_TOGGLE_KEY, shown in the XYZ tooltip as in
+ * the demo at 3:52) from anywhere in the editor or the panel, in Write_On
+ * mode only. As in the demo, the panel runs full height against the right
+ * edge and the corner controls stay on top of it: the keyboard glyph opens
+ * the shortcut reference and the XYZ tag, lit while the panel is open,
+ * closes it.
  *
  *   editor.overflow.open({ focus })    // -> true when shown (Write_On only)
  *   editor.overflow.close({ restoreFocus })
@@ -81,7 +87,6 @@
  * Keyboard and ARIA. Escape anywhere in the panel closes it and returns
  * focus to where it was before the panel was opened (the XYZ control), or
  * to the page. The text area is labelled and described by the footer hint.
- * The header's keyboard glyph opens the chrome's shortcut reference.
  *
  * Lifecycle. Listeners use the editor's AbortController signal plus the
  * panel's own; destroy() removes the DOM, the menu item, the body attribute
@@ -155,7 +160,6 @@ class TeOverflowPanel {
       tools.appendChild(b);
       return b;
     };
-    this.shortcutsButton = button('te-overflow-shortcuts', 'fa-regular fa-keyboard', 'Keyboard shortcuts');
     this.closeButton = button('te-overflow-close', 'fa-solid fa-xmark', 'Close Overflow');
     header.append(title, tools);
 
@@ -196,10 +200,20 @@ class TeOverflowPanel {
       if (e.detail && e.detail.mode !== 'write-on') this.close();
     });
     on(this.closeButton, 'click', () => this.close());
-    on(this.shortcutsButton, 'click', () => {
-      const chrome = this.editor.chrome;
-      if (chrome && typeof chrome.openShortcuts === 'function') chrome.openShortcuts();
-    });
+    // Ctrl+Shift+D, from the editor or the panel (which may be mounted
+    // outside it). Capture phase, so a focused control cannot swallow it; the
+    // browser's own binding is overridden only when the panel acts.
+    const toggleKey = typeof OVERFLOW_TOGGLE_KEY === 'string' ? OVERFLOW_TOGGLE_KEY : 'ctrl+shift+d';
+    const onToggleKey = (e) => {
+      if (e.defaultPrevented || typeof teShortcutMatches !== 'function' || !teShortcutMatches(e, toggleKey)) return;
+      if (!this.isOpen() && !this.usable()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggle();
+    };
+    const keyScope = this.editor.root || this.mount;
+    on(keyScope, 'keydown', onToggleKey, { capture: true });
+    if (!keyScope.contains(this.root)) on(this.root, 'keydown', onToggleKey, { capture: true });
     on(this.root, 'keydown', (e) => {
       if (e.key === 'Escape' && !e.isComposing) {
         e.preventDefault();

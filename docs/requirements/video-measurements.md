@@ -1,6 +1,6 @@
 # Write_On video measurements
 
-Evidence for the panel widths and the Overflow timings cited in [alternative-control.md](alternative-control.md) (issue #96). Source: the Write_On demo recording, 3096x1952 pixels, 60 fps, 415.4 s. The recording is the whole app window, so a percentage of the frame width is a percentage of the window width. The video and its frames are not committed.
+Evidence for the panel widths, the Overflow timings and placement, and the other video citations in [alternative-control.md](alternative-control.md) (issues #96 and #101). Source: the Write_On demo recording, 3096x1952 pixels, 60 fps, 415.4 s. The recording is the whole app window, so a percentage of the frame width is a percentage of the window width. The video and its frames are not committed.
 
 ## Method
 
@@ -55,8 +55,41 @@ Both panels are 18% of the window, so the "same width class" in R-6.1 holds exac
 | 6:10-6:22 | Transcript recap: "I can stash extra writing in the sidebar" |
 | 6:23.50 | Panel closed |
 
-## Not yet reflected in the implementation
+## Overflow placement and the corner controls (R-6.1, R-7.2)
 
-- The `Ctrl+Shift+D` toggle shortcut shown in the 3:52 tooltip is not bound.
-- In the video the Overflow panel is full height and flush right, with the keyboard glyph and the XYZ tag inside it; ours floats between those corner controls. Its width matches. R-6.1 asks only for a right-hand panel, so this is a difference from the demo, not a failed requirement.
-- The CSS clamps both widths to 12rem–20rem, so they are exactly 18% only for windows from 1067px to 1778px wide; narrower windows keep a usable 12rem panel and wider ones stop at 20rem.
+Compared at 3:48 (closed) and 4:05 (open), cropping x=2396 to 3095 of the full height:
+
+| Time | Observation |
+|---|---|
+| 3:48, 4:05 | The top-right keyboard glyph is at the same place closed and open; open, it sits over the top of the panel, above the title |
+| 3:48, 4:05 | The bottom-right XYZ tag is at the same place closed and open; open, it sits over the bottom of the panel, below the footer hint, and is drawn lavender (border and text) instead of dim |
+| 4:05 | The panel has no buttons of its own: the title "Overflow", the text, and the footer hint; its content starts about 23 CSS px in from its left border |
+| 4:05 | The title sits well below the keyboard glyph and the footer hint well above the XYZ tag |
+
+The implementation matches: the panel runs full height against the right edge, the corner controls stay on top of it (and keep working), the XYZ tag is lit while it is open, and Ctrl+Shift+D toggles it. It keeps a close button beside the title, so the panel can be dismissed from inside it; Escape and the XYZ tag also close it.
+
+The CSS clamps both widths to 12rem–20rem, so they are exactly 18% only for windows from 1067px to 1778px wide; narrower windows keep a usable 12rem panel and wider ones stop at 20rem.
+
+## Other citations re-derived (issue #101)
+
+Transcript times are from the recording's own transcript; frames were extracted every three seconds over the Lab (4:48 to 6:00) and twice a second around the transitions.
+
+| Requirement | Was | Now | Evidence |
+|---|---|---|---|
+| §1 no AI rewriting | T 5:10–5:20 | T 5:38–5:46 | "So it's not rewriting anything for me. I don't want it to do that" |
+| R-2.2 alternatives | T 0:35–1:00 | T 0:33–1:11 | from "written alternate versions of this headline" to "I wrote these alternatives" |
+| R-2.3 granularities | T 0:55, 1:55; T 2:00 | T 0:56, 1:52; T 2:08–2:15 | "tension" at 0:56, "paperclip" at 1:52; "Same thing is true at the paragraph level" at 2:08 |
+| R-2.4 cycling | T 0:40–0:50, 1:25–1:35 | T 0:40–0:53, 1:28–1:37 | "mouse over it and use my arrow key"; "If I arrow up… see them in line" |
+| R-2.5 persistence | T 1:00, 1:40 | T 0:53, 1:37–1:43 | "keep it like this because that's what I prefer"; "leave struggle there for a while" |
+| R-2.6 a/an | T 1:50–2:00, F 1:55 | T 1:52–2:08, F 2:05 | at 1:55 the text still reads "a paperclip"; "an eraser" is on screen at 2:05 |
+| R-3.3 lit dot | T 1:00–1:10 | T 1:40–1:52 | "the dot in the middle is highlighted… not the original word" |
+| R-5.1 ghost | T 2:15–2:45, F 2:40 | T 2:15–2:48, F 2:38 | "dim something back" at 2:15, "ghost it… about 10%" at 2:37; the text is ghosted by 2:38 |
+| R-5.2 revive | T 2:45–2:50 | T 2:48–2:52 | "right click it and say revive" |
+| R-8.1 Lab popover | F 5:00 | T 4:48–4:59, F 4:56, F 5:00 | popover fades in at 4:55.5 and is fully open at 4:56 |
+| R-8.2 mark actions | T 4:15–4:35 | T 4:59–5:15 | "mark the convoluted sentences. Find words that don't fit the tone" |
+| R-8.3 trim levels | F 5:00 | T 5:15–5:27, F 5:00 | "slightly trim this, tighten it some more, even sharper, or cut it in half"; Slight trim hovered 5:25–5:26.5 |
+| R-8.4 trim behaviour | T 4:45–5:20 | T 5:22–5:46, F 5:27, F 5:35 | "AI scans the whole document… uses the dim feature"; the status card is up from 5:27 |
+| R-8.5 review | T 5:20–5:30 | T 5:41–5:49 | "I can walk through the changes, I can make the cuts, or I can say, 'Eh, maybe not.'" |
+| Evidence index | 0:55–1:10, 1:50–2:00, 2:15–2:50, 4:10–5:35 | 0:55–1:11 and 1:40–1:52, 1:52–2:15, 2:15–2:52, 4:48–5:58 | as above; the Lab runs from "the last thing… the lab" (4:48) to "cut it in half" (5:58) |
+
+Frames checked and found right: F 0:05 (plain mode, counter only), F 0:25 (headline underline and dots), F 0:55 ("tension" underlined), F 1:45 ("struggle"), F 2:00–2:10 (paragraph gutter rule), F 2:35 (all corner controls), F 5:00 (Lab popover; "Shouldn't everything be obvious?" with its dots), F 5:35 (trim status card).

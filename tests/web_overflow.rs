@@ -2,7 +2,8 @@
 //! the XYZ toggle, ARIA and Escape, stashing as a move and one undo step
 //! (menu and Ctrl+Shift+X), pulling back with Ctrl+Enter and by drag and
 //! drop, persistence through save and open, export, the preserved-block
-//! refusal and destroy(). Run with `wasm-pack test --headless --chrome`.
+//! refusal and destroy(); Ctrl+Shift+D and the full-height placement are in
+//! `web_overflow_layout.rs`. Run with `wasm-pack test --headless --chrome`.
 //! Real scripts and the real document API; nothing is mocked. Each test is a
 //! short list of `run_steps` steps with one or two model calls each.
 #![cfg(target_arch = "wasm32")]
@@ -25,33 +26,10 @@ fn fixture() -> String {
     write(&doc)
 }
 
-/// Installs `window.__teSrc` and the small helpers the steps share.
-fn install(src: &str) {
-    let script = format!(
-        r##"window.__teSrc = {src};
-        window.teOv = {{
-          api() {{ return window.wasmBindings; }},
-          // Live and set-aside annotation counts, read from the model.
-          where() {{
-            const a = window.wasmBindings.document_annotations();
-            return 'spans=' + a.spans.length + ' ghosts=' + a.ghosts.length +
-              ' aside=' + (a.setAside.spans.length + a.setAside.ghosts.length);
-          }},
-          type(area, value) {{
-            area.value = value;
-            area.dispatchEvent(new InputEvent('input', {{ bubbles: true }}));
-          }},
-        }};
-        'ok'"##,
-        src = js_string_literal(src)
-    );
-    assert_eq!(js_string(&script), "ok");
-}
-
 #[wasm_bindgen_test]
 async fn test_xyz_toggles_the_panel_with_aria_escape_and_mode_gating() {
     let _document = fresh_full_editor();
-    install("Hello world.\n");
+    install_overflow_helpers("Hello world.\n");
     let r = run_steps(&[
         r#"ed.openDocument(window.__teSrc);
         ed.chrome.setMode('write-on');
@@ -98,7 +76,7 @@ async fn test_xyz_toggles_the_panel_with_aria_escape_and_mode_gating() {
 #[wasm_bindgen_test]
 async fn test_stash_is_a_move_and_one_undo_step() {
     let _document = fresh_full_editor();
-    install(&fixture());
+    install_overflow_helpers(&fixture());
     let r = run_steps(&[
         // Stash through the selection menu.
         r#"ed.openDocument(window.__teSrc);
@@ -175,7 +153,7 @@ async fn test_stash_is_a_move_and_one_undo_step() {
 #[wasm_bindgen_test]
 async fn test_ctrl_enter_and_drop_insert_at_the_caret() {
     let _document = fresh_full_editor();
-    install("Alpha beta gamma.\n");
+    install_overflow_helpers("Alpha beta gamma.\n");
     let r = run_steps(&[
         // The caret is placed as a click would (a DOM selection in the
         // surface), then focus moves to the panel.
@@ -313,7 +291,7 @@ async fn test_ctrl_enter_and_drop_insert_at_the_caret() {
 #[wasm_bindgen_test]
 async fn test_panel_text_persists_is_not_exported_and_destroy_cleans_up() {
     let _document = fresh_full_editor();
-    install("Body text.\n");
+    install_overflow_helpers("Body text.\n");
     let r = run_steps(&[
         r#"ed.openDocument(window.__teSrc);
         ed.chrome.setMode('write-on');
@@ -368,7 +346,7 @@ async fn test_panel_width_matches_the_video() {
     assert_panel_clamp(markup, ".te-overflow").await;
 
     let _document = fresh_full_editor();
-    install("Hello world.\n");
+    install_overflow_helpers("Hello world.\n");
     let r = run_steps(&[r#"ed.openDocument(window.__teSrc);
         ed.chrome.setMode('write-on');
         teTest.control('overflow').click();

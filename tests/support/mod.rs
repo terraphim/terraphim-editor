@@ -19,11 +19,13 @@ mod files;
 mod fixtures;
 pub mod indicators;
 pub mod kg;
+mod overflow;
 pub mod trim;
 pub use alt_panel::*;
 pub use bench::*;
 pub use files::*;
 pub use fixtures::*;
+pub use overflow::*;
 
 pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
@@ -246,16 +248,27 @@ pub async fn wait_until(mut done: impl FnMut() -> bool) -> bool {
 /// 560 of 3096 pixels (R-4.1, R-6.1; docs/requirements/video-measurements.md).
 pub const VIDEO_PANEL_SHARE: f64 = 0.18;
 
-/// The border-box width of `selector` in an iframe `viewport` CSS pixels wide
-/// holding `markup` and the real tokens and panel stylesheets, so `vw` and the
-/// media queries resolve against that viewport rather than the test window.
-pub async fn width_in_viewport(viewport: f64, markup: &str, selector: &str) -> f64 {
+/// The border box of an element measured in a sized iframe.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FrameRect {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub height: f64,
+    pub width: f64,
+}
+
+/// The border box of `selector` in an iframe `width` by `height` CSS pixels
+/// holding `markup` and the real tokens and panel stylesheets, so `vw`, `vh`
+/// and the media queries resolve against that viewport rather than the test
+/// window.
+pub async fn rect_in_viewport(width: f64, height: f64, markup: &str, selector: &str) -> FrameRect {
     let css = format!("{TOKENS_CSS}\n{ALT_PANEL_CSS}\n{OVERFLOW_CSS}");
     let html = format!("<!doctype html><style>{css}</style><body>{markup}</body>");
     js_eval(&format!(
         r#"(() => {{
           const f = document.createElement('iframe');
-          f.style.cssText = 'position: fixed; left: -20000px; top: 0; border: 0; width: {viewport}px; height: 800px;';
+          f.style.cssText = 'position: fixed; left: -20000px; top: 0; border: 0; width: {width}px; height: {height}px;';
           f.srcdoc = {html};
           document.body.appendChild(f);
           window.__teVwFrame = f;
@@ -269,17 +282,33 @@ pub async fn width_in_viewport(viewport: f64, markup: &str, selector: &str) -> f
         sel = js_string_literal(selector)
     );
     let loaded = wait_until(|| js_eval(&probe).as_bool() == Some(true)).await;
-    let width = js_number(&format!(
+    let rect = js_string(&format!(
         "(() => {{ const f = window.__teVwFrame; delete window.__teVwFrame; \
          const el = f.contentDocument.querySelector({sel}); \
-         const w = el ? el.getBoundingClientRect().width : -1; f.remove(); return w; }})()",
+         const r = el ? el.getBoundingClientRect() : null; f.remove(); \
+         return JSON.stringify(r ? [r.left, r.top, r.right, r.height, r.width] : []); }})()",
         sel = js_string_literal(selector)
     ));
+    let v: Vec<f64> = serde_json::from_str(&rect).unwrap();
     assert!(
-        loaded && width >= 0.0,
+        loaded && v.len() == 5,
         "{selector} did not render in the sized frame"
     );
-    width
+    FrameRect {
+        left: v[0],
+        top: v[1],
+        right: v[2],
+        height: v[3],
+        width: v[4],
+    }
+}
+
+/// The border-box width of `selector` in an iframe `viewport` CSS pixels wide
+/// (see [`rect_in_viewport`]).
+pub async fn width_in_viewport(viewport: f64, markup: &str, selector: &str) -> f64 {
+    rect_in_viewport(viewport, 800.0, markup, selector)
+        .await
+        .width
 }
 
 /// Assert `width` is within 2% of the video's share of a `viewport`-wide window.

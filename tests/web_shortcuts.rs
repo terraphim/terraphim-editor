@@ -100,8 +100,17 @@ fn test_configured_and_write_on_shortcuts_are_disjoint() {
             'contextmenu', 'shift+f10',
             // The plain-mode tools toggle (issue #86).
             'ctrl+shift+l',
+            // The Overflow panel toggle (R-6.1, the XYZ tooltip at 3:52).
+            'ctrl+shift+d',
           ].map(norm);
           if (TOOLS_TOGGLE_KEY !== 'ctrl+shift+l') out.push('tools toggle key ' + TOOLS_TOGGLE_KEY);
+          if (OVERFLOW_TOGGLE_KEY !== 'ctrl+shift+d') out.push('overflow toggle key ' + OVERFLOW_TOGGLE_KEY);
+          // The panel toggles are distinct from each other and from the menu.
+          const toggles = [TOOLS_TOGGLE_KEY, OVERFLOW_TOGGLE_KEY].map(norm);
+          for (const k of toggles) {{
+            if (menuKeys.includes(k)) out.push('toggle collides with the menu: ' + k);
+          }}
+          if (new Set(toggles).size !== toggles.length) out.push('toggles collide');
           const writeOn = new Set(menuKeys.concat(reference, direct));
           for (const k of configured) {{
             if (writeOn.has(k)) out.push('collision: ' + k);

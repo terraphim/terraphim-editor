@@ -6,7 +6,7 @@ Target codebase: `terraphim-editor` (Rust → WASM via Trunk, vanilla JS, Shoela
 
 ## 1. Scope and non-goals
 
-Write_On is "alternative control, not version control" at the word, sentence and paragraph level, plus two supporting ideas: dimming text back without deleting it, and stashing text nearby. The author explicitly does not want AI rewriting his text; AI only proposes alternatives or marks candidates for cutting `[T 5:10–5:20]`.
+Write_On is "alternative control, not version control" at the word, sentence and paragraph level, plus two supporting ideas: dimming text back without deleting it, and stashing text nearby. The author explicitly does not want AI rewriting his text; AI only proposes alternatives or marks candidates for cutting `[T 5:38–5:46]`.
 
 Out of scope for this spec: collaboration, cloud sync, publishing to X/LinkedIn (the demo has buttons for these but they are incidental to the editing model `[T 4:29–4:48]`).
 
@@ -14,15 +14,15 @@ Out of scope for this spec: collaboration, cloud sync, publishing to X/LinkedIn 
 
 **R-2.1 Plain mode by default.** The editor opens as a plain text editor with nothing visible except the text and a small word/char count in the top-left corner (`535 words 3115 chars`, dim monospace) `[T 0:00–0:05, F 0:05]`. Clicking the word count toggles "Write_On mode" on, which reveals the alternative indicators and the chrome described in §7 `[T 0:05]`.
 
-**R-2.2 Span-anchored alternatives.** Any contiguous span of text (word, phrase, sentence, headline, paragraph) can own an ordered list of *alternatives*. Index 0 is always the original text as first written; the author's own additions and AI additions follow. Exactly one alternative is *active* and is what the document shows; the others are stored, not rendered `[T 0:35–1:00]`.
+**R-2.2 Span-anchored alternatives.** Any contiguous span of text (word, phrase, sentence, headline, paragraph) can own an ordered list of *alternatives*. Index 0 is always the original text as first written; the author's own additions and AI additions follow. Exactly one alternative is *active* and is what the document shows; the others are stored, not rendered `[T 0:33–1:11]`.
 
-**R-2.3 Three granularities.** Alternatives are grouped by Word, Sentence and Paragraph `[F 1:30 side-panel tabs]`. The demo shows all three in use: headline (treated as a sentence-level span) `[T 0:30]`, single words `[T 0:55, 1:55]`, and a whole paragraph `[T 2:00]`.
+**R-2.3 Three granularities.** Alternatives are grouped by Word, Sentence and Paragraph `[F 1:30 side-panel tabs]`. The demo shows all three in use: headline (treated as a sentence-level span) `[T 0:30]`, single words `[T 0:56, 1:52]`, and a whole paragraph `[T 2:08–2:15]`.
 
-**R-2.4 In-place cycling.** Hovering the span and pressing ↑/↓ cycles the active alternative in place, so the author sees each candidate in context with surrounding text `[T 0:40–0:50, 1:25–1:35]`. No modal, no diff view.
+**R-2.4 In-place cycling.** Hovering the span and pressing ↑/↓ cycles the active alternative in place, so the author sees each candidate in context with surrounding text `[T 0:40–0:53, 1:28–1:37]`. No modal, no diff view.
 
-**R-2.5 Persistence.** The chosen alternative and the full list are kept with the document; the author "leaves it like this for a while" and returns later `[T 1:00, 1:40]`. Alternatives are part of the document model, not transient UI state. **Inferred:** serialise as a sidecar structure alongside the Markdown so plain `.md` export stays clean (see §9).
+**R-2.5 Persistence.** The chosen alternative and the full list are kept with the document; the author "leaves it like this for a while" and returns later `[T 0:53, 1:37–1:43]`. Alternatives are part of the document model, not transient UI state. **Inferred:** serialise as a sidecar structure alongside the Markdown so plain `.md` export stays clean (see §9).
 
-**R-2.6 Grammar fix-ups on swap.** When the active alternative starts with a vowel sound, a preceding indefinite article is automatically switched between "a" and "an" (`a paperclip` → `an eraser` → `a thumbtack`) `[T 1:50–2:00, F 1:55]`. The rule must be reversible and must not touch text outside the article immediately preceding the span.
+**R-2.6 Grammar fix-ups on swap.** When the active alternative starts with a vowel sound, a preceding indefinite article is automatically switched between "a" and "an" (`a paperclip` → `an eraser` → `a thumbtack`) `[T 1:52–2:08, F 2:05]`. The rule must be reversible and must not touch text outside the article immediately preceding the span.
 
 **R-2.7 Emptying removes the indicator.** Deleting all non-original alternatives removes the underline and dots; the span reverts to plain text `[T 3:31–3:39]`. Any ghost over that text is unaffected; a ghost no longer keeps an emptied span alive **(decision 2026-10-04: ghost layer)**.
 
@@ -36,7 +36,7 @@ These are the most distinctive UI elements and must be reproduced precisely.
 - For a single word, the row is centred under the word (`tension` with 7 dots `[F 0:55]`, `struggle` with 7 dots `[F 1:45]`).
 - For a sentence or headline, the row is right-aligned at the end of the underline (headline with 3 dots `[F 0:25]`, sentence "Shouldn't everything be obvious?" with 3 dots `[F 5:00]`).
 
-**R-3.3 Active-dot highlight.** Exactly one dot is filled/bright (lavender); the others are hollow/dim. The first dot represents the original. When the active alternative is not the original, a dot other than the first is lit; the author describes this as "very subtle, but it tells me I'm on a variation" `[T 1:00–1:10, F 1:45 fifth dot lit]`.
+**R-3.3 Active-dot highlight.** Exactly one dot is filled/bright (lavender); the others are hollow/dim. The first dot represents the original. When the active alternative is not the original, a dot other than the first is lit; the author describes this as "very subtle, but it tells me I'm on a variation" `[T 1:40–1:52, F 1:45 fifth dot lit]`.
 
 **R-3.4 Paragraph indicator.** A paragraph with alternatives shows a thin vertical rule in the left gutter spanning the paragraph's height, with a short vertical column of dots immediately to its left, one dot per alternative, same lit-dot semantics `[F 2:00–2:10]`. No underline is drawn under paragraph text.
 
@@ -63,15 +63,15 @@ The active alternative is shown with brighter/bold text and its glyph tinted lav
 
 ## 5. Ghosting (dim back)
 
-**R-5.1 Ghost.** Select text → right-click → "Ghost it" (Ctrl+/) renders the selection at roughly 10% opacity. The text remains in the document, still readable, still selectable, and still counted **(inferred)**, but visually recedes so the author can judge the paragraph without it `[T 2:15–2:45, F 2:40]`.
+**R-5.1 Ghost.** Select text → right-click → "Ghost it" (Ctrl+/) renders the selection at roughly 10% opacity. The text remains in the document, still readable, still selectable, and still counted **(inferred)**, but visually recedes so the author can judge the paragraph without it `[T 2:15–2:48, F 2:38]`.
 
-**R-5.2 Revive.** Right-click ghosted text → "Revive" restores full opacity `[T 2:45–2:50]`.
+**R-5.2 Revive.** Right-click ghosted text → "Revive" restores full opacity `[T 2:48–2:52]`.
 
 **R-5.3 Ghosting is an independent layer, persisted with the document** **(decision 2026-10-04: ghost layer)**. Ghosts are ranges of body text separate from alternative spans: a ghost may fully cover or partially overlap any spans (so a sentence containing a word with alternatives can be ghosted), while ghosts never overlap each other (ghosting over or next to an existing ghost merges them; reviving part of a ghost trims or splits it). Ghosts are elastic: edits and alternative swaps inside a ghost resize it, and deleting all of its text removes it.
 
 ## 6. Overflow panel (stash)
 
-**R-6.1 Placement and toggle.** A right-hand panel, the same width as the alternatives panel (18% of the window: 560 of 3096 px, with the same 12rem–20rem clamp), opened by the "XYZ" icon in the bottom-right chrome, whose tooltip shows `Ctrl+Shift+D` `[T 3:48–3:57, F 3:52, F 4:05, F 6:15]`. In the demo it is open from 3:53 to 4:27 and again from 6:13 to 6:23; measurements in [video-measurements.md](video-measurements.md). Title "Overflow" in the cursive display face, lavender.
+**R-6.1 Placement and toggle.** A right-hand panel, the same width as the alternatives panel (18% of the window: 560 of 3096 px, with the same 12rem–20rem clamp), opened by the "XYZ" icon in the bottom-right chrome, whose tooltip shows `Ctrl+Shift+D` `[T 3:48–3:57, F 3:52, F 4:05, F 6:15]`. It runs full height against the right edge of the window; the top-right keyboard glyph and the bottom-right XYZ tag stay where they are, over the panel, and the XYZ tag is lit lavender while it is open `[F 3:48, F 4:05]`. Ctrl+Shift+D toggles it in Write_On mode. In the demo it is open from 3:53 to 4:27 and again from 6:13 to 6:23; measurements in [video-measurements.md](video-measurements.md). Title "Overflow" in the cursive display face, lavender.
 
 **R-6.2 Content.** Free-form text area in the document's monospace face; holds any text (paragraphs, notes, URLs, outlines) `[T 3:57–4:03, T 6:10–6:22, F 4:05]`.
 
@@ -88,10 +88,10 @@ The active alternative is shown with brighter/bold text and its glyph tinted lav
 **R-7.2 Corner controls (Write_On mode on)** `[F 2:35, zoomed crops]`:
 - Top-left: `N words M chars`, dim; click toggles Write_On mode (R-2.1).
 - Top-centre: "●●●" (three dots, lavender) = alternatives panel toggle; "M↓" boxed glyph = Markdown view/export toggle **(inferred from glyph)**.
-- Top-right: keyboard glyph = shortcut reference (also present at top of Overflow panel).
+- Top-right: keyboard glyph = shortcut reference (stays in place, over the Overflow panel, while that is open `[F 4:05]`).
 - Bottom-left: save (floppy, lavender), open (folder), post to X, LinkedIn (present but intentionally blocked `[T 4:33–4:48]`).
 - Bottom-centre: `LAB` in a dashed-border pill.
-- Bottom-right: `XYZ` rounded tag = Overflow panel toggle.
+- Bottom-right: `XYZ` rounded tag = Overflow panel toggle (Ctrl+Shift+D, shown in its tooltip `[F 3:52]`); lit lavender while the panel is open `[F 4:05]`.
 
 **R-7.3 Context menu on selection** `[F 2:36, F 4:05]`:
 
@@ -108,9 +108,9 @@ Menu is a dark rounded panel, monospace labels left, dim shortcut text right, ho
 
 ## 8. Lab (AI-assisted editing)
 
-**R-8.1 Lab popover.** `LAB` opens a popover anchored above the bottom-centre control. Header row: `The Lab guide…` left, `what each idea does` right (dim). Then a list of actions, then a row of trim buttons `[F 5:00]`.
+**R-8.1 Lab popover.** `LAB` opens a popover anchored above the bottom-centre control. Header row: `The Lab guide…` left, `what each idea does` right (dim). Then a list of actions, then a row of trim buttons `[T 4:48–4:59, F 4:56, F 5:00]`.
 
-**R-8.2 Mark actions** (each marks text, never rewrites it) `[F 5:00, T 4:15–4:35]`:
+**R-8.2 Mark actions** (each marks text, never rewrites it) `[F 5:00, T 4:59–5:15]`:
 - Fix punctuation and typos
 - Mark the weakest sentences
 - Mark sentences that run long
@@ -118,11 +118,11 @@ Menu is a dark rounded panel, monospace labels left, dim shortcut text right, ho
 - Mark words that don't fit the tone
 - Mark hedges and filler
 
-**R-8.3 Trim levels.** Five bordered buttons: `Original` (selected, lavender border), `Slight trim ~10%`, `Tighten more ~20%`, `Even sharper ~30%`, `Cut in half ~50%` `[F 5:00]`.
+**R-8.3 Trim levels.** Five bordered buttons: `Original` (selected, lavender border), `Slight trim ~10%`, `Tighten more ~20%`, `Even sharper ~30%`, `Cut in half ~50%` `[T 5:15–5:27, F 5:00]`.
 
-**R-8.4 Trim behaviour.** Selecting a level sends the whole document to the model and receives a set of spans to drop. Those spans are rendered using the ghost treatment (R-5.1); nothing is rewritten `[T 4:45–5:20, F 5:35]`. A floating status card appears bottom-centre: bold level name, `535 → 480 words · −10%` in lavender, hint `Faded words would go. Click one to keep it.`, and buttons `Make the cuts` · `Walk through` · `Done` `[F 5:35]`.
+**R-8.4 Trim behaviour.** Selecting a level sends the whole document to the model and receives a set of spans to drop. Those spans are rendered using the ghost treatment (R-5.1); nothing is rewritten `[T 5:22–5:46, F 5:27, F 5:35]`. A floating status card appears bottom-centre: bold level name, `535 → 480 words · −10%` in lavender, hint `Faded words would go. Click one to keep it.`, and buttons `Make the cuts` · `Walk through` · `Done` `[F 5:35]`.
 
-**R-8.5 Review.** Clicking a faded span un-ghosts it (keep). `Make the cuts` deletes all still-faded spans; `Walk through` steps through them one at a time **(inferred from label)**; `Done` dismisses the card and leaves the ghosting as is `[T 5:20–5:30]`.
+**R-8.5 Review.** Clicking a faded span un-ghosts it (keep). `Make the cuts` deletes all still-faded spans; `Walk through` steps through them one at a time **(inferred from label)**; `Done` dismisses the card and leaves the ghosting as is `[T 5:41–5:49]`.
 
 **R-8.6 AI alternatives.** "AI alternatives for selection" appends bot-marked alternatives to the span's list (demo: calls → judgments, decisions, trade-offs, choices, bets) `[T 2:56–3:19, F 3:20]`.
 
@@ -183,13 +183,14 @@ From frames (approximate; sample before finalising): background `#0a0d1c`; body 
 |---|---|
 | 0:05 | Plain mode; word/char count top-left |
 | 0:25–0:50 | Headline underline, 3 end dots, ↑/↓ cycling |
-| 0:55–1:10 | Word underline with centred 7-dot row; lit non-original dot |
+| 0:55–1:11 | Word underline with centred 7-dot row |
+| 1:40–1:52 | Lit non-original dot (frame 1:45) |
 | 1:11–1:40 | Side panel (opens 1:17): tabs, list, inline add, live update |
-| 1:50–2:00 | a/an auto-fix; paragraph gutter rule + dot column |
-| 2:15–2:50 | Ghost it (≈10% opacity) and Revive |
+| 1:52–2:15 | a/an auto-fix (`an eraser` at 2:05); paragraph alternatives; paragraph gutter rule + dot column |
+| 2:15–2:52 | Ghost it (≈10% opacity; ghosted by 2:38) and Revive |
 | 2:36–2:37 | Context menu with shortcuts |
 | 2:56–3:39 | AI alternatives; bullet vs bot provenance markers; undo |
 | 3:48–4:27 | Overflow panel (open 3:53–4:27); XYZ toggle and `Ctrl+Shift+D` tooltip at 3:52; stash menu and `ctrl+⏎ or drag` hint at 4:05 |
 | 4:29–4:48 | Save/open/X/LinkedIn corner icons |
-| 4:10–5:35 | Lab popover, mark actions, trim levels, trim status card |
+| 4:48–5:58 | Lab popover (open from 4:56), mark actions (5:04–5:15), trim levels, trim status card (from 5:27) |
 | 6:13–6:23 | Overflow panel shown again during the recap |
