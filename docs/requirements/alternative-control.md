@@ -8,7 +8,7 @@ Target codebase: `terraphim-editor` (Rust → WASM via Trunk, vanilla JS, Shoela
 
 Write_On is "alternative control, not version control" at the word, sentence and paragraph level, plus two supporting ideas: dimming text back without deleting it, and stashing text nearby. The author explicitly does not want AI rewriting his text; AI only proposes alternatives or marks candidates for cutting `[T 5:10–5:20]`.
 
-Out of scope for this spec: collaboration, cloud sync, publishing to X/LinkedIn (the demo has buttons for these but they are incidental to the editing model `[T 3:50–4:05]`).
+Out of scope for this spec: collaboration, cloud sync, publishing to X/LinkedIn (the demo has buttons for these but they are incidental to the editing model `[T 4:29–4:48]`).
 
 ## 2. Editing model
 
@@ -24,7 +24,7 @@ Out of scope for this spec: collaboration, cloud sync, publishing to X/LinkedIn 
 
 **R-2.6 Grammar fix-ups on swap.** When the active alternative starts with a vowel sound, a preceding indefinite article is automatically switched between "a" and "an" (`a paperclip` → `an eraser` → `a thumbtack`) `[T 1:50–2:00, F 1:55]`. The rule must be reversible and must not touch text outside the article immediately preceding the span.
 
-**R-2.7 Emptying removes the indicator.** Deleting all non-original alternatives removes the underline and dots; the span reverts to plain text `[T 3:10–3:20]`. Any ghost over that text is unaffected; a ghost no longer keeps an emptied span alive **(decision 2026-10-04: ghost layer)**.
+**R-2.7 Emptying removes the indicator.** Deleting all non-original alternatives removes the underline and dots; the span reverts to plain text `[T 3:31–3:39]`. Any ghost over that text is unaffected; a ghost no longer keeps an emptied span alive **(decision 2026-10-04: ghost layer)**.
 
 ## 3. Inline indicators (the "dots under text")
 
@@ -46,20 +46,20 @@ These are the most distinctive UI elements and must be reproduced precisely.
 
 ## 4. Alternatives side panel
 
-**R-4.1 Placement and toggle.** A left-hand panel (~29% of a 1140px window, i.e. ≈330px) opened by a keyboard shortcut or the "●●●" icon in the top-centre chrome `[T 1:10–1:15, F 1:30]`. The main text dims slightly while the panel is open `[F 1:30]`.
+**R-4.1 Placement and toggle.** A full-height left-hand panel, 18% of the window width (558 of 3096 px; about 205px at a 1140px window; the implementation clamps it to 12rem–20rem, so it is exactly 18% between 1067px and 1778px windows), opened by a keyboard shortcut or the "●●●" icon in the top-centre chrome `[T 1:11–1:22, F 1:17, F 1:30, F 3:20]`; measurements in [video-measurements.md](video-measurements.md). The main text dims slightly while the panel is open `[F 1:30]`.
 
 **R-4.2 Tabs.** Header row with three labels, Word · Sentence · Paragraph, set in a cursive/handwritten display face; the active tab is lavender, the others cream `[F 1:30]`. Selecting a span of the matching granularity in the document populates the list.
 
-**R-4.3 Alternative list.** One alternative per line, monospace, directly editable. Pressing Enter on a new line adds an alternative (the author types "challenge" and it immediately appears in the document as a candidate) `[T 1:15–1:25, F 1:30]`.
+**R-4.3 Alternative list.** One alternative per line, monospace, directly editable. Pressing Enter on a new line adds an alternative (the author types "challenge" and it immediately appears in the document as a candidate) `[T 1:22–1:28, F 1:30]`.
 
 **R-4.4 Provenance marker.** Each line carries a leading glyph:
-- small dim dot ("bullet point") = written by the author `[T 3:00–3:05, F 1:30]`;
-- small robot/bot glyph ("bot point") = produced by AI `[T 3:05–3:10, F 3:20]`.
+- small dim dot ("bullet point") = written by the author `[T 3:14–3:19, F 1:30]`;
+- small robot/bot glyph ("bot point") = produced by AI `[T 3:19–3:24, F 3:20]`.
 The active alternative is shown with brighter/bold text and its glyph tinted lavender `[F 1:30 "challenge", F 3:20 "trade-offs"]`.
 
-**R-4.5 Keyboard navigation.** With the panel open, ↑/↓ moves the active alternative and the document updates live `[T 1:25–1:35]`.
+**R-4.5 Keyboard navigation.** With the panel open, ↑/↓ moves the active alternative and the document updates live `[T 1:28–1:38]`.
 
-**R-4.6 Undo.** AI-added alternatives can be removed with undo; removing them clears the bot-marked lines and, if none remain, the inline indicator `[T 3:10–3:20]`.
+**R-4.6 Undo.** AI-added alternatives can be removed with undo; removing them clears the bot-marked lines and, if none remain, the inline indicator `[T 3:27–3:39]`.
 
 ## 5. Ghosting (dim back)
 
@@ -71,13 +71,13 @@ The active alternative is shown with brighter/bold text and its glyph tinted lav
 
 ## 6. Overflow panel (stash)
 
-**R-6.1 Placement and toggle.** A right-hand panel, same width class as the alternatives panel, opened by the "XYZ" icon in the bottom-right chrome `[T 3:25–3:35, F 3:45]`. Title "Overflow" in the cursive display face, lavender.
+**R-6.1 Placement and toggle.** A right-hand panel, the same width as the alternatives panel (18% of the window: 560 of 3096 px, with the same 12rem–20rem clamp), opened by the "XYZ" icon in the bottom-right chrome, whose tooltip shows `Ctrl+Shift+D` `[T 3:48–3:57, F 3:52, F 4:05, F 6:15]`. In the demo it is open from 3:53 to 4:27 and again from 6:13 to 6:23; measurements in [video-measurements.md](video-measurements.md). Title "Overflow" in the cursive display face, lavender.
 
-**R-6.2 Content.** Free-form text area in the document's monospace face; holds any text (paragraphs, notes, URLs, outlines) `[T 3:35–3:45, F 3:45]`.
+**R-6.2 Content.** Free-form text area in the document's monospace face; holds any text (paragraphs, notes, URLs, outlines) `[T 3:57–4:03, T 6:10–6:22, F 4:05]`.
 
-**R-6.3 Stash.** Select text in the document → right-click → "Stash this in Overflow" (Ctrl+Shift+X) moves (not copies) the selection to the end of the Overflow panel `[T 3:40–3:50, F 2:40 context menu]`.
+**R-6.3 Stash.** Select text in the document → right-click → "Stash this in Overflow" (Ctrl+Shift+X) moves (not copies) the selection to the end of the Overflow panel `[T 3:59–4:10, F 2:36 context menu, F 4:05]`.
 
-**R-6.4 Pull back.** Footer hint reads `ctrl+⏎ or drag into the page to use`: Ctrl+Enter inserts the overflow selection at the document caret; drag-and-drop from the panel into the page does the same `[F 3:45]`. Plain copy/paste also works.
+**R-6.4 Pull back.** Footer hint reads `ctrl+⏎ or drag into the page to use`: Ctrl+Enter inserts the overflow selection at the document caret; drag-and-drop from the panel into the page does the same `[T 4:22–4:26, F 4:05]`. Plain copy/paste also works.
 
 **R-6.5 Persistence.** Overflow content is saved with the document.
 
@@ -89,11 +89,11 @@ The active alternative is shown with brighter/bold text and its glyph tinted lav
 - Top-left: `N words M chars`, dim; click toggles Write_On mode (R-2.1).
 - Top-centre: "●●●" (three dots, lavender) = alternatives panel toggle; "M↓" boxed glyph = Markdown view/export toggle **(inferred from glyph)**.
 - Top-right: keyboard glyph = shortcut reference (also present at top of Overflow panel).
-- Bottom-left: save (floppy, lavender), open (folder), post to X, LinkedIn (present but intentionally blocked `[T 3:55–4:05]`).
+- Bottom-left: save (floppy, lavender), open (folder), post to X, LinkedIn (present but intentionally blocked `[T 4:33–4:48]`).
 - Bottom-centre: `LAB` in a dashed-border pill.
 - Bottom-right: `XYZ` rounded tag = Overflow panel toggle.
 
-**R-7.3 Context menu on selection** `[F 2:38]`:
+**R-7.3 Context menu on selection** `[F 2:36, F 4:05]`:
 
 | Item | Shortcut |
 |---|---|
@@ -124,7 +124,7 @@ Menu is a dark rounded panel, monospace labels left, dim shortcut text right, ho
 
 **R-8.5 Review.** Clicking a faded span un-ghosts it (keep). `Make the cuts` deletes all still-faded spans; `Walk through` steps through them one at a time **(inferred from label)**; `Done` dismisses the card and leaves the ghosting as is `[T 5:20–5:30]`.
 
-**R-8.6 AI alternatives.** "AI alternatives for selection" appends bot-marked alternatives to the span's list (demo: calls → judgments, decisions, trade-offs, choices, bets) `[T 2:55–3:10, F 3:20]`.
+**R-8.6 AI alternatives.** "AI alternatives for selection" appends bot-marked alternatives to the span's list (demo: calls → judgments, decisions, trade-offs, choices, bets) `[T 2:56–3:19, F 3:20]`.
 
 **R-8.7 Provider abstraction.** AI calls go through a pluggable provider. For terraphim-editor the first provider should be local: synonyms and related terms from the active role's thesaurus via `terraphim_automata` (already shipped as WASM), with an LLM provider (Ollama/OpenRouter via terraphim_server `/chat`) as an optional second source. This keeps the "privacy-first, works offline" property of the rest of Terraphim and gives a deterministic baseline the Lab's "mark" actions can use (e.g. hedges/filler as a KG list). **Inferred — Terraphim-specific.**
 
@@ -184,11 +184,12 @@ From frames (approximate; sample before finalising): background `#0a0d1c`; body 
 | 0:05 | Plain mode; word/char count top-left |
 | 0:25–0:50 | Headline underline, 3 end dots, ↑/↓ cycling |
 | 0:55–1:10 | Word underline with centred 7-dot row; lit non-original dot |
-| 1:15–1:35 | Side panel: tabs, list, inline add, live update |
+| 1:11–1:40 | Side panel (opens 1:17): tabs, list, inline add, live update |
 | 1:50–2:00 | a/an auto-fix; paragraph gutter rule + dot column |
 | 2:15–2:50 | Ghost it (≈10% opacity) and Revive |
-| 2:38 | Context menu with shortcuts |
-| 2:55–3:20 | AI alternatives; bullet vs bot provenance markers |
-| 3:25–3:50 | Overflow panel; stash; `ctrl+⏎ or drag` hint; XYZ toggle |
-| 3:50–4:05 | Save/open/X/LinkedIn corner icons |
+| 2:36–2:37 | Context menu with shortcuts |
+| 2:56–3:39 | AI alternatives; bullet vs bot provenance markers; undo |
+| 3:48–4:27 | Overflow panel (open 3:53–4:27); XYZ toggle and `Ctrl+Shift+D` tooltip at 3:52; stash menu and `ctrl+⏎ or drag` hint at 4:05 |
+| 4:29–4:48 | Save/open/X/LinkedIn corner icons |
 | 4:10–5:35 | Lab popover, mark actions, trim levels, trim status card |
+| 6:13–6:23 | Overflow panel shown again during the recap |

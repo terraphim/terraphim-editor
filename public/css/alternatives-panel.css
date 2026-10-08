@@ -5,7 +5,9 @@
  * Consumes the design tokens from tokens.css; the panel adds only its own
  * geometry and the dim level of the text behind it, defined once here:
  *
- *   --te-alt-panel-width   about 330px at a 1140px window (R-4.1: ~29%)
+ *   --te-alt-panel-width   18% of the window, as measured in the demo video
+ *                          (R-4.1; docs/requirements/video-measurements.md):
+ *                          about 205px at a 1140px window
  *   --te-alt-dim-opacity   the main text while the panel is open (R-4.1)
  *
  * The DOM is built by public/js/alternatives-panel.js. The panel is fixed to
@@ -13,8 +15,16 @@
  * the panel never covers it, and it stays centred when there is room.
  */
 
+/*
+ * The 12rem floor keeps the three cursive tabs and the alternative lines
+ * legible; it takes over below a 1067px window (12rem is 18% of 1067px), so
+ * every window from there up gets the measured 18%. The 20rem cap stops the
+ * panel growing past what a list of single words needs on very wide
+ * screens; it is reached at 1778px. Below 48rem the narrow-screen rule at
+ * the end of this file replaces the width with an overlay.
+ */
 :root {
-    --te-alt-panel-width: clamp(16rem, 29vw, 22rem);
+    --te-alt-panel-width: clamp(12rem, 18vw, 20rem);
     --te-alt-dim-opacity: 0.7;
 }
 

@@ -241,6 +241,67 @@ pub async fn wait_until(mut done: impl FnMut() -> bool) -> bool {
     true
 }
 
+/// The share of the window both side panels take in the demo video: 558 and
+/// 560 of 3096 pixels (R-4.1, R-6.1; docs/requirements/video-measurements.md).
+pub const VIDEO_PANEL_SHARE: f64 = 0.18;
+
+/// The border-box width of `selector` in an iframe `viewport` CSS pixels wide
+/// holding `markup` and the real tokens and panel stylesheets, so `vw` and the
+/// media queries resolve against that viewport rather than the test window.
+pub async fn width_in_viewport(viewport: f64, markup: &str, selector: &str) -> f64 {
+    let css = format!("{TOKENS_CSS}\n{ALT_PANEL_CSS}\n{OVERFLOW_CSS}");
+    let html = format!("<!doctype html><style>{css}</style><body>{markup}</body>");
+    js_eval(&format!(
+        r#"(() => {{
+          const f = document.createElement('iframe');
+          f.style.cssText = 'position: fixed; left: -20000px; top: 0; border: 0; width: {viewport}px; height: 800px;';
+          f.srcdoc = {html};
+          document.body.appendChild(f);
+          window.__teVwFrame = f;
+          return 0;
+        }})()"#,
+        html = js_string_literal(&html)
+    ));
+    let probe = format!(
+        "(() => {{ const d = window.__teVwFrame.contentDocument; \
+         return !!(d && d.readyState === 'complete' && d.querySelector({sel})); }})()",
+        sel = js_string_literal(selector)
+    );
+    let loaded = wait_until(|| js_eval(&probe).as_bool() == Some(true)).await;
+    let width = js_number(&format!(
+        "(() => {{ const f = window.__teVwFrame; delete window.__teVwFrame; \
+         const el = f.contentDocument.querySelector({sel}); \
+         const w = el ? el.getBoundingClientRect().width : -1; f.remove(); return w; }})()",
+        sel = js_string_literal(selector)
+    ));
+    assert!(
+        loaded && width >= 0.0,
+        "{selector} did not render in the sized frame"
+    );
+    width
+}
+
+/// Assert `width` is within 2% of the video's share of a `viewport`-wide window.
+pub fn assert_video_panel_width(what: &str, width: f64, viewport: f64) {
+    let expected = VIDEO_PANEL_SHARE * viewport;
+    assert!(
+        (width - expected).abs() <= 0.02 * expected,
+        "{what} is {width}px at a {viewport}px window; the video measures {expected}px (18%)"
+    );
+}
+
+/// The clamp around the video's 18%: a 12rem (192px) floor in a 900px window
+/// and a 20rem (320px) cap in a 2000px one.
+pub async fn assert_panel_clamp(markup: &str, selector: &str) {
+    for (viewport, expected) in [(900.0, 192.0), (2000.0, 320.0)] {
+        let width = width_in_viewport(viewport, markup, selector).await;
+        assert!(
+            (width - expected).abs() < 0.5,
+            "{selector} is {width}px at a {viewport}px window; the clamp gives {expected}px"
+        );
+    }
+}
+
 pub fn now() -> f64 {
     web_sys::window().unwrap().performance().unwrap().now()
 }

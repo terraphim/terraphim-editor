@@ -13,8 +13,19 @@
  * space left of the panel instead of running underneath it.
  */
 
+/*
+ * The same 18% of the window as the alternatives panel (R-6.1; measured in
+ * docs/requirements/video-measurements.md), with the same clamp: the 12rem
+ * floor keeps the title and its two buttons on one line and takes over below
+ * a 1067px window; the 20rem cap is reached at 1778px. Declared on :root so
+ * the writing column's clearance below uses the same value. Below 40rem the
+ * narrow-screen rule replaces the width.
+ */
+:root {
+    --te-overflow-width: clamp(12rem, 18vw, 20rem);
+}
+
 .te-overflow {
-    --te-overflow-width: clamp(16rem, 28vw, 26rem);
     position: fixed;
     top: 3.75rem;
     right: 1.25rem;
@@ -135,7 +146,7 @@
 @media (min-width: 60rem) {
     .te-app[data-mode="write-on"][data-te-overflow="open"],
     #app.te-app[data-mode="write-on"][data-te-overflow="open"] {
-        padding-right: calc(clamp(16rem, 28vw, 26rem) + 2rem);
+        padding-right: calc(var(--te-overflow-width) + 2rem);
     }
 }
 

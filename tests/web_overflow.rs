@@ -288,3 +288,40 @@ async fn test_panel_text_persists_is_not_exported_and_destroy_cleans_up() {
     .await;
     assert!(r.is_empty(), "{r}");
 }
+
+/// R-6.1: the panel is the same 18% of the window as the alternatives panel,
+/// as measured in the demo video, so within 2% of 205px at a 1140px window,
+/// clamped to 12rem-20rem; the panel the editor opens takes the width the
+/// same stylesheet gives at the test window's width, and its title and
+/// buttons fit on one line.
+#[wasm_bindgen_test]
+async fn test_panel_width_matches_the_video() {
+    let markup = r#"<aside class="te-overflow"></aside>"#;
+    let at_1140 = width_in_viewport(1140.0, markup, ".te-overflow").await;
+    assert_video_panel_width("the Overflow panel", at_1140, 1140.0);
+    assert_panel_clamp(markup, ".te-overflow").await;
+
+    let _document = fresh_full_editor();
+    install("Hello world.\n");
+    let r = run_steps(&[r#"ed.openDocument(window.__teSrc);
+        ed.chrome.setMode('write-on');
+        teTest.control('overflow').click();
+        const ov = ed.overflow;
+        if (!ov.isOpen()) return 'XYZ did not open the panel';
+        window.__teOvWidth = ov.root.getBoundingClientRect().width;
+        const header = ov.root.querySelector('.te-overflow-header');
+        if (header.scrollWidth > header.clientWidth) out.push('header overflows: ' + header.scrollWidth + ' > ' + header.clientWidth);
+        const title = ov.root.querySelector('.te-overflow-title').getBoundingClientRect();
+        const close = ov.root.querySelector('.te-overflow-close').getBoundingClientRect();
+        if (close.top >= title.bottom) out.push('buttons wrapped below the title');
+        ov.close();"#])
+    .await;
+    assert!(r.is_empty(), "{r}");
+    let real = js_number("window.__teOvWidth");
+    let window_width = js_number("window.innerWidth");
+    let expected = width_in_viewport(window_width, markup, ".te-overflow").await;
+    assert!(
+        (real - expected).abs() < 0.5,
+        "opened panel is {real}px; the stylesheet gives {expected}px at {window_width}px"
+    );
+}

@@ -14,7 +14,7 @@ Code: `public/js/alternatives-panel.js` (`TeAlternativesPanel`, `editor.altPanel
 
 - `●●●` and Ctrl+Shift+A inside the panel toggle it closed. Escape always closes it. Leaving Write_On mode closes it.
 - **Write_On only.** The panel, like the indicators, is part of Write_On mode. The `●●●` control only exists there. Ctrl+Shift+A in plain mode is an explicit request for alternatives, so it turns Write_On mode on (through `chrome.setMode`, persisted like a click on the word count) and opens the panel, rather than doing nothing.
-- While open, the main text dims (`--te-alt-dim-opacity`, R-4.1) and, on windows at least 48rem wide, the writing column moves right so the panel (fixed to the left edge, `--te-alt-panel-width`: about 330px at 1140px) never covers it; it stays centred when there is room. Below 48rem the panel overlays the text.
+- While open, the main text dims (`--te-alt-dim-opacity`, R-4.1) and, on windows at least 48rem wide, the writing column moves right so the panel (fixed to the left edge, `--te-alt-panel-width`: 18% of the window, about 205px at 1140px) never covers it; it stays centred when there is room. Below 48rem the panel overlays the text.
 
 ## Which span is shown (tabs, R-4.2)
 
