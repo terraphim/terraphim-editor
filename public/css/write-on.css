@@ -392,6 +392,7 @@
 /* R-3.5: headlines bold, same face and colour, slightly larger: every `#`
    line (te-heading, issue #84) and headline spans with alternatives. */
 .te-app[data-mode="write-on"] .te-surface .te-heading,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .te-surface .te-heading,
 .te-app[data-mode="write-on"] .te-surface .te-ind-headline {
     font-weight: 700;
     font-size: 1.15em;
@@ -399,12 +400,18 @@
 
 /* The `#` marker stays in the text but takes no space, so the heading is
    flush with the body; shown dimmed while the caret is on its line. */
-.te-app[data-mode="write-on"] .te-surface .te-heading-marker {
+.te-app[data-mode="write-on"] .te-surface .te-heading-marker,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .te-surface .te-heading-marker {
     font-size: 0;
 }
 
-.te-app[data-mode="write-on"] .te-surface .te-heading-marker.te-heading-marker--shown {
+.te-app[data-mode="write-on"] .te-surface .te-heading-marker.te-heading-marker--shown,
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .te-surface .te-heading-marker.te-heading-marker--shown {
     font-size: 1.15em;
+}
+
+.te-app[data-mode="write-on"] .te-surface .te-heading-marker.te-heading-marker--shown:not(.te-ghost),
+.te-app:not([data-mode="write-on"]):not([data-tools="on"]) .te-surface .te-heading-marker.te-heading-marker--shown:not(.te-ghost) {
     color: var(--te-color-text-dim);
 }
 

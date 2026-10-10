@@ -55,7 +55,7 @@ name = "kg_bench"
 harness = false
 
 [workspace]
-members = [".", "crates/terraphim_alternatives", "crates/terraphim_lab"]
+members = [".", "crates/terraphim_alternatives", "crates/terraphim_lab", "crates/terraphim_rolegraph_browser"]
 resolver = "2"
 # terraphim_lsp_core depends on terraphim_alternatives 0.1 and terraphim_lab
 # 0.1 from the registry. Point those dependencies at the workspace members

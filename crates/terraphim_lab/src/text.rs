@@ -62,56 +62,7 @@ pub(crate) fn word_spans(text: &str) -> Vec<(usize, usize)> {
     out
 }
 
-/// Lower-case abbreviations that end in a full stop but do not end a sentence.
-const ABBREVIATIONS: [&str; 12] = [
-    "e.g.", "i.e.", "st.", "mr.", "mrs.", "ms.", "dr.", "vs.", "cf.", "no.", "fig.", "etc.",
-];
-
-/// True when the full stop at byte `dot` of `text` ends an abbreviation
-/// ("e.g.", "Dr.", "Fig.", ...) rather than a sentence. The token is read
-/// back to the previous whitespace, but not before byte `floor`. The single
-/// abbreviation rule shared by sentence splitting and the trim tidy-up.
-pub(crate) fn is_abbreviation(text: &str, floor: usize, dot: usize) -> bool {
-    let tok_start = text[floor..dot]
-        .rfind(char::is_whitespace)
-        .map_or(floor, |p| floor + p + 1);
-    let tok = text[tok_start..=dot]
-        .trim_start_matches(|ch: char| !ch.is_alphanumeric())
-        .to_lowercase();
-    // "**No.**" is a sentence, not the abbreviation "no.".
-    let bold = text[tok_start..].starts_with("**");
-    ABBREVIATIONS.contains(&tok.as_str()) && !bold
-}
-
-/// True when the full stop at byte `dot` of `text` can end a sentence: not an
-/// abbreviation ([`is_abbreviation`]), not part of an ellipsis (`...`), and
-/// not a decimal point (`3.5`).
-pub(crate) fn full_stop_ends_sentence(text: &str, dot: usize) -> bool {
-    let before = text[..dot].chars().next_back();
-    let after = text[dot + 1..].chars().next();
-    let ellipsis = before == Some('.') || after == Some('.');
-    let decimal =
-        before.is_some_and(|c| c.is_ascii_digit()) && after.is_some_and(|c| c.is_ascii_digit());
-    !ellipsis && !decimal && !is_abbreviation(text, 0, dot)
-}
-
-/// Characters that may trail a terminator and still belong to the sentence.
-fn is_closer(c: char) -> bool {
-    matches!(
-        c,
-        '.' | '!' | '?' | '"' | '\u{201D}' | '\u{2019}' | ')' | ']' | '*' | '`' | '_'
-    )
-}
-
-/// Characters that may open a new sentence after whitespace.
-fn opens_sentence(c: char) -> bool {
-    c.is_uppercase()
-        || c.is_ascii_digit()
-        || matches!(
-            c,
-            '\u{201C}' | '"' | '(' | '*' | '`' | '_' | '[' | '\u{2018}'
-        )
-}
+pub(crate) use terraphim_alternatives::text::full_stop_ends_sentence;
 
 /// Split `text[start..end]` into sentences. Terminators inside protected
 /// ranges (inline code, URLs) never split.
@@ -121,50 +72,24 @@ fn split_sentences(
     end: usize,
     protected: &[(usize, usize)],
 ) -> Vec<(usize, usize)> {
-    let slice = &text[start..end];
-    let chars: Vec<(usize, char)> = slice.char_indices().collect();
-    let mut out = Vec::new();
-    let mut s_start = 0usize;
-    let mut i = 0;
-    while i < chars.len() {
-        let (pos, c) = chars[i];
-        if !matches!(c, '.' | '!' | '?') || in_ranges(protected, start + pos) {
-            i += 1;
-            continue;
-        }
-        if c == '.' && is_abbreviation(text, start, start + pos) {
-            i += 1;
-            continue;
-        }
-        let mut j = i + 1;
-        while j < chars.len() && is_closer(chars[j].1) {
-            j += 1;
-        }
-        if j < chars.len() && chars[j].1.is_whitespace() {
-            let mut k = j;
-            while k < chars.len() && chars[k].1.is_whitespace() {
-                k += 1;
-            }
-            if k < chars.len() && opens_sentence(chars[k].1) {
-                out.push((start + s_start, start + chars[j].0));
-                s_start = chars[k].0;
-                i = k;
-                continue;
-            }
-        }
-        i = j;
-    }
-    if s_start < slice.len() {
-        let tail = slice[s_start..].trim_end();
-        if !tail.is_empty() {
-            out.push((start + s_start, start + s_start + tail.len()));
-        }
-    }
-    out
+    use terraphim_alternatives::text::{ByteRange, sentence_ranges_with_protected};
+    let protected: Vec<_> = protected
+        .iter()
+        .filter(|&&(s, e)| s < end && start < e)
+        .map(|&(s, e)| ByteRange {
+            start: s.max(start) - start,
+            end: e.min(end) - start,
+        })
+        .collect();
+    sentence_ranges_with_protected(&text[start..end], &protected)
+        .into_iter()
+        .map(|r| (start + r.start, start + r.end))
+        .collect()
 }
 
 /// True when byte `pos` lies inside one of the sorted `ranges`.
-pub(crate) fn in_ranges(ranges: &[(usize, usize)], pos: usize) -> bool {
+#[cfg(test)]
+fn in_ranges(ranges: &[(usize, usize)], pos: usize) -> bool {
     let i = ranges.partition_point(|r| r.1 <= pos);
     ranges.get(i).is_some_and(|r| r.0 <= pos)
 }
@@ -443,13 +368,15 @@ impl<'a> Doc<'a> {
 /// folded byte `i`. A match that crosses a paragraph break maps to a range
 /// spanning two paragraphs, which the actions reject.
 #[derive(Debug, Clone)]
-pub(crate) struct Folded {
+pub struct Folded {
+    /// Whitespace-folded text; non-whitespace bytes are unchanged.
     pub text: String,
     map: Vec<usize>,
 }
 
 impl Folded {
-    pub(crate) fn new(original: &str) -> Folded {
+    /// Build the existing whitespace-only view of original text.
+    pub fn new(original: &str) -> Folded {
         let mut text = String::with_capacity(original.len());
         let mut map = Vec::with_capacity(original.len() + 1);
         let mut chars = original.char_indices().peekable();
@@ -472,7 +399,7 @@ impl Folded {
 
     /// Original byte range of folded range `start..end` (a match never
     /// starts or ends on folded whitespace, because KG terms are trimmed).
-    pub(crate) fn to_original(&self, start: usize, end: usize) -> (usize, usize) {
+    pub fn to_original(&self, start: usize, end: usize) -> (usize, usize) {
         let s = self.map[start];
         let e = if end > start {
             self.map[end - 1] + 1
@@ -567,6 +494,26 @@ mod tests {
         assert!(doc.sentences[0].first_in_para);
         assert!(!doc.sentences[1].first_in_para);
         assert!(doc.sentences[2].first_in_para);
+    }
+
+    #[test]
+    fn shared_unicode_policy_keeps_markdown_openers_and_protected_code() {
+        assert_eq!(sentences("日本。次！本？"), vec!["日本。", "次！", "本？"]);
+        assert_eq!(sentences("مرحبا؟ التالي."), vec!["مرحبا؟", "التالي."]);
+        let text = "Use `code. *lower*` here. `terraphim_lsp` must preserve it. Dr. Who agrees.";
+        assert_eq!(
+            sentences(text),
+            vec![
+                "Use `code. *lower*` here.",
+                "`terraphim_lsp` must preserve it.",
+                "Dr. Who agrees."
+            ]
+        );
+        let doc = Doc::parse(text);
+        for sentence in doc.sentences {
+            assert!(text.is_char_boundary(sentence.start));
+            assert!(text.is_char_boundary(sentence.end));
+        }
     }
 
     #[test]

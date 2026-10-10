@@ -8,7 +8,9 @@
 //! counter and in the card's `535 -> 480 words`, so both must count the same
 //! body the same way (issue #59).
 //!
-//! A word is a maximal run of alphanumerics or `_`, where an apostrophe
+//! A word is a maximal run of alphanumerics or `_`, with combining/spacing
+//! marks attached to their base through extended graphemes. Mark-only
+//! graphemes do not begin words. An apostrophe
 //! (`'` or `\u{2019}`), hyphen, full stop or slash joins two runs only when
 //! it sits between word characters:
 //!
@@ -27,9 +29,13 @@
 //!
 //! # Performance
 //!
-//! One forward pass over the characters, with one character of look-ahead
+//! One forward pass over extended graphemes, with one grapheme of look-ahead
 //! after a joiner: `O(n)` in the length of the text, no allocation for
 //! [`count_words`].
+
+use unicode_segmentation::{
+    GraphemeCursor, GraphemeIncomplete, GraphemeIndices, UnicodeSegmentation,
+};
 
 /// True for a character that can make up a word: alphanumeric or `_`.
 pub fn is_word_char(c: char) -> bool {
@@ -46,25 +52,25 @@ pub fn is_joiner(c: char) -> bool {
 #[derive(Debug, Clone)]
 pub struct WordSpans<'a> {
     text: &'a str,
-    iter: std::iter::Peekable<std::str::CharIndices<'a>>,
+    iter: std::iter::Peekable<GraphemeIndices<'a>>,
 }
 
 impl Iterator for WordSpans<'_> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-        let (start, first) = self.iter.by_ref().find(|&(_, c)| is_word_char(c))?;
-        let mut end = start + first.len_utf8();
+        let (start, first) = self.iter.by_ref().find(|&(_, g)| word_grapheme(g))?;
+        let mut end = start + first.len();
         while let Some(&(pos, next)) = self.iter.peek() {
-            if is_word_char(next) {
-                end = pos + next.len_utf8();
+            if word_grapheme(next) {
+                end = pos + next.len();
                 self.iter.next();
-            } else if is_joiner(next) {
+            } else if matches!(next, "'" | "’" | "-" | "." | "/") {
                 // A joiner only counts when a word character follows it.
-                let after = self.text[pos + next.len_utf8()..].chars().next();
-                if after.is_some_and(is_word_char) {
+                let after = self.text[pos + next.len()..].graphemes(true).next();
+                if after.is_some_and(word_grapheme) {
                     self.iter.next();
-                    end = pos + next.len_utf8();
+                    end = pos + next.len();
                 } else {
                     break;
                 }
@@ -74,6 +80,28 @@ impl Iterator for WordSpans<'_> {
         }
         Some((start, end))
     }
+}
+
+// Extended graphemes keep the marks attached to a base in the same original
+// span. A mark-only grapheme cannot begin a word.
+fn word_grapheme(grapheme: &str) -> bool {
+    let Some(first) = grapheme.chars().next() else {
+        return false;
+    };
+    if !is_word_char(first) {
+        return false;
+    }
+    if first.is_ascii() {
+        return true;
+    }
+    // Alphabetic includes a few combining/spacing marks. Ask the same pinned
+    // grapheme engine whether the first scalar attaches to an artificial ASCII
+    // base. Two borrowed chunks avoid allocation and another Unicode table.
+    let mut cursor = GraphemeCursor::new(1, 1 + grapheme.len(), true);
+    if cursor.is_boundary(grapheme, 1) == Err(GraphemeIncomplete::PreContext(1)) {
+        cursor.provide_context("a", 0);
+    }
+    cursor.is_boundary(grapheme, 1) == Ok(true)
 }
 
 /// The byte span `(start, end)` of every word in `text`, in order.
@@ -88,7 +116,7 @@ impl Iterator for WordSpans<'_> {
 pub fn word_spans(text: &str) -> WordSpans<'_> {
     WordSpans {
         text,
-        iter: text.char_indices().peekable(),
+        iter: text.grapheme_indices(true).peekable(),
     }
 }
 

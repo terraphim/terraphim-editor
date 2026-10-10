@@ -1,23 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8">
     <title>Markdown Editor</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script type="module">
-      import { setBasePath } from 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/utilities/base-path.js';
-      setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/');
+    <link data-trunk rel="copy-dir" href="public/vendor" />
+    <link data-trunk rel="inline" href="public/js/runtime-assets.js" />
+    <script>
+      // The controller awaits this before initializing toolbar/dialog controls.
+      window.TerraphimRuntimeAssets.ready = window.TerraphimRuntimeAssets.load();
+      window.TerraphimRuntimeAssets.ready.catch(error => console.error('Local runtime assets failed:', error));
     </script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/input/input.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button/button.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/button-group/button-group.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/tooltip/tooltip.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/split-panel/split-panel.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/dialog/dialog.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/divider/divider.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/badge/badge.js"></script>
     <link data-trunk rel="inline" href="public/js/config.js" />
     <script>console.log("config.js loaded");</script>
     <link data-trunk rel="inline" href="public/js/chrome.js" />
@@ -37,6 +29,9 @@
     <link data-trunk rel="inline" href="public/js/overflow.js" />
     <!-- Save, open, drafts and the Markdown export view (issues #76, #73): before editor.js, which instantiates it. -->
     <link data-trunk rel="inline" href="public/js/persistence.js" />
+    <!-- Optional graph service: lazy Worker startup, separate from editor WASM. -->
+    <link data-trunk rel="inline" href="public/js/rolegraph-storage.js" />
+    <link data-trunk rel="inline" href="public/js/rolegraph-client.js" />
     <link data-trunk rel="inline" href="public/js/editor.js" />
     <script>console.log("editor.js loaded");</script>
     <link data-trunk rel="css" href="public/css/tokens.css" />
@@ -134,6 +129,6 @@
     </style>
   </head>
   <body>
-    <div id="app"></div>
+    <main id="app" aria-label="Markdown editor"></main>
   </body>
-</html> 
+</html>

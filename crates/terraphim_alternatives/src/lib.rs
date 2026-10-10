@@ -80,6 +80,7 @@ mod document;
 mod model;
 pub mod offset;
 pub mod reanchor;
+pub mod text;
 pub mod words;
 
 pub use article::{Article, article_for, preceding_article, respell};

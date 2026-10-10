@@ -5,6 +5,16 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, Event, Window};
 
 mod document;
+// Cohort C: native mixed-history/checkpoint bridge; no serialized session clones.
+pub use document::{
+    abort_document_history_transaction, abort_history_transaction_json,
+    begin_document_history_replay, begin_history_replay_json, begin_trim_ghost_transaction,
+    begin_trim_ghost_transaction_json, finish_document_history_transaction,
+    finish_history_transaction_json, parse_history_operations, preflight_document_ghost_change,
+    recover_document_history_transaction, recover_history_transaction_json,
+    replay_document_ghost_change, GhostChange, GhostSnapshot, HistoryOperation,
+    HistoryTransactionError, HISTORY_JSON_LIMIT, HISTORY_OPERATION_LIMIT,
+};
 pub use document::{
     apply_edit, counts_json, document_annotations, document_body, document_counts, export_document,
     ghost_json, ghost_range, move_document_range, open_document, revive_json, revive_range,
@@ -24,9 +34,12 @@ pub use document::{
 mod kg;
 pub use document::EditOutcome;
 pub use kg::{
-    alt_kg_append, clear_thesaurus, kg_append, kg_clear_thesaurus, kg_document_spans,
-    kg_load_thesaurus, kg_lookup, kg_lookup_selection, kg_spans, kg_spans_json, kg_swap,
-    kg_swap_alternative, load_thesaurus, thesaurus_name, KgError, KgSpan, KG_MODEL,
+    alt_kg_append, clear_thesaurus, commit_prepared_thesaurus, discard_prepared_thesaurus,
+    kg_append, kg_clear_thesaurus, kg_commit_prepared_role, kg_discard_prepared_role,
+    kg_document_spans, kg_load_thesaurus, kg_lookup, kg_lookup_selection, kg_prepare_role,
+    kg_role_snapshot_json, kg_set_role_change_listener, kg_spans, kg_spans_json, kg_swap,
+    kg_swap_alternative, load_thesaurus, prepare_thesaurus, role_snapshot_json, thesaurus_name,
+    KgError, KgSpan, KG_MODEL,
 };
 
 // Pluggable alternatives providers (issue #83, R-8.7).
@@ -40,7 +53,12 @@ pub use providers::{
 };
 
 mod lab;
-pub use lab::{lab_actions, lab_mark, trim_make_cuts, trim_plan_json, trim_status};
+pub mod protection;
+pub use lab::{
+    lab_actions, lab_mark, protected_trim_ranges, trim_make_cuts, trim_plan_json, trim_status,
+};
+mod text;
+pub use text::{text_infer_kind, text_range_at, text_range_json, TextTargetError};
 // The alternatives side panel (issue #10).
 pub use document::{
     alt_add, alt_create_span, alt_edit, alt_move, alt_remove, alt_restore, body_edit, AltChange,

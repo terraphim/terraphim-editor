@@ -30,7 +30,10 @@
  *                  anywhere and files dropped on the bare page open (default
  *                  false: only while focus is in the editor)
  *   dirtyTitle     prefix document.title while unsaved (default: standalone)
- *   loadShoelace   load the Shoelace components from the CDN (default true)
+ *   loadShoelace   load local Shoelace + icon styles (default true); false
+ *                  means the host owns component/style/icon readiness
+ *   assetBase      directory containing vendor/ (default: next to this script)
+ *   allowExternalAssets explicit opt-in for cross-origin assetBase (default false)
  *   config         overrides merged over window.EditorConfig (shortcuts,
  *                  commands, documentKey, fileSystemAccess, autosaveDelay,
  *                  tools: true to start with the plain-mode toolbar and
@@ -52,19 +55,6 @@ const TE_SCRIPT_BASE = (() => {
   const script = document.currentScript;
   return script && script.src ? script.src : document.baseURI;
 })();
-
-const TE_SHOELACE_BASE = 'https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/';
-const TE_SHOELACE_COMPONENTS = [
-  'input/input.js',
-  'icon/icon.js',
-  'button/button.js',
-  'button-group/button-group.js',
-  'tooltip/tooltip.js',
-  'split-panel/split-panel.js',
-  'dialog/dialog.js',
-  'divider/divider.js',
-  'badge/badge.js',
-];
 
 class TeraphimEditor {
   /**
@@ -100,23 +90,10 @@ class TeraphimEditor {
     return TeraphimEditor.modulePromise;
   }
 
-  /** Load the Shoelace theme and components from the CDN (once). */
-  static async loadShoelace() {
-    if (!document.querySelector('link[href*="shoelace"][href$="light.css"]')) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = `${TE_SHOELACE_BASE}themes/light.css`;
-      document.head.appendChild(link);
-    }
-    // Without a <script src> pointing at Shoelace it cannot infer where its
-    // icons live; tell it, as index.html does.
-    const basePath = await import(`${TE_SHOELACE_BASE}utilities/base-path.js`);
-    if (typeof basePath.setBasePath === 'function') basePath.setBasePath(TE_SHOELACE_BASE);
-    await Promise.all(TE_SHOELACE_COMPONENTS.map(async (component) => {
-      if (!customElements.get(`sl-${component.split('/')[0]}`)) {
-        await import(`${TE_SHOELACE_BASE}components/${component}`);
-      }
-    }));
+  /** Load the local theme, FontAwesome and components through one bootstrap. */
+  static async loadShoelace(options = {}) {
+    if (!window.TerraphimRuntimeAssets) throw new Error('runtime-assets.js must load before the embed wrapper');
+    return window.TerraphimRuntimeAssets.load(options, TE_SCRIPT_BASE);
   }
 
   /**
@@ -151,7 +128,7 @@ class TeraphimEditor {
     TeraphimEditor.active = this;
     try {
       const opts = this.options;
-      if (opts.loadShoelace !== false) await TeraphimEditor.loadShoelace();
+      if (opts.loadShoelace !== false) await TeraphimEditor.loadShoelace(opts);
       const bindings = opts.bindings || (await TeraphimEditor.loadModule(opts));
       if (!bindings || typeof bindings.mount_editor !== 'function') {
         throw new Error('The editor module does not export mount_editor');
@@ -176,6 +153,10 @@ class TeraphimEditor {
           standalone,
           dirtyTitle: opts.dirtyTitle === undefined ? standalone : opts.dirtyTitle !== false,
           bindings,
+          rolegraphAssetBase: opts.rolegraphAssetBase || (opts.assetBase
+            ? window.TerraphimRuntimeAssets.resolveBase(opts, TE_SCRIPT_BASE)
+            : new URL('.', TE_SCRIPT_BASE).href),
+          rolegraph: opts.rolegraph || (opts.config && opts.config.rolegraph),
         },
       );
       const editor = new MarkdownEditor(config);
@@ -222,6 +203,11 @@ class TeraphimEditor {
   /** Save, open, drafts and the Markdown export view (TePersistence). */
   get persistence() {
     return this.editor ? this.editor.persistence || null : null;
+  }
+
+  /** Lazy Worker-backed graph service; never starts during ordinary mounting. */
+  get rolegraph() {
+    return this.requireEditor().rolegraph;
   }
 
   /** The body text on the surface (no annotation block). */

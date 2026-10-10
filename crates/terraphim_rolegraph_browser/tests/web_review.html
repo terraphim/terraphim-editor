@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>RoleGraph bridge review regressions</title>
+<pre id="result">Running…</pre>
+<script type="module">
+import init, { BrowserRoleGraph } from './terraphim_rolegraph_browser.js';
+try {
+  const wasm = await init();
+  // Run allocation regression first in a fresh WASM instance. This measures
+  // linear-memory high-water for this case, not all operating-envelope workloads.
+  const tiny = new BrowserRoleGraph();
+  const call = (op, payload, generation='0') => JSON.parse(tiny.dispatch(JSON.stringify({version:1,requestId:'memory',generation,expectedRevision:null,op,payload})));
+  const prep=call('prepare_role',{thesaurusText:'{"name":"memory","data":{"alpha":{"id":1,"nterm":"alpha"}}}'});
+  call('activate_role',{token:prep.result.token,nextGeneration:'1'});
+  const before=wasm.memory.buffer.byteLength;
+  const request='{"version":1,"requestId":"tags","generation":"1","expectedRevision":null,"op":"index_learning","payload":{"document":{"id":"bad","rank":"1","nodes":["1"],"tags":['+'"",'.repeat(4999999)+'""]}}}';
+  const rejected=JSON.parse(tiny.dispatch(request));
+  const after=wasm.memory.buffer.byteLength;
+  if (rejected.error?.code!=='resource_limit' || rejected.revision!=='0' || after-before>32*1024*1024) throw new Error('tag preallocation bound failed');
+  tiny.free();
+  const graph=new BrowserRoleGraph(); let snapshot; let commands=0;
+  const steps=await (await fetch('./review_scenario.json')).json();
+  for (const step of steps) for (let i=0;i<(step.repeat??1);i++) {
+    const p=structuredClone(step.payload);
+    if (p.documents==='$documents101') p.documents=Array.from({length:101},(_,i)=>({id:`d${String(i).padStart(3,'0')}`,title:'',body:'alpha beta'}));
+    if (p.documents==='$escapedNine') p.documents=Array.from({length:9},(_,i)=>({id:`escaped${i}`,title:'',body:'\\'.repeat(1048576)}));
+    if (p.document?.id==='$learningId') p.document.id=`l${String(i).padStart(3,'0')}`;
+    if (p.text==='$match101') p.text='alpha '.repeat(101);
+    if (p.snapshotText==='$snapshot') p.snapshotText=snapshot;
+    const response=JSON.parse(graph.dispatch(JSON.stringify({version:1,requestId:String(commands),generation:step.generation,expectedRevision:null,op:step.op,payload:p})));
+    for (const [pointer,expected] of Object.entries(step.expect)) {
+      const actual=pointer.slice(1).split('/').reduce((v,k)=>v?.[k],response);
+      if (JSON.stringify(actual)!==JSON.stringify(expected)) throw new Error(`command ${commands} ${pointer}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
+    }
+    if (step.resultLength!==undefined && response.result.length!==step.resultLength) throw new Error('page length');
+    if (step.op==='export_snapshot') snapshot=response.result.snapshotText;
+    commands++;
+  }
+  graph.free();
+  globalThis.rolegraphTest={ok:true,commands,tagMemory:{before,after,delta:after-before}};
+} catch(error) { globalThis.rolegraphTest={ok:false,error:String(error)}; }
+document.querySelector('#result').textContent=JSON.stringify(globalThis.rolegraphTest);
+</script>

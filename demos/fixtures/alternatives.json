@@ -1,0 +1,20 @@
+{
+  "id": "unicode-local-alternatives-v1",
+  "body": "🦀 Café é — a synthetic draft uses rubber",
+  "term": "rubber",
+  "replacement": "eraser",
+  "role": {
+    "name": "public-synthetic-demo",
+    "data": {
+      "rubber": {
+        "id": 1,
+        "nterm": "eraser"
+      },
+      "eraser": {
+        "id": 1,
+        "nterm": "eraser"
+      }
+    }
+  },
+  "labBody": "# Maybe a heading that is basically fine\n\nCafé notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n"
+}
