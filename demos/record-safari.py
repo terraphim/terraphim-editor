@@ -4,6 +4,7 @@ import base64
 import socket
 import struct
 import math
+import os
 import urllib.request
 from browser_demo_common import *
 
@@ -107,6 +108,34 @@ def selection_context_point(rects, viewport=VIEWPORT):
     raise ValueError('No visible selected text for context menu')
 
 
+def native_drag_geometry(start, end):
+    for point in (start, end):
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise ValueError('Invalid native drag geometry')
+        for value, limit in zip(point, (VIEWPORT['width'], VIEWPORT['height'])):
+            if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value < limit:
+                raise ValueError('Invalid native drag geometry')
+
+
+def native_drag_ack(path, sequence, token):
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as error:
+        raise RuntimeError('Unsafe native drag acknowledgement refused') from error
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 4096:
+            raise RuntimeError('Unsafe native drag acknowledgement refused')
+        raw = os.read(descriptor, 4097)
+        if len(raw) > 4096:
+            raise RuntimeError('Oversized native drag acknowledgement refused')
+    finally:
+        os.close(descriptor)
+    value = json.loads(raw)
+    if value != {'sequence': sequence, 'token': token, 'performedBy': 'CUA'}:
+        raise RuntimeError('Native drag acknowledgement mismatch')
+
+
 class Driver:
     def __init__(self, base, session, stage):
         self.base = base
@@ -114,6 +143,8 @@ class Driver:
         self.stage = stage
         self.samples = []
         self.context_menu_inputs = []
+        self.native_drag_handoff = None
+        self.native_drag_inputs = []
         self.started = time.monotonic()
     def call(self, method, route, payload=None, *, timeout=20):
         return webdriver(self.base, method, self.route + route, payload, timeout=timeout)
@@ -152,6 +183,38 @@ class Driver:
         actions += [{'type': 'keyUp', 'value': k} for k in reversed(keys)]
         self.call('POST', '/actions', {'actions': [{'type': 'key', 'id': 'fixture-keys', 'actions': actions}]})
     def drag(self, start, end):
+        if self.native_drag_handoff is not None:
+            native_drag_geometry(start, end)
+            state = self.evaluate('return {visible:document.visibilityState === "visible",focused:document.hasFocus(),width:innerWidth,height:innerHeight};')
+            if state != {'visible': True, 'focused': True, **VIEWPORT}:
+                raise RuntimeError('Owned Safari window not focused at native drag handoff')
+            sequence = len(self.native_drag_inputs) + 1
+            token = str(uuid.uuid4())
+            request = {'sequence': sequence, 'token': token, 'viewport': VIEWPORT,
+                       'start': start, 'end': end, 'method': 'native CUA drag; viewport coordinates require observed window mapping'}
+            request['coordinationStatus'] = 'requested; not proof of output'
+            self.native_drag_inputs.append(request)
+            request_path = self.native_drag_handoff / f'request-{sequence}.json'
+            acknowledgement = self.native_drag_handoff / f'ack-{sequence}.json'
+            descriptor = os.open(request_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, 'w') as output:
+                json.dump(request, output)
+            print('Native CUA drag requested: ' + str(request_path), flush=True)
+            deadline = time.monotonic() + 60
+            while not acknowledgement.exists():
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Native CUA drag acknowledgement unavailable within 60 seconds')
+                tick = time.monotonic()
+                self.capture(timeout=max(.001, deadline - tick))
+                time.sleep(max(0, min(.25 - (time.monotonic() - tick), deadline - time.monotonic())))
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Native CUA drag acknowledgement expired')
+            native_drag_ack(acknowledgement, sequence, token)
+            state = self.call('POST', '/execute/sync', {'script': 'return {visible:document.visibilityState === "visible",focused:document.hasFocus(),width:innerWidth,height:innerHeight};', 'args': []}, timeout=max(.001, deadline - time.monotonic()))
+            if time.monotonic() >= deadline or state != {'visible': True, 'focused': True, **VIEWPORT}:
+                raise RuntimeError('Owned Safari window changed or native drag handoff expired')
+            request['coordinationStatus'] = 'acknowledged; output checks remain independent'
+            return
         moves=[{'type':'pointerMove','duration':0,'origin':'viewport','x':round(start[0]),'y':round(start[1])},
                {'type':'pointerDown','button':0},{'type':'pause','duration':500},
                {'type':'pointerMove','duration':200,'origin':'viewport','x':round(start[0]+12),'y':round(start[1])},
@@ -168,9 +231,9 @@ class Driver:
         for c in text:
             actions += [{'type':'keyDown','value':c},{'type':'keyUp','value':c}]
         self.call('POST','/actions',{'actions':[{'type':'key','id':'public-demo-typing','actions':actions}]})
-    def capture(self):
+    def capture(self, *, timeout=20):
         started = time.monotonic() - self.started
-        png = base64.b64decode(self.call('GET', '/screenshot'), validate=True)
+        png = base64.b64decode(self.call('GET', '/screenshot', timeout=timeout), validate=True)
         completed = time.monotonic() - self.started
         if png[:8] != b'\x89PNG\r\n\x1a\n' or struct.unpack('>II', png[16:24]) != (1140, 720):
             raise RuntimeError('Actual viewport PNG must be exactly 1140x720')
@@ -187,7 +250,15 @@ class Driver:
 
 
 def main():
-    args = parser().parse_args()
+    arguments = parser()
+    arguments.add_argument('--native-drag-handoff', type=pathlib.Path)
+    args = arguments.parse_args()
+    if args.native_drag_handoff is not None:
+        handoff = args.native_drag_handoff
+        if (not handoff.is_absolute() or handoff.is_symlink() or not handoff.is_dir()
+                or handoff.resolve().parent != pathlib.Path('/private/tmp')
+                or not handoff.name.startswith('safari-native-drag-') or any(handoff.iterdir())):
+            raise ValueError('Native drag handoff requires a fresh dedicated /private/tmp/safari-native-drag-* directory')
     if not pathlib.Path('/usr/bin/safaridriver').is_file():
         raise RuntimeError('Installed native safaridriver required')
     with inputs(args, 'safari') as (stage, url, fixture, metadata, ffmpeg, ffprobe):
@@ -216,6 +287,7 @@ def main():
                 metadata['captureMethod'] = 'Actual Safari sampled viewport PNGs; genuine elapsed intervals duplicated at 15fps encoding'
                 metadata['networkBoundary'] = 'Loopback asset server, NOT proven Safari network isolation'
                 driver = Driver(base, session, stage)
+                driver.native_drag_handoff = args.native_drag_handoff
                 driver.call('POST', '/url', {'url': url})
                 wait_visible_owned_window(driver, metadata)
                 wait_ready(driver)
@@ -253,6 +325,7 @@ def main():
                 if driver:
                     metadata['rawSamples'] = driver.samples
                     metadata['contextMenuInputs'] = driver.context_menu_inputs
+                    metadata['nativeDragInputs'] = driver.native_drag_inputs
                 try:
                     if session:
                         webdriver(base, 'DELETE', '/session/' + session)

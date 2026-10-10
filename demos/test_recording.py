@@ -19,6 +19,27 @@ spec.loader.exec_module(safari)
 
 
 class RecordingTests(unittest.TestCase):
+    def test_native_drag_geometry_rejects_invalid_coordinates(self):
+        safari.native_drag_geometry([10.5, 20], [100, 200])
+        for point in [[-1, 0], [1140, 0], [0, 720], [True, 1], [float('nan'), 1], [float('inf'), 1], [1], 'xy']:
+            with self.assertRaises(ValueError): safari.native_drag_geometry(point, [1, 1])
+
+    def test_native_drag_ack_is_exact_bounded_regular_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / 'ack.json'
+            value = {'sequence': 1, 'token': 'fresh', 'performedBy': 'CUA'}
+            path.write_text(json.dumps(value))
+            safari.native_drag_ack(path, 1, 'fresh')
+            for bad in [dict(value, token='stale'), dict(value, sequence=2), dict(value, performedBy='other'), dict(value, extra=True)]:
+                path.write_text(json.dumps(bad))
+                with self.assertRaises(RuntimeError): safari.native_drag_ack(path, 1, 'fresh')
+            path.write_text(' ' * 4097)
+            with self.assertRaises(RuntimeError): safari.native_drag_ack(path, 1, 'fresh')
+            link = pathlib.Path(directory) / 'link.json'
+            link.symlink_to(path)
+            with self.assertRaises(RuntimeError): safari.native_drag_ack(link, 1, 'fresh')
+            with self.assertRaises(RuntimeError): safari.native_drag_ack(path.parent, 1, 'fresh')
+
     def test_safari_context_point_inside_visible_selection(self):
         self.assertEqual(safari.selection_context_point([{'left': 10, 'top': 20, 'right': 110, 'bottom': 40}]), {'x': 18, 'y': 30})
         self.assertEqual(safari.selection_context_point([{'left': -20, 'top': -10, 'right': 12, 'bottom': 10}]), {'x': 6, 'y': 5})
@@ -88,6 +109,7 @@ class RecordingTests(unittest.TestCase):
             with self.subTest(fail=fail), self.lifecycle_repo() as (_, args, _):
                 args.output = args.output.with_name(args.output.name.replace('chrome-', 'safari-'))
                 args.duration = 64
+                args.native_drag_handoff = None
                 parser = Mock()
                 parser.parse_args.return_value = args
                 process = Mock()
@@ -95,6 +117,7 @@ class RecordingTests(unittest.TestCase):
                 driver.evaluate.side_effect = [common.VIEWPORT, common.VIEWPORT, 'unit-agent']
                 driver.samples = [{'name': 'unit-a', 'completed': 0}, {'name': 'unit-b', 'completed': .25}]
                 driver.context_menu_inputs = []
+                driver.native_drag_inputs = []
                 events = []
                 def guard(delegate, metadata):
                     self.assertIs(delegate, driver)
