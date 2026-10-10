@@ -1,10 +1,16 @@
 """Independent text/count oracles and complete requirement inventory, no browser mocks."""
 import unittest
-from full_demo import word_count, cut_text, preview_text, promotion_ranges, REQUIREMENTS, overflow_insertion
+from full_demo import word_count, cut_text, preview_text, promotion_ranges, REQUIREMENTS, overflow_insertion, coverage_status
 
 from browser_demo_common import native_boundary_keys
 
 class OutputOracles(unittest.TestCase):
+    def test_failed_coverage_stays_failed(self):
+        self.assertEqual(coverage_status('NOT DEMONSTRATED', False), 'FAIL')
+        self.assertEqual(coverage_status('FAIL', True), 'FAIL')
+        self.assertEqual(coverage_status('FAIL', False), 'FAIL')
+        self.assertIn('FULL CRITERIA REVIEW REQUIRED', coverage_status('NOT DEMONSTRATED', True))
+
     def test_native_document_boundary_chords(self):
         self.assertEqual(native_boundary_keys(["\ue009","\ue011"],True),["\ue03d","\ue013"])
         self.assertEqual(native_boundary_keys(["\ue009","\ue008","\ue010"],True),["\ue03d","\ue008","\ue015"])

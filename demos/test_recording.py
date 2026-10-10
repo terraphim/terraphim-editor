@@ -110,6 +110,7 @@ class RecordingTests(unittest.TestCase):
                 args.output = args.output.with_name(args.output.name.replace('chrome-', 'safari-'))
                 args.duration = 64
                 args.native_drag_handoff = None
+                args.record_failed_drag_chapters = False
                 parser = Mock()
                 parser.parse_args.return_value = args
                 process = Mock()

@@ -85,6 +85,11 @@ ANNOTATIONS = 'return window.terraphimEditor.annotations();'
 MODE = 'return window.terraphimEditor.chrome.mode;'
 
 
+def coverage_status(previous, passed):
+    """A failed requirement stays failed even when later finite checks pass."""
+    return 'FAIL' if previous == 'FAIL' or not passed else 'OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED'
+
+
 def full_storyboard(d, fixture, duration, pause, metadata):
     wait_ready(d)
     started = time.monotonic()
@@ -103,7 +108,7 @@ def full_storyboard(d, fixture, duration, pause, metadata):
         evidence.append({'seconds':round(time.monotonic()-started,3), 'name':name, 'actual':actual, 'expected':expected, 'status':'PASS' if ok else 'FAIL', 'requirements':ids})
         for rid in ids:
             item=metadata['coverage'][rid]; item['checks'].append(index)
-            item['status']='OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED' if ok else 'FAIL'
+            item['status']=coverage_status(item['status'], ok)
         if not ok: raise AssertionError(f'{name}: actual {actual!r} != expected {expected!r}')
     def body(expected, name, ids): check(name, d.evaluate(BODY), expected, ids)
     setup_index=0
@@ -233,12 +238,25 @@ def full_storyboard(d, fixture, duration, pause, metadata):
     geometry=d.evaluate("const a=document.querySelector('.te-overflow-text').getBoundingClientRect(),root=window.terraphimEditor.surface.root,n=document.createTreeWalker(root,NodeFilter.SHOW_TEXT).nextNode(),r=document.createRange();r.setStart(n,0);r.setEnd(n,1);const b=r.getBoundingClientRect();return {start:[a.x+12,a.y+12],end:[b.x+b.width/2,b.y+b.height/2]};")
     d.drag(geometry['start'],geometry['end']);pause(2)
     receipts=d.evaluate('return window.__demoDrag;');metadata['nativePullDragReceipts']=receipts
-    check('Native pull drag has one trusted source and destination',[[r['type'],r['trusted'],r['target']] for r in receipts],[['dragstart',True,'overflow'],['drop',True,'surface']],['R-6.4'])
-    drop=receipts[-1];check('Native pull drop carries exact selected text',drop['payload'],'Public note.',['R-6.4'])
-    drag_expected=overflow_insertion(drag_body,drop['offset'],'Public note.')
-    body(drag_expected,'Native pull inserts independently separated text',['R-6.4'])
-    check('Native pull keeps Overflow copy',d.evaluate(ANNOTATIONS)['overflow'],'Public note.',['R-6.4'])
-    d.click('.markdown-input');undo(drag_body,['R-6.4']);d.keys(['\ue009','\ue008','z']);body(drag_expected,'Native pull redo restores exact body',['R-6.4'])
+    try:
+        check('Native pull drag has one trusted source and destination',[[r['type'],r['trusted'],r['target']] for r in receipts],[['dragstart',True,'overflow'],['drop',True,'surface']],['R-6.4'])
+    except AssertionError as error:
+        if not metadata.get('recordFailedDragChapters'):
+            raise
+        metadata['acceptanceStatus'] = 'FAIL'
+        metadata.setdefault('failedDragChapters', []).append({'chapter': 'pull drag',
+            'failure': str(error), 'dependentChecks': [{'name': name, 'status': 'NOT EXECUTED'} for name in ['Exact drop payload', 'Exact inserted body', 'Overflow copy', 'Undo', 'Redo']]})
+        caption('FAILED — pull drag: actual output check failed; dependent checks NOT EXECUTED. Continuing independent chapters.')
+        pause(2)
+        d.keys(['\ue00c'])
+        d.evaluate('window.__demoDragAbort?.abort();return true;')
+    else:
+        drop=receipts[-1];check('Native pull drop carries exact selected text',drop['payload'],'Public note.',['R-6.4'])
+        drag_expected=overflow_insertion(drag_body,drop['offset'],'Public note.')
+        body(drag_expected,'Native pull inserts independently separated text',['R-6.4'])
+        check('Native pull keeps Overflow copy',d.evaluate(ANNOTATIONS)['overflow'],'Public note.',['R-6.4'])
+        d.click('.markdown-input');undo(drag_body,['R-6.4']);d.keys(['\ue009','\ue008','z']);body(drag_expected,'Native pull redo restores exact body',['R-6.4'])
+
     setup(drag_body);caption('B06 — Native drag of the last paragraph into Overflow; verify move, append, undo and redo.')
     d.click('.markdown-input')
     check('Stash-drag shortcut targets the focused editor',d.evaluate('return window.terraphimEditor.surface.root.contains(document.activeElement);'),True,[])
@@ -248,11 +266,24 @@ def full_storyboard(d, fixture, duration, pause, metadata):
     geometry=d.evaluate("const r=document.getSelection().getRangeAt(0).getClientRects()[0],b=document.querySelector('.te-overflow-text').getBoundingClientRect();return {start:[r.x+r.width/2,r.y+r.height/2],end:[b.x+20,b.y+20]};")
     d.drag(geometry['start'],geometry['end']);pause(2)
     receipts=d.evaluate('return window.__demoDrag;');metadata['nativeStashDragReceipts']=receipts
-    check('Native stash drag has trusted source and destination',[[r['type'],r['trusted'],r['target']] for r in receipts],[['dragstart',True,'surface'],['drop',True,'overflow']],['R-6.3','R-6.4'])
-    body('First paragraph.\n\nSecond paragraph.\n\n','Native stash removes exact source paragraph',['R-6.3'])
-    check('Native stash appends exact text after blank line',d.evaluate(ANNOTATIONS)['overflow'],'Existing note.\n\nThird paragraph.',['R-6.3'])
-    d.click('.markdown-input');undo(drag_body,['R-6.3']);check('Native stash undo restores Overflow',d.evaluate(ANNOTATIONS)['overflow'],'Existing note.',['R-6.3'])
-    d.keys(['\ue009','\ue008','z']);body('First paragraph.\n\nSecond paragraph.\n\n','Native stash redo removes source again',['R-6.3'])
+    try:
+        check('Native stash drag has trusted source and destination',[[r['type'],r['trusted'],r['target']] for r in receipts],[['dragstart',True,'surface'],['drop',True,'overflow']],['R-6.3','R-6.4'])
+    except AssertionError as error:
+        if not metadata.get('recordFailedDragChapters'):
+            raise
+        metadata['acceptanceStatus'] = 'FAIL'
+        metadata.setdefault('failedDragChapters', []).append({'chapter': 'stash drag',
+            'failure': str(error), 'dependentChecks': [{'name': name, 'status': 'NOT EXECUTED'} for name in ['Exact source removal', 'Exact Overflow append', 'Undo source and Overflow', 'Redo']]})
+        caption('FAILED — stash drag: actual output check failed; dependent checks NOT EXECUTED. Continuing independent chapters.')
+        pause(2)
+        d.keys(['\ue00c'])
+        d.evaluate('window.__demoDragAbort?.abort();return true;')
+    else:
+        body('First paragraph.\n\nSecond paragraph.\n\n','Native stash removes exact source paragraph',['R-6.3'])
+        check('Native stash appends exact text after blank line',d.evaluate(ANNOTATIONS)['overflow'],'Existing note.\n\nThird paragraph.',['R-6.3'])
+        d.click('.markdown-input');undo(drag_body,['R-6.3']);check('Native stash undo restores Overflow',d.evaluate(ANNOTATIONS)['overflow'],'Existing note.',['R-6.3'])
+        d.keys(['\ue009','\ue008','z']);body('First paragraph.\n\nSecond paragraph.\n\n','Native stash redo removes source again',['R-6.3'])
+
 
     lab_body=fixture['labBody']
     setup(lab_body,{'name':'public-trim','data':{'unmentioned':{'id':1,'nterm':'unmentioned'}}})
@@ -359,3 +390,4 @@ def full_storyboard(d, fixture, duration, pause, metadata):
     metadata['remainingCriteria']=['Trusted drag/drop','OS file-picker save/open','Context reanchor and ambiguity GUI sequence','Full hover/dot geometry and §10 visual review','Shortcut collision GUI sequence','Provider abstraction beyond built-in local provider','Independent semantic assessment of all Lab marks','Editing inside ghost beyond alternative swaps']
     remaining=duration-(time.monotonic()-started)
     if remaining>0: pause(remaining)
+    metadata['acceptanceStatus'] = 'FAIL' if metadata.get('acceptanceStatus') == 'FAIL' or metadata.get('failedDragChapters') or any(item['status'] == 'FAIL' for item in evidence) else 'FINITE CHECKS PASS; FULL REQUIREMENTS NOT ACCEPTED'

@@ -252,7 +252,10 @@ class Driver:
 def main():
     arguments = parser()
     arguments.add_argument('--native-drag-handoff', type=pathlib.Path)
+    arguments.add_argument('--record-failed-drag-chapters', action='store_true')
     args = arguments.parse_args()
+    if args.native_drag_handoff is not None and args.record_failed_drag_chapters:
+        raise ValueError('Native handoff and failed-drag recording are mutually exclusive')
     if args.native_drag_handoff is not None:
         handoff = args.native_drag_handoff
         if (not handoff.is_absolute() or handoff.is_symlink() or not handoff.is_dir()
@@ -262,6 +265,8 @@ def main():
     if not pathlib.Path('/usr/bin/safaridriver').is_file():
         raise RuntimeError('Installed native safaridriver required')
     with inputs(args, 'safari') as (stage, url, fixture, metadata, ffmpeg, ffprobe):
+        metadata['recordFailedDragChapters'] = args.record_failed_drag_chapters
+        metadata['acceptanceStatus'] = 'NOT EVALUATED'
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             port = sock.getsockname()[1]
