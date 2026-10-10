@@ -19,6 +19,22 @@ spec.loader.exec_module(safari)
 
 
 class RecordingTests(unittest.TestCase):
+    def test_safari_context_point_inside_visible_selection(self):
+        self.assertEqual(safari.selection_context_point([{'left': 10, 'top': 20, 'right': 110, 'bottom': 40}]), {'x': 18, 'y': 30})
+        self.assertEqual(safari.selection_context_point([{'left': -20, 'top': -10, 'right': 12, 'bottom': 10}]), {'x': 6, 'y': 5})
+        self.assertEqual(safari.selection_context_point([{'left': 10.2, 'top': 20.2, 'right': 11.5, 'bottom': 22}]), {'x': 11, 'y': 21})
+
+    def test_safari_context_point_skips_invisible_and_rejects_bad_geometry(self):
+        hidden = {'left': 1200, 'top': 20, 'right': 1300, 'bottom': 40}
+        visible = {'left': 100, 'top': 100, 'right': 120, 'bottom': 120}
+        self.assertEqual(safari.selection_context_point([hidden, visible]), {'x': 108, 'y': 110})
+        for rects in [[], [hidden], [{'left': 0.2, 'top': 0.2, 'right': 0.4, 'bottom': 0.4}]]:
+            with self.assertRaisesRegex(ValueError, 'No visible'):
+                safari.selection_context_point(rects)
+        for value in [float('nan'), float('inf'), True, '10', None]:
+            with self.assertRaisesRegex(ValueError, 'Malformed'):
+                safari.selection_context_point([dict(visible, left=value)])
+
     def test_safari_visibility_sequence_and_private_state(self):
         driver = Mock()
         driver.call.side_effect = ['owned-private-handle', 'owned-private-handle',
@@ -78,6 +94,7 @@ class RecordingTests(unittest.TestCase):
                 driver = Mock()
                 driver.evaluate.side_effect = [common.VIEWPORT, common.VIEWPORT, 'unit-agent']
                 driver.samples = [{'name': 'unit-a', 'completed': 0}, {'name': 'unit-b', 'completed': .25}]
+                driver.context_menu_inputs = []
                 events = []
                 def guard(delegate, metadata):
                     self.assertIs(delegate, driver)

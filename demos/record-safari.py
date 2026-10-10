@@ -3,6 +3,7 @@
 import base64
 import socket
 import struct
+import math
 import urllib.request
 from browser_demo_common import *
 
@@ -88,12 +89,31 @@ def frame_durations(samples):
     return durations
 
 
+def selection_context_point(rects, viewport=VIEWPORT):
+    """Choose an integer point inside a visible selected glyph rectangle."""
+    for rect in rects:
+        values = [rect.get(k) for k in ('left', 'top', 'right', 'bottom')]
+        if any(type(v) not in (int, float) or not math.isfinite(v) for v in values):
+            raise ValueError('Malformed selection rectangle')
+        left, top, right, bottom = values
+        left, top = max(0, left), max(0, top)
+        right, bottom = min(viewport['width'], right), min(viewport['height'], bottom)
+        if right <= left or bottom <= top:
+            continue
+        x = max(math.ceil(left), math.floor(left + min(8, (right-left)/2)))
+        y = max(math.ceil(top), math.floor((top+bottom)/2))
+        if left <= x < right and top <= y < bottom:
+            return {'x': x, 'y': y}
+    raise ValueError('No visible selected text for context menu')
+
+
 class Driver:
     def __init__(self, base, session, stage):
         self.base = base
         self.route = '/session/' + session
         self.stage = stage
         self.samples = []
+        self.context_menu_inputs = []
         self.started = time.monotonic()
     def call(self, method, route, payload=None, *, timeout=20):
         return webdriver(self.base, method, self.route + route, payload, timeout=timeout)
@@ -114,6 +134,19 @@ class Driver:
         element=self.call("POST","/element",{"using":"css selector","value":selector})
         self.call("POST","/actions",{"actions":[{"type":"pointer","id":"public-hover","parameters":{"pointerType":"mouse"},"actions":[{"type":"pointerMove","duration":150,"origin":element,"x":0,"y":0}]}]})
     def keys(self, keys):
+        if keys == ['\ue008', '\ue03a']:
+            # Safari did not generate contextmenu for Shift+F10 in the real
+            # walkthrough. Use a genuine secondary-button pointer action.
+            rects = self.evaluate('const s=getSelection();if(!s?.rangeCount||s.isCollapsed)return [];return Array.from(s.getRangeAt(0).getClientRects(),r=>({left:r.left,top:r.top,right:r.right,bottom:r.bottom}));')
+            point = selection_context_point(rects)
+            try:
+                self.call('POST', '/actions', {'actions': [{'type': 'pointer', 'id': 'public-context-menu', 'parameters': {'pointerType': 'mouse'}, 'actions': [
+                    {'type': 'pointerMove', 'duration': 100, 'origin': 'viewport', **point},
+                    {'type': 'pointerDown', 'button': 2}, {'type': 'pointerUp', 'button': 2}]}]})
+            finally:
+                self.call('DELETE', '/actions')
+            self.context_menu_inputs.append({'method': 'native W3C secondary-button click inside selection', **point})
+            return
         keys=native_boundary_keys(keys,self.evaluate("return navigator.platform.includes(\"Mac\");"))
         actions = [{'type': 'keyDown', 'value': k} for k in keys]
         actions += [{'type': 'keyUp', 'value': k} for k in reversed(keys)]
@@ -219,6 +252,7 @@ def main():
             finally:
                 if driver:
                     metadata['rawSamples'] = driver.samples
+                    metadata['contextMenuInputs'] = driver.context_menu_inputs
                 try:
                     if session:
                         webdriver(base, 'DELETE', '/session/' + session)
