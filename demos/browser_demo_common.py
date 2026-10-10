@@ -43,6 +43,13 @@ return true;
 """
 
 
+def native_boundary_keys(keys, is_mac):
+    """Use native document-boundary chords; Control shortcuts stay unchanged."""
+    if is_mac and keys in (["\ue009","\ue011"],["\ue009","\ue010"],["\ue009","\ue008","\ue010"]):
+        return ["\ue03d"] + (["\ue008"] if "\ue008" in keys else []) + (["\ue013"] if "\ue011" in keys else ["\ue015"])
+    return list(keys)
+
+
 def run(args, **kwargs):
     with tempfile.TemporaryFile(dir=SCRATCH) as stdout, tempfile.TemporaryFile(dir=SCRATCH) as stderr:
         subprocess.run(args, check=True, stdout=stdout, stderr=stderr, timeout=120, **kwargs)

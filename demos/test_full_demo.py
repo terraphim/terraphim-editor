@@ -1,8 +1,18 @@
 """Independent text/count oracles and complete requirement inventory, no browser mocks."""
 import unittest
-from full_demo import word_count, cut_text, preview_text, promotion_ranges, REQUIREMENTS
+from full_demo import word_count, cut_text, preview_text, promotion_ranges, REQUIREMENTS, overflow_insertion
+
+from browser_demo_common import native_boundary_keys
 
 class OutputOracles(unittest.TestCase):
+    def test_native_document_boundary_chords(self):
+        self.assertEqual(native_boundary_keys(["\ue009","\ue011"],True),["\ue03d","\ue013"])
+        self.assertEqual(native_boundary_keys(["\ue009","\ue008","\ue010"],True),["\ue03d","\ue008","\ue015"])
+        for mac in [True,False]: self.assertEqual(native_boundary_keys(["\ue009","/"],mac),["\ue009","/"])
+        self.assertEqual(native_boundary_keys(["\ue009","\ue010"],False),["\ue009","\ue010"])
+    def test_independent_native_drag_insertion(self):
+        for body,at,expected in [('abc',0,'X\n\nabc'),('abc',3,'abc\n\nX'),('a b',2,'a Xb'),('a\n\nb',2,'a\n\nX\n\nb')]:
+            self.assertEqual(overflow_insertion(body,at,'X'),expected)
     def test_joined_words(self):
         self.assertEqual(word_count("It's a well-made café. A/B _name 42."), 7)
     def test_combining_and_non_bmp(self):

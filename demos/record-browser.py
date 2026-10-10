@@ -12,11 +12,21 @@ class Driver:
         return self.page.evaluate('(args) => { return (function(){' + script + '}).apply(null,args); }', list(args))
     def click(self, selector):
         self.page.locator(selector).first.click(timeout=10000)
+    def hover(self, selector):
+        self.page.locator(selector).first.hover(timeout=10000)
+    def drag(self, start, end):
+        self.page.mouse.move(*start); self.page.mouse.down()
+        self.page.wait_for_timeout(500)
+        self.page.mouse.move(start[0]+12,start[1],steps=6)
+        self.page.mouse.move(*end,steps=18); self.page.wait_for_timeout(250)
+        self.page.mouse.move(end[0]+1,end[1],steps=2); self.page.wait_for_timeout(100)
+        self.page.mouse.up(); self.page.wait_for_timeout(100)
     def text(self, text):
         self.page.keyboard.type(text, delay=55)
     def keys(self, keys):
-        mapping = {'\ue009': 'Control', '\ue008': 'Shift', '\ue010': 'End',
-                   '\ue011': 'Home', '\ue007': 'Enter', '\ue013': 'ArrowUp', '\ue012': 'ArrowLeft', '\ue015': 'ArrowDown', '\ue00c': 'Escape'}
+        keys=native_boundary_keys(keys,self.evaluate("return navigator.platform.includes(\"Mac\");"))
+        mapping = {'\ue009': 'Control', '\ue03d':'Meta', '\ue008': 'Shift', '\ue010': 'End',
+                   '\ue011': 'Home', '\ue007': 'Enter', '\ue013': 'ArrowUp', '\ue012': 'ArrowLeft', '\ue014':'ArrowRight', '\ue015': 'ArrowDown', '\ue00c': 'Escape', '\ue003':'Backspace', '\ue03a':'F10'}
         self.page.keyboard.press('+'.join(mapping.get(k, k) for k in keys))
 
 

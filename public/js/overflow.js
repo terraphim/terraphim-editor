@@ -249,6 +249,13 @@ class TeOverflowPanel {
       on(this.surface.root, 'dragend', () => { this.pageDrag = null; });
       // Captured before EditorSurface's own drop handling, which inserts
       // the dropped text as it is.
+      // A custom pull-back target must accept its owned text drag before
+      // the browser dispatches drop (plaintext-only editing does not do so).
+      on(this.surface.root, 'dragover', (e) => {
+        if (!this.panelDrag || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes('text/plain')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      });
       on(this.surface.root, 'drop', (e) => this.onPageDrop(e), { capture: true });
     }
     on(this.root, 'dragover', (e) => {

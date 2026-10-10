@@ -16,6 +16,7 @@ import re
 import signal
 import subprocess
 import threading
+import traceback
 from urllib.parse import unquote, urlsplit
 
 BODY = 'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.'
@@ -24,6 +25,7 @@ TRIM_BODY = ('# Public fixture\n\nDecision and choice matter. Decision matters a
              'The coffee shop has café. Honour the paperclip and use it.\n\n'
              'Maybe perhaps basically this is really rather quite very unnecessary filler.\n\n'
              'This final public sentence and an eraser stay.')
+TRIM_SAFE_BODY=TRIM_BODY.replace('Maybe perhaps basically this is really rather quite very unnecessary filler.','Perhaps this brief aside can wait.')
 ROLE = {'name': 'writing-fixture', 'data': {}}
 CANDIDATE_EDITOR_SHA256 = '1f7985c4ab85972bd09eea10a6d587e1b7359be451b4b510fe03acb027f5c87f'
 EMBED_PATH = '__public_interaction_embed.html'
@@ -279,12 +281,11 @@ FOCUS = """() => {let e=document.activeElement; while(e?.shadowRoot?.activeEleme
 DRAG_OBSERVER = """() => {window.__publicDragReceipts=[];
  window.__publicDragAbort?.abort();window.__publicDragAbort=new AbortController();
  for(const type of ['dragstart','drop'])document.addEventListener(type,e=>{
- const t=e.target;
+ const t=e.target?.nodeType===3?e.target.parentElement:e.target;
  if(type==='drop' && t.closest?.('[contenteditable]') && window.terraphimEditor.overflow.panelDrag){
  const editor=window.terraphimEditor,drag=editor.overflow.panelDrag;
  const at=editor.surface.dropOffset(e);
- window.__publicDragReceipts.push({type:'observed-pull-anchor',dropOffset:at,
- pullBack:editor.requireDocumentApi().overflow_pull_back_text(at,drag.start,drag.end)});
+ window.__publicDragReceipts.push({type:'observed-pull-anchor',dropOffset:at});
  }
  const payload=type==='drop' && e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
  const expected=window.__publicDragExpected;
@@ -336,12 +337,41 @@ def assert_protected(text, ranges):
 
 
 def expected_export(text, ghosts):
-    data = text.encode('utf-16-le')
-    for ghost in sorted(ghosts, key=lambda item: item['anchor']['start'], reverse=True):
-        anchor = ghost['anchor']
-        require(utf16_slice(text, anchor['start'], anchor['end']) == anchor['text'])
-        data = data[:anchor['start'] * 2] + data[anchor['end'] * 2:]
-    return data.decode('utf-16-le')
+    """Independent exclusion and boundary-whitespace projection; no product calls."""
+    ranges=[]
+    for ghost in sorted(ghosts,key=lambda g:g['anchor']['start']):
+        anchor=ghost['anchor']
+        require(utf16_slice(text,anchor['start'],anchor['end'])==anchor['text'])
+        start=0 if anchor['start']==0 else len(utf16_slice(text,0,anchor['start']))
+        end=len(utf16_slice(text,0,anchor['end']))
+        if ranges and start<=ranges[-1][1]:ranges[-1]=(ranges[-1][0],max(end,ranges[-1][1]))
+        else:ranges.append((start,end))
+    out='';cursor=0
+    for start,end in ranges:
+        if end<=cursor:continue
+        out+=text[cursor:start] if cursor<start else ''
+        cursor=end
+        following=text[cursor:cursor+1]
+        if out.endswith(' ') and (not following or following in ' \n.,;:!?)'):out=out[:-1]
+        if not out or out.endswith('\n'):
+            while text[cursor:cursor+1]==' ':cursor+=1
+        if not out or out.endswith('\n\n'):
+            while text[cursor:cursor+1]=='\n':cursor+=1
+    return out+text[cursor:]
+
+
+def promotion_ranges(active):
+    """Project unique containing ranges only after refusing all crossing pairs."""
+    ranges=sorted(set((c['start'],c['end']) for c in active),key=lambda r:(r[0],-r[1]))
+    for i,(start,end) in enumerate(ranges):
+        require(type(start) is int and type(end) is int and 0 <= start < end)
+        for other_start,other_end in ranges[i+1:]:
+            require(not (start < other_start < end < other_end))
+    outer=[]
+    for start,end in ranges:
+        if outer and start < outer[-1][1]: continue
+        outer.append((start,end))
+    return outer
 
 
 def verify_done(before, after, active, receipt):
@@ -362,10 +392,11 @@ def verify_done(before, after, active, receipt):
     for key in ['spans', 'overflow', 'setAside', 'preservedBlock']:
         require(new[key] == old[key])
     added = [g for g in new['ghosts'] if g not in old['ghosts']]
-    require(len(added) == len(active) and len(added) > 0)
+    projected=promotion_ranges(active)
+    require(len(added) == len(projected) and len(added) > 0)
     require(len({g['id'] for g in new['ghosts']}) == len(new['ghosts']))
     actual = sorted((g['anchor']['start'], g['anchor']['end']) for g in added)
-    require(actual == sorted((c['start'], c['end']) for c in active))
+    require(actual == projected)
     require(after['exported'] == expected_export(after['body'], new['ghosts']))
     assert_protected(after['body'], active)
     identity = lambda text: sorted((item['id'], item['text'].casefold()) for item in protected_occurrences(text))
@@ -412,6 +443,21 @@ def verify_rendered_preview(text, segments, active):
             merged_ranges((s['start'], s['end']) for s in active))
 
 
+def overflow_insertion(body, at, text):
+    """Independent UTF-16 insertion oracle from the paragraph-spacing contract."""
+    raw=body.encode('utf-16-le')
+    before=raw[:at*2].decode('utf-16-le')
+    after=raw[at*2:].decode('utf-16-le')
+    if before.endswith('\r') and after.startswith('\n'):
+        before+='\n';after=after[1:]
+    if before and not before.endswith('\n') and after and not after.startswith(('\r','\n')):
+        return before+text+after
+    eol='\r\n' if '\r\n' in body else '\n'
+    lead=0 if not before else max(0,2-before[len(before.rstrip('\r\n')):].count('\n')) if before.endswith('\n') else 2
+    trail=0 if not after else max(0,2-after[:len(after)-len(after.lstrip('\r\n'))].count('\n')) if after.startswith(('\r','\n')) else 2
+    return before+eol*lead+text+eol*trail+after
+
+
 def verify_drop(receipts, expected, source, target):
     starts = [x for x in receipts if x['type'] == 'dragstart']
     drops = [x for x in receipts if x['type'] == 'drop']
@@ -422,7 +468,7 @@ def verify_drop(receipts, expected, source, target):
 
 
 def open_fixture(page, text):
-    page.evaluate('(text)=>window.terraphimEditor.openDocument(text,"public-acceptance.md")', text)
+    page.evaluate('(text)=>{window.__publicFixtureIndex=(window.__publicFixtureIndex||0)+1;window.terraphimEditor.openDocument(text,"public-acceptance-"+window.__publicFixtureIndex+".md");}', text)
     require(page.evaluate(READ_STATE)['body'] == text)
 
 
@@ -443,11 +489,18 @@ def native_drag(page, start, end, expected, source='overflow', target='surface')
     page.evaluate('(text)=>window.__publicDragExpected=text', expected)
     page.mouse.move(*start)
     page.mouse.down()
+    page.wait_for_timeout(500)  # Native selected-text drag hold before movement.
     # Deliberate bounded native pointer transition; no synthetic DragEvent/transfer.
     page.mouse.move(start[0] + 12, start[1], steps=6)
     page.mouse.move(*end, steps=18)
+    page.wait_for_timeout(250)
+    page.mouse.move(end[0]+1,end[1],steps=2)
+    page.wait_for_timeout(100)
     page.mouse.up()
+    page.wait_for_timeout(100)
     receipts = page.evaluate('()=>window.__publicDragReceipts')
+    if not any(r['type']=='drop' for r in receipts):
+        page.keyboard.press('Escape')  # Cancel failed native drag before subsequent scenes.
     verify_drop(receipts, expected, source, target)
     return receipts
 
@@ -469,7 +522,7 @@ body:window.terraphimEditor.surface.getText()};}''')
     require(original == {'lang': 'fr', 'mainCount': 1, 'mainIdentity': True,
                          'navIdentity': True, 'bodyUnchanged': True, 'body': HEADING})
     editor_surface.click()
-    page.keyboard.press('Control+End')
+    page.keyboard.press('Meta+ArrowDown' if page.evaluate('()=>navigator.platform.includes("Mac")') else 'Control+End')
     snapshot(page, output, 'embedded-plain-heading')
     page.locator('.te-chrome-counter').click()
     require(observe() == original)
@@ -500,7 +553,16 @@ def run_scenes(page, output, results=None):
                 results.append({'case': name, 'status': 'FAIL', 'errorClass': 'TimeoutError',
                                 'reason': 'Total browser-phase deadline reached'})
                 raise  # Global deadline must not be swallowed by case reporting.
-            results.append({'case': name, 'status': 'FAIL', 'errorClass': type(error).__name__})
+            frames=[{'line':f.lineno,'function':f.name} for f in traceback.extract_tb(error.__traceback__) if f.filename==__file__]
+            try:
+                diagnostic=page.evaluate('''()=>({state:window.terraphimEditor?{body:window.terraphimEditor.surface.getText().slice(0,12000),trimAnnouncement:window.terraphimEditor.lab.trim.live.textContent.slice(0,2000),mode:window.terraphimEditor.chrome.mode,labOpen:window.terraphimEditor.lab.isOpen}:null,drag:(window.__publicDragReceipts||[]).slice(-20),overflowSelection:(()=>{const a=document.querySelector('.te-overflow-text');return a?{start:a.selectionStart,end:a.selectionEnd,length:a.value.length}:null})(),notice:document.querySelector('.te-files-notice')?.getAttribute('data-kind')||null})''')
+            except Exception as diagnostic_error:
+                diagnostic={"status":"unavailable","errorClass":type(diagnostic_error).__name__}
+                if type(diagnostic_error) is TimeoutError:
+                    results.append({"case":name,"status":"FAIL","errorClass":type(error).__name__,"publicCheckpoints":frames,"publicDiagnostic":diagnostic})
+                    raise
+
+            results.append({'case': name, 'status': 'FAIL', 'errorClass': type(error).__name__,'publicCheckpoints':frames,'publicDiagnostic':diagnostic})
     editor_surface = surface(page)
     def mode(write_on):
         counter = page.locator('.te-chrome-counter')
@@ -526,7 +588,7 @@ def run_scenes(page, output, results=None):
         open_fixture(page, HEADING)
         mode(False)
         editor_surface.click()
-        page.keyboard.press('Control+End')
+        page.keyboard.press('Meta+ArrowDown' if page.evaluate('()=>navigator.platform.includes("Mac")') else 'Control+End')
         require(page.evaluate(READ_STATE)['body'] == HEADING)
         page.wait_for_function('()=>!window.terraphimEditor.surface.root.querySelector(".te-heading-marker--shown")')
         require(page.evaluate('()=>Array.from(window.terraphimEditor.surface.root.querySelectorAll(".te-heading-marker")).every(e=>getComputedStyle(e).fontSize==="0px" && e.getBoundingClientRect().width===0)'))
@@ -564,21 +626,22 @@ def run_scenes(page, output, results=None):
         open_fixture(page, BODY)
         area = overflow()
         area.fill('Public note.')
-        area.press('Control+A')
+        area.press('Meta+A' if page.evaluate('()=>navigator.platform.includes("Mac")') else 'Control+A')
+        selection=area.evaluate('(a)=>({start:a.selectionStart,end:a.selectionEnd,text:a.value.slice(a.selectionStart,a.selectionEnd)})')
+        require(selection == {'start':0,'end':12,'text':'Public note.'})
         before = page.evaluate(READ_STATE)
         index = page.evaluate('()=>window.terraphimEditor.surface.historyIndex')
         page.evaluate(DRAG_OBSERVER)
-        a, b = area.bounding_box(), editor_surface.bounding_box()
-        receipts = native_drag(page, (a['x'] + 12, a['y'] + 12), (b['x'] + 30, b['y'] + 15), expected='Public note.')
+        a = area.bounding_box()
+        glyph=editor_surface.evaluate('root=>{const n=document.createTreeWalker(root,NodeFilter.SHOW_TEXT).nextNode(),r=document.createRange();r.setStart(n,0);r.setEnd(n,1);const b=r.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height};}')
+        require(glyph['width']>0 and glyph['height']>0)
+        receipts = native_drag(page, (a['x'] + 12, a['y'] + 12), (glyph['x']+glyph['width']/2,glyph['y']+glyph['height']/2), expected='Public note.')
         state = page.evaluate(READ_STATE)
         require(state['body'].count('Public note.') == 1)
         require(state['body'] == state['nativeBody'])
         anchors = [item for item in receipts if item['type'] == 'observed-pull-anchor']
         require(len(anchors) == 1)
-        insertion = anchors[0]['pullBack']
-        encoded = BODY.encode('utf-16-le')
-        at = insertion['start'] * 2
-        expected = (encoded[:at] + insertion['text'].encode('utf-16-le') + encoded[at:]).decode('utf-16-le')
+        expected = overflow_insertion(BODY,anchors[0]['dropOffset'],'Public note.')
         require(state['body'] == expected)
         require(state['annotations']['overflow'] == 'Public note.')
         require(page.evaluate('()=>window.terraphimEditor.surface.historyIndex') == index + 1)
@@ -598,8 +661,9 @@ def run_scenes(page, output, results=None):
         area = overflow()
         area.fill('Existing public note.')
         editor_surface.click()  # blur flushes synthetic setup into actual model
-        page.keyboard.press('Control+End')
-        page.keyboard.press('Shift+Home')
+        page.keyboard.press('Meta+ArrowDown' if page.evaluate('()=>navigator.platform.includes("Mac")') else 'Control+End')
+        for _ in 'Third paragraph.':
+            page.keyboard.press('Shift+ArrowLeft')
         selected = page.evaluate('()=>{const e=window.terraphimEditor,s=e.surface.getSelectionOffsets();return {...s,text:e.surface.getText().slice(s.start,s.end)};}')
         require(selected['text'] == 'Third paragraph.')
         before = page.evaluate(READ_STATE)
@@ -648,20 +712,21 @@ def run_scenes(page, output, results=None):
         return {'setup': 'explicit clearThesaurus API; actual Lab button and DOM disabled state'}
     case('no-role-disabled-trim', no_role)
 
-    def protected_done():
-        open_fixture(page, TRIM_BODY)
+    def protected_done(text, crossing):
+        open_fixture(page, text)
         summary = page.evaluate('(role)=>window.terraphimEditor.loadThesaurus(role)', ROLE)
         require(summary['name'] == 'writing-fixture' and summary['concepts'] == 7)
         mode(True)
         # A real manual ghost over the Markdown heading, disjoint from body cuts.
         # No arbitrary-range ghost model setup and no revision of native APIs.
         editor_surface.click()
-        page.keyboard.press('Control+Home')
+        page.keyboard.press('Meta+ArrowUp' if page.evaluate('()=>navigator.platform.includes("Mac")') else 'Control+Home')
         page.keyboard.press('ArrowRight')
         page.keyboard.press('ArrowRight')
-        page.keyboard.press('Shift+End')
+        for _ in 'Public fixture':
+            page.keyboard.press('Shift+ArrowRight')
         selection = page.evaluate('()=>window.terraphimEditor.surface.getSelectionOffsets()')
-        require(utf16_slice(TRIM_BODY, selection['start'], selection['end']) == 'Public fixture')
+        require(utf16_slice(text, selection['start'], selection['end']) == 'Public fixture')
         page.keyboard.press('Control+/')
         manual = page.evaluate(READ_STATE)
         require(len(manual['annotations']['ghosts']) == 1)
@@ -680,8 +745,8 @@ def run_scenes(page, output, results=None):
             page.locator('.te-trim-card').wait_for(state='visible')
             status = page.evaluate('()=>window.terraphimEditor.lab.trim.status')
             require(status['kgProtected'] is True)
-            matches = assert_protected(TRIM_BODY, status['active'])
-            verify_rendered_preview(TRIM_BODY, page.evaluate(RENDERED), status['active'])
+            matches = assert_protected(text, status['active'])
+            verify_rendered_preview(text, page.evaluate(RENDERED), status['active'])
             verify_rendered_ghosts(page.evaluate(RENDERED), before['annotations']['ghosts'])
             require(status['protectionCount'] == len(matches))
             require(page.evaluate(READ_STATE) == before)
@@ -689,6 +754,26 @@ def run_scenes(page, output, results=None):
                            'protectionCount': len(matches), 'cardText': status['cardText']})
         active = status['active']
         require(len(active) > 0)
+        if crossing:
+            refused=False
+            try: promotion_ranges(active)
+            except AssertionError: refused=True
+            require(refused)
+            refusal_before=page.evaluate(READ_STATE)
+            page.locator('.te-trim-done').click()
+            announcement=page.evaluate('()=>window.terraphimEditor.lab.trim.live.textContent')
+            require('unsafe_promotion: crossing active fragments' in announcement)
+            require(page.locator('.te-trim-card').is_visible())
+            require(page.evaluate(READ_STATE)==refusal_before)
+            verify_rendered_preview(text,page.evaluate(RENDERED),active)
+            snapshot(page,output,'crossing-Done-refusal')
+            return {'expectedRefusal':announcement,'literalBodyPreserved':True,'levels':levels,'fixtureSha256':digest(text.encode())}
+        lab()
+        page.locator('.te-trim-level[data-level="slight"]').click()
+        status=page.evaluate('()=>window.terraphimEditor.lab.trim.status')
+        active=status['active']
+        require(len(active)>0)
+        promotion_ranges(active)
         history_before = page.evaluate('()=>window.terraphimEditor.surface.historyIndex')
         require(page.evaluate('()=>{const a=window.terraphimEditor.requireDocumentApi();return ["begin_trim_ghost_transaction","begin_document_history_replay","finish_document_history_transaction","abort_document_history_transaction"].every(n=>typeof a[n]==="function");}'))
         page.evaluate('()=>{window.__publicDoneTrusted=[];document.addEventListener("click",e=>{if(e.target.closest?.(".te-trim-done"))window.__publicDoneTrusted.push(e.isTrusted);},true);}')
@@ -703,10 +788,10 @@ def run_scenes(page, output, results=None):
         require(native['edits'][0]['ghost']['undo'] is False)
         receipt = native['edits'][0]['ghost']['change']
         after = page.evaluate(READ_STATE)
-        require(after['nativeBody'] == TRIM_BODY)
+        require(after['nativeBody'] == text)
         added = verify_done(before, after, active, receipt)
         verify_rendered_ghosts(page.evaluate(RENDERED), after['annotations']['ghosts'])
-        verify_rendered_preview(TRIM_BODY, page.evaluate(RENDERED), [])
+        verify_rendered_preview(text, page.evaluate(RENDERED), [])
         snapshot(page, output, 'done-persistent-ghosts')
         editor_surface.click()
         page.keyboard.press('Control+z')
@@ -718,7 +803,7 @@ def run_scenes(page, output, results=None):
         require(page.evaluate('()=>window.terraphimEditor.surface.historyIndex') == history_before + 1)
         verify_rendered_ghosts(page.evaluate(RENDERED), after['annotations']['ghosts'])
         saved = page.evaluate('()=>window.terraphimEditor.saveDocument()')
-        require(saved != TRIM_BODY and 'Public saved overflow sentinel.' in saved)
+        require(saved != text and 'Public saved overflow sentinel.' in saved)
         page.evaluate('(text)=>window.terraphimEditor.openDocument(text,"public-done-reopen.md")', saved)
         require(page.evaluate(READ_STATE) == after)
         verify_rendered_ghosts(page.evaluate(RENDERED), after['annotations']['ghosts'])
@@ -726,16 +811,17 @@ def run_scenes(page, output, results=None):
         snapshot(page, output, 'done-reopened')
         return {'roleSummary': {'name': summary['name'], 'concepts': summary['concepts']},
                 'manualGhostPreserved': True, 'nativeReceipt': receipt, 'addedGhosts': added,
-                'levels': levels, 'protectedOccurrences': protected_occurrences(TRIM_BODY),
+                'levels': levels, 'protectedOccurrences': protected_occurrences(text),
                 'savedSha256': digest(saved.encode()), 'cleanExportSha256': digest(after['exported'].encode()),
                 'mechanism': 'actual manual ghost shortcut, four Lab level buttons, trusted Done click, one native-receipt undo/redo; disclosed API save/reopen/read'}
-    case('protected-trim-Done-reopen', protected_done)
+    case('protected-crossing-Done-refusal', lambda:protected_done(TRIM_BODY,True))
+    case('protected-trim-Done-reopen', lambda:protected_done(TRIM_SAFE_BODY,False))
 
     def tools():
         open_fixture(page, HEADING)
         mode(False)
         editor_surface.click()
-        page.keyboard.press('Control+End')
+        page.keyboard.press('Meta+ArrowDown' if page.evaluate('()=>navigator.platform.includes("Mac")') else 'Control+End')
         if not page.evaluate('()=>window.terraphimEditor.chrome.toolsVisible()'):
             page.keyboard.press('Control+Shift+L')
         require(page.evaluate('()=>window.terraphimEditor.chrome.toolsVisible()'))
@@ -862,7 +948,7 @@ def main():
                 page.set_viewport_size({'width': 900, 'height': 1000})
                 open_fixture(page, HEADING)
                 surface(page).click()
-                page.keyboard.press('Control+End')
+                page.keyboard.press('Meta+ArrowDown' if page.evaluate('()=>navigator.platform.includes("Mac")') else 'Control+End')
                 page.wait_for_function('()=>!window.terraphimEditor.surface.root.querySelector(".te-heading-marker--shown")')
                 snapshot(page, output, 'narrow-heading')
                 page.set_viewport_size({'width': 1140, 'height': 720})

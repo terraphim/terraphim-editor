@@ -110,10 +110,26 @@ class Driver:
             if time.monotonic() > deadline:
                 raise RuntimeError('Required visible control missing')
             time.sleep(.1)
+    def hover(self, selector):
+        element=self.call("POST","/element",{"using":"css selector","value":selector})
+        self.call("POST","/actions",{"actions":[{"type":"pointer","id":"public-hover","parameters":{"pointerType":"mouse"},"actions":[{"type":"pointerMove","duration":150,"origin":element,"x":0,"y":0}]}]})
     def keys(self, keys):
+        keys=native_boundary_keys(keys,self.evaluate("return navigator.platform.includes(\"Mac\");"))
         actions = [{'type': 'keyDown', 'value': k} for k in keys]
         actions += [{'type': 'keyUp', 'value': k} for k in reversed(keys)]
         self.call('POST', '/actions', {'actions': [{'type': 'key', 'id': 'fixture-keys', 'actions': actions}]})
+    def drag(self, start, end):
+        moves=[{'type':'pointerMove','duration':0,'origin':'viewport','x':round(start[0]),'y':round(start[1])},
+               {'type':'pointerDown','button':0},{'type':'pause','duration':500},
+               {'type':'pointerMove','duration':200,'origin':'viewport','x':round(start[0]+12),'y':round(start[1])},
+               {'type':'pointerMove','duration':700,'origin':'viewport','x':round(end[0]),'y':round(end[1])},
+               {'type':'pause','duration':250},
+               {'type':'pointerMove','duration':100,'origin':'viewport','x':round(end[0]+1),'y':round(end[1])},
+               {'type':'pause','duration':100},{'type':'pointerUp','button':0}]
+        try:
+            self.call('POST','/actions',{'actions':[{'type':'pointer','id':'public-drag','parameters':{'pointerType':'mouse'},'actions':moves}]})
+        finally:
+            self.call('DELETE','/actions')
     def text(self, text):
         actions = []
         for c in text:
