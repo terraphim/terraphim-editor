@@ -11,7 +11,7 @@ private struct CaptureError: Error, CustomStringConvertible {
 }
 
 private func permittedWindow(bundle: String?, title: String?) -> Bool {
-    bundle == "dev.zed.Zed" && (title == "demo — trim-long.md" || title == "demo — writing.md")
+    bundle == "dev.zed.Zed" && (title == "demo — trim-long.md" || title == "demo — writing.md" || title == "demo — writing.clean.md")
 }
 
 private final class Watchdog {
@@ -74,10 +74,11 @@ private struct WindowRecorder {
             if args.count == 2 && args[1] == "--self-test" {
                 precondition(permittedWindow(bundle: "dev.zed.Zed", title: "demo — writing.md"))
                 precondition(permittedWindow(bundle: "dev.zed.Zed", title: "demo — trim-long.md"))
+                precondition(permittedWindow(bundle: "dev.zed.Zed", title: "demo — writing.clean.md"))
                 precondition(!permittedWindow(bundle: "com.apple.Safari", title: "demo — writing.md"))
                 precondition(!permittedWindow(bundle: "dev.zed.Zed", title: "personal — writing.md"))
                 precondition(!permittedWindow(bundle: "dev.zed.Zed", title: nil))
-                print("Window allowlist tests: 5 passed")
+                print("Window allowlist tests: 6 passed")
                 watchdog.cancel()
                 return
             }
@@ -93,7 +94,7 @@ private struct WindowRecorder {
                   stop.resolvingSymlinksInPath() == stop else {
                 throw CaptureError("Fresh regular output/stop paths required; existing paths and symlinks refused")
             }
-            // Only the two public demo titles are eligible; no unrelated window metadata is printed.
+            // Only the three exact public demo titles are eligible; no unrelated window metadata is printed.
             let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
             let windows = content.windows.filter {
                 permittedWindow(bundle: $0.owningApplication?.bundleIdentifier, title: $0.title)
