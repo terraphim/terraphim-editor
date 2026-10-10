@@ -264,7 +264,8 @@ class RecordingTests(unittest.TestCase):
         names = ['index.html', 'terraphim_editor.js', 'terraphim_editor_bg.wasm',
                  'terraphim-editor.min.js', 'terraphim-editor.min.css', 'js/rolegraph-worker.js',
                  'rolegraph/terraphim_rolegraph_browser.js',
-                 'rolegraph/terraphim_rolegraph_browser_bg.wasm', 'vendor/LICENSE']
+                 'rolegraph/terraphim_rolegraph_browser_bg.wasm', 'vendor/LICENSE',
+                 'vendor/fontawesome/6.5.2/webfonts/fa-solid-900.ttf']
         with tempfile.TemporaryDirectory() as tmp:
             delivery = pathlib.Path(tmp)
             assets = {}

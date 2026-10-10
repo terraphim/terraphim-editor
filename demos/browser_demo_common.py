@@ -106,7 +106,7 @@ def verified_assets(delivery, manifest):
         p = delivery / safe_name(name)
         if not p.resolve().is_relative_to(delivery.resolve()) or p.is_symlink():
             raise ValueError('Manifest symlink/escape refused')
-        if p.suffix not in {'.html', '.js', '.wasm', '.css', '.json', '.woff', '.woff2', '.svg'} and not p.name.lower().startswith(('license', 'licence')):
+        if p.suffix not in {'.html', '.js', '.wasm', '.css', '.json', '.woff', '.woff2', '.ttf', '.svg'} and not p.name.lower().startswith(('license', 'licence')):
             raise ValueError('Non-production manifest entry')
         if p.suffix == '.html' and name != 'index.html':
             raise ValueError('Test/example HTML refused')
