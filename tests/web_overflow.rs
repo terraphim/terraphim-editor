@@ -369,3 +369,33 @@ async fn test_panel_width_matches_the_video() {
         "opened panel is {real}px; the stylesheet gives {expected}px at {window_width}px"
     );
 }
+
+/// A native selected-text drag needs an accepted drag-over before Chrome emits drop.
+#[wasm_bindgen_test]
+async fn test_panel_drag_accepts_only_its_owned_plain_text_dragover() {
+    let _document = fresh_full_editor();
+    install_overflow_helpers("Public body.");
+    let r = run_steps(&[
+        r#"ed.openDocument(window.__teSrc);
+        ed.chrome.setMode('write-on');
+        const ov=ed.overflow;
+        ov.open();
+        teOv.type(ov.area,'Public note.');
+        ov.area.setSelectionRange(0,12);
+        const transfer=new DataTransfer();
+        transfer.setData('text/plain','Public note.');
+        ov.area.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:transfer}));
+        const over=new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:transfer});
+        s.root.dispatchEvent(over);
+        if (!over.defaultPrevented) out.push('owned plain text drag was not accepted');
+        // This constructed event tests acceptance gating; the native driver
+        // separately proves a trusted copy and exact unchanged Overflow.
+        ov.area.dispatchEvent(new DragEvent('dragend',{bubbles:true,dataTransfer:transfer}));
+        const external=new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:transfer});
+        s.root.dispatchEvent(external);
+        if (external.defaultPrevented) out.push('unowned drag was captured');
+        if (s.getText()!=='Public body.') out.push('dragover rewrote body');
+        if (ov.text()!=='Public note.') out.push('dragover rewrote Overflow');"#,
+    ]).await;
+    assert!(r.is_empty(), "{r}");
+}

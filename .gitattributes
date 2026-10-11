@@ -1,0 +1,2 @@
+# Native output receipts retain exact CRLF bytes for hash verification.
+docs/verification/output-fixes-20261011/vscode-*.md -text whitespace=cr-at-eol

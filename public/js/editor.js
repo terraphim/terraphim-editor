@@ -42,6 +42,7 @@ class EditorSurface {
     this.composing = false;
     this.programmatic = false;
     this.pendingSource = null;
+    this.historyOwner = options.historyOwner || null;
     this.history = [];
     this.historyIndex = -1;
     this.historyLimit = options.historyLimit || 500;
@@ -468,6 +469,7 @@ class EditorSurface {
       source: source || last.source,
       edits: group.flatMap((entry) => entry.edits),
     };
+    if (group.some((entry) => entry.ghostHistory || entry.edits.some((step) => step.ghost))) merged.ghostHistory = true;
     this.history.splice(first, count, merged);
     this.historyIndex = first;
     return true;
@@ -496,16 +498,22 @@ class EditorSurface {
   }
 
   canUndo() {
+    if (this.historyOwner) return true;
     return this.historyIndex > 0;
   }
 
   canRedo() {
+    if (this.historyOwner) return true;
     return this.historyIndex < this.history.length - 1;
   }
 
   undo() {
+    if (this.historyOwner) { this.historyOwner.undo(); return true; }
     if (!this.canUndo()) return false;
     const undone = this.history[this.historyIndex];
+    if (undone.ghostHistory || (undone.edits && undone.edits.some((step) => step.ghost))) {
+      return this.replayGhostHistory(this.historyIndex - 1, 'undo', undone.edits);
+    }
     this.historyIndex -= 1;
     const steps = undone.edits ? undone.edits.slice().reverse().map(EditorSurface.invertStep) : null;
     this.restore(this.history[this.historyIndex], 'undo', steps);
@@ -513,11 +521,29 @@ class EditorSurface {
   }
 
   redo() {
+    if (this.historyOwner) { this.historyOwner.redo(); return true; }
     if (!this.canRedo()) return false;
+    const next = this.history[this.historyIndex + 1];
+    if (next.ghostHistory || (next.edits && next.edits.some((step) => step.ghost))) {
+      return this.replayGhostHistory(this.historyIndex + 1, 'redo', next.edits);
+    }
     this.historyIndex += 1;
     const entry = this.history[this.historyIndex];
     this.restore(entry, 'redo', entry.edits);
     return true;
+  }
+
+  /** Ghost groups never enter legacy restore/diff or best-effort listeners. */
+  replayGhostHistory(index, source, steps) {
+    if (!this.ghostHistoryAdapter) return false;
+    try {
+      if (source === 'undo' && Array.isArray(steps)) steps = steps.slice().reverse().map(EditorSurface.invertStep);
+      this.ghostHistoryAdapter.replayGhostHistory(index, source, steps);
+      return true;
+    } catch (error) {
+      this.ghostHistoryAdapter.ghostHistoryNotice(error);
+      return false;
+    }
   }
 
   /** Focus the surface, restoring the last known selection. */
@@ -782,6 +808,7 @@ class EditorSurface {
     if (step && edit.move) step.move = edit.move;
     if (step && edit.swap) step.swap = edit.swap;
     if (step && edit.overflow) step.overflow = edit.overflow;
+    if (step && edit.ghost) step.ghost = edit.ghost;
     const entry = {
       text: this.text,
       start: sel ? sel.start : this.text.length,
@@ -790,11 +817,12 @@ class EditorSurface {
       time: now,
       edits: step ? [step] : null,
     };
+    if (step && edit.ghost) entry.ghostHistory = true;
     // #10: an alternatives-panel step always gets its own entry, even when
     // the text is unchanged (adding, editing, moving or removing an inactive
     // alternative changes only the annotations), and never coalesces.
-    if (step && edit.alt) {
-      step.alt = edit.alt;
+    if (step && (edit.alt || edit.ghost)) {
+      if (edit.alt) step.alt = edit.alt;
       this.history.length = this.historyIndex + 1;
       this.history.push(entry);
       if (this.history.length > this.historyLimit) this.history.shift();
@@ -815,6 +843,7 @@ class EditorSurface {
       top &&
       this.historyIndex > 0 &&
       (source === 'typing' || source === 'delete') &&
+      !top.ghostHistory && !(top.edits && top.edits.some((step) => step.ghost)) &&
       top.source === source &&
       now - top.time < this.coalesceMs;
     if (coalesce) {
@@ -1165,12 +1194,13 @@ class EditorSurface {
 
   /** The step that undoes `step` ({ start, deletedText, insertedText }). */
   static invertStep(step) {
-    const inverse = { start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
+    const inverse = { ...step, start: step.start, deletedText: step.insertedText, insertedText: step.deletedText };
     // #10: undoing a panel step restores the span as it was before.
-    if (step.alt) inverse.alt = { span: step.alt.span, before: step.alt.after, after: step.alt.before };
-    if (step.move) inverse.move = EditorSurface.invertMove(step.move);
-    if (step.swap) inverse.swap = { span: step.swap.span, from: step.swap.to, to: step.swap.from };
-    if (step.overflow) inverse.overflow = { before: step.overflow.after, after: step.overflow.before };
+    if (step.alt) inverse.alt = { ...step.alt, span: step.alt.span, before: step.alt.after, after: step.alt.before };
+    if (step.move) inverse.move = { ...step.move, ...EditorSurface.invertMove(step.move) };
+    if (step.swap) inverse.swap = { ...step.swap, span: step.swap.span, from: step.swap.to, to: step.swap.from };
+    if (step.overflow) inverse.overflow = { ...step.overflow, before: step.overflow.after, after: step.overflow.before };
+    if (step.ghost) inverse.ghost = { ...step.ghost, change: step.ghost.change, undo: typeof step.ghost.undo === 'boolean' ? !step.ghost.undo : step.ghost.undo };
     return inverse;
   }
 
@@ -1194,6 +1224,7 @@ class EditorSurface {
   static appendStep(steps, next, before) {
     const last = steps[steps.length - 1];
     if (!last) return [next];
+    if ([last, next].some((step) => step.ghost || step.alt || step.move || step.swap || step.overflow)) return [...steps, next];
     const lastEnd = last.start + last.insertedText.length;
     const nextEnd = next.start + next.deletedText.length;
     if (next.start > lastEnd || nextEnd < last.start) return [...steps, next];
@@ -1232,6 +1263,7 @@ class EditorSurface {
       if (step.move) edit.move = step.move;
       if (step.swap) edit.swap = step.swap;
       if (step.overflow) edit.overflow = step.overflow;
+      if (step.ghost) edit.ghost = step.ghost;
       out.push({ edit, text: t });
     }
     return t === expected ? out : null;
@@ -1384,6 +1416,8 @@ class MarkdownEditor {
     // Set-aside spans and ghosts in the model, as last reported.
     this.setAsideCount = 0;
     this.suppressModelSync = false;
+    this.graphClient = null;
+    this.graphAttachment = null;
   }
 
   /**
@@ -1399,6 +1433,13 @@ class MarkdownEditor {
   destroy() {
     if (this.destroyed) return [];
     this.destroyed = true;
+    this.detachGraphDocument();
+    // Older modules still support ordinary editor teardown without this export.
+    if (this.graphRoleListenerApi) {
+      this.graphRoleListenerApi.kg_set_role_change_listener(undefined);
+      this.graphRoleListenerApi = null;
+    }
+    if (this.graphClient) this.graphClient.destroy();
     // The alternatives panel (issue #10) tears itself down when the editor's
     // signal aborts, so take its drafts first.
     const altDrafts = this.altPanel ? this.altPanel.destroy() || [] : [];
@@ -1462,8 +1503,9 @@ class MarkdownEditor {
       return;
     }
 
-    this.surface = new EditorSurface(this.input);
+    this.surface = new EditorSurface(this.input, { historyOwner: this.config.historyOwner });
     this.connectDocumentModel();
+    this.observeRolePublications();
 
     this.setupShortcuts();
     this.setupHelpDialog();
@@ -1520,7 +1562,7 @@ class MarkdownEditor {
 
     // #76 #73 Save, open, autosave drafts and the Markdown export view
     // (public/js/persistence.js): last, so it sees the chrome and panels.
-    if (typeof window.TePersistence === 'function') {
+    if (!this.config.hostManaged && typeof window.TePersistence === 'function') {
       this.persistence = new window.TePersistence(this, { signal: this.abortController.signal });
     }
   }
@@ -1768,6 +1810,239 @@ class MarkdownEditor {
     return api;
   }
 
+  // Cohort C: synchronous, acknowledged native checkpoints. These adapters
+  // never align/resync a refused transaction and never serialize model clones.
+  ghostHistoryApi() {
+    if (this.destroyed || this.surface.destroyed) throw new Error('Ghost history is unavailable after editor destruction');
+    if (this.ghostHistoryConflict) throw new Error('Ghost history conflict: explicitly reopen the document to recover');
+    if (this.ghostHistoryActive) throw new Error('A ghost history transaction is already active');
+    const api = this.requireDocumentApi();
+    for (const name of ['begin_trim_ghost_transaction', 'begin_document_history_replay',
+      'finish_document_history_transaction', 'abort_document_history_transaction']) {
+      if (typeof api[name] !== 'function') throw new Error(`Missing native checkpoint API: ${name}`);
+    }
+    return api;
+  }
+
+  ghostHistoryNotice(error) {
+    const message = error && (error.message || error.error) || String(error);
+    this.showWarning(`Ghost history refused: ${message}`, 'ghost-history');
+  }
+
+  ghostHistoryRole(api) {
+    return typeof api.kg_role_snapshot_json === 'function' ? api.kg_role_snapshot_json() : null;
+  }
+
+  ghostHistoryCheckpoint(api) {
+    const s = this.surface;
+    return {
+      history: structuredClone(s.history), historyIndex: s.historyIndex, historyLimit: s.historyLimit,
+      text: s.text, selection: { ...(s.readSelection() || s.lastSelection) },
+      lastSelection: { ...s.lastSelection }, decorations: structuredClone(s.decorations),
+      nextDecorationId: s.nextDecorationId, pendingHint: s.pendingHint, pendingSource: s.pendingSource,
+      nodes: Array.from(s.root.childNodes), role: this.ghostHistoryRole(api),
+      layers: this.decorations ? new Map(Array.from(this.decorations.layers, ([name, items]) => [name, structuredClone(items)])) : null,
+      registryPending: this.decorations && this.decorations.pending,
+      ghosts: this.ghosts ? {ghosts: structuredClone(this.ghosts.ghosts), modelGhosts: this.ghosts.modelGhosts,
+        count: this.ghosts.count, refreshCount:this.ghosts.refreshCount} : null,
+    };
+  }
+
+  restoreGhostHistoryCheckpoint(saved, api) {
+    const s = this.surface;
+    const roleChanged = this.ghostHistoryRole(api) !== saved.role;
+    Object.assign(s, {history:saved.history, historyIndex:saved.historyIndex, historyLimit:saved.historyLimit,
+      text:saved.text, lastSelection:saved.lastSelection, decorations:saved.decorations,
+      nextDecorationId:saved.nextDecorationId, pendingHint:saved.pendingHint, pendingSource:saved.pendingSource});
+    if (saved.layers) {
+      // B's separately retired fades are authoritative, not transaction-owned.
+      const retired = this.decorations.layers.get('lab-trim');
+      this.decorations.layers = saved.layers;
+      this.decorations.pending = saved.registryPending;
+      if (roleChanged) this.decorations.layers.set('lab-trim', retired || []);
+    }
+    if (saved.ghosts) Object.assign(this.ghosts, saved.ghosts);
+    if (roleChanged) {
+      s.decorations = s.decorations.filter((item) => !String(item.id).startsWith('lab-trim:'));
+      s.render(); // do not resurrect DOM fades from the old role
+    } else s.root.replaceChildren(...saved.nodes);
+    s.setSelectionOffsets(saved.selection.start, saved.selection.end, saved.selection.direction);
+    s.lastSelection = saved.lastSelection;
+  }
+
+  static ghostAcknowledgement(value, token, field) {
+    if (!value || value.ok !== true || value[field] !== true || value.token !== token) {
+      throw new Error(`Native ${field} acknowledgement is missing or invalid`);
+    }
+  }
+
+  runGhostHistoryTransaction(api, begin, prepare) {
+    const saved = this.ghostHistoryCheckpoint(api);
+    let started;
+    let returned = false;
+    this.ghostHistoryActive = true;
+    try {
+      started = begin();
+      returned = true;
+      if (started === null) return null;
+      if (!started || started.ok !== true || typeof started.token !== 'string' || !started.token) {
+        throw new Error('Native begin acknowledgement is invalid');
+      }
+      prepare(started, saved);
+      if (api.document_body() !== this.surface.getText()) throw new Error('Tentative surface/native body mismatch');
+      MarkdownEditor.ghostAcknowledgement(api.finish_document_history_transaction(started.token), started.token, 'finalized');
+      return started;
+    } catch (error) {
+      if (started && typeof started.token === 'string') {
+        let retired = false;
+        try {
+          MarkdownEditor.ghostAcknowledgement(api.abort_document_history_transaction(started.token), started.token, 'rolledBack');
+          retired = true;
+          this.restoreGhostHistoryCheckpoint(saved, api);
+        } catch (abortError) {
+          this.ghostHistoryConflict = {token:retired ? null : started.token, nativeRetired:retired};
+          throw new Error(`Ghost history conflict; ${retired ? 'native rollback acknowledged but surface restoration failed' : 'rollback not acknowledged'}. Explicitly reopen to recover. ${abortError.error || abortError.message || abortError}`);
+        }
+      } else if (returned) {
+        // Invalid successful transport cannot be treated as an atomic refusal.
+        this.ghostHistoryConflict = {token:null, nativeRetired:false};
+      }
+      throw error;
+    } finally {
+      this.ghostHistoryActive = false;
+    }
+  }
+
+  paintGhostHistory(annotations, applied = []) {
+    const s = this.surface;
+    for (const {edit, text} of applied) {
+      s.decorations = EditorSurface.mapRanges(s.decorations, edit);
+      if (this.decorations) this.decorations.mapEdit(edit);
+      s.text = text;
+    }
+    if (this.ghosts) this.ghosts.refresh(annotations);
+    else if (this.decorations) this.decorations.set('ghosts', annotations.ghosts.map((g) => ({
+      id:g.id, start:g.anchor.start, end:g.anchor.end, className:'te-ghost',
+    })));
+    s.render();
+  }
+
+  commitTrimGhosts(level, kept) {
+    const s = this.surface;
+    if (!Number.isInteger(s.historyLimit) || s.historyLimit < 2 || s.historyIndex < 0) {
+      throw new Error('History capacity must retain a base state and one ghost operation');
+    }
+    const api = this.ghostHistoryApi();
+    if (!Array.isArray(kept) || kept.length > 4096) throw new Error('Too many kept indices');
+    const body = s.getText();
+    const keptJson = JSON.stringify(kept);
+    MarkdownEditor.ghostTransportBounds(body, body, keptJson);
+    s.ghostHistoryAdapter = this;
+    const result = this.runGhostHistoryTransaction(api,
+      () => api.begin_trim_ghost_transaction(body, level, keptJson), (started, saved) => {
+        if (!started.change || !started.annotations) throw new Error('Missing native ghost receipt/annotations');
+        s.record('trim-ghost', s.lastSelection, {start:0,deletedText:'',insertedText:'',
+          ghost:{change:structuredClone(started.change),undo:false}});
+        // Recording must really retain exactly one undoable receipt, including
+        // after eviction/redo truncation. Injected partial record failures abort.
+        const top = s.history[s.historyIndex];
+        if (s.text !== body || s.historyIndex < 1 || !top || top.text !== body || top.edits?.length !== 1 ||
+            JSON.stringify(top.edits[0].ghost) !== JSON.stringify({change:started.change,undo:false})) {
+          throw new Error('Ghost receipt was not retained as an undoable history step');
+        }
+        this.paintGhostHistory(started.annotations);
+        s.setSelectionOffsets(saved.selection.start, saved.selection.end, saved.selection.direction);
+      });
+    if (result) this.notifyGhostHistory('insertReplacementText');
+    return result;
+  }
+
+  static ghostTransportBounds(body, target, json) {
+    const encoder = new TextEncoder();
+    if ([body,target,json].some((text) => encoder.encode(text).length > 16 * 1024 * 1024)) {
+      throw new Error('Ghost transaction transport exceeds 16 MiB');
+    }
+  }
+
+  static nativeGhostHistoryOperations(body, steps, target) {
+    if (!Array.isArray(steps) || !steps.some((step) => step && step.ghost)) throw new Error('Ghost history metadata is missing; text-diff fallback is forbidden');
+    if (steps.length > 4096) throw new Error('Too many history operations');
+    const allowed = ['start','deletedText','insertedText','ghost','alt','move','swap','overflow'];
+    for (const step of steps) {
+      if (Object.keys(step).some((key) => !allowed.includes(key)) ||
+          ['ghost','alt','move','swap','overflow'].filter((key) => step[key]).length > 1 ||
+          !Number.isInteger(step.start) || step.start < 0 || step.start > 0xffffffff ||
+          typeof step.deletedText !== 'string' || typeof step.insertedText !== 'string') {
+        throw new Error('Invalid or conflicting ghost-group history metadata');
+      }
+      if (step.ghost && (typeof step.ghost.undo !== 'boolean' || step.deletedText || step.insertedText)) {
+        throw new Error('Ghost receipt must be annotation-only with an exact direction');
+      }
+      for (const [key, fields] of Object.entries({ghost:['change','undo'],alt:['span','before','after'],
+        move:['start','end','to'],swap:['span','from','to'],overflow:['before','after']})) {
+        if (step[key] && (Object.keys(step[key]).length !== fields.length ||
+            fields.some((field) => !Object.hasOwn(step[key], field)))) {
+          throw new Error('Unknown or missing ghost-group metadata fields');
+        }
+      }
+    }
+    const applied = EditorSurface.replaySteps(body, steps, target);
+    if (!applied) throw new Error('Ghost history exact steps do not reproduce the target body');
+    const operations = applied.map(({edit, text}) => {
+      if (edit.ghost) return {kind:'ghost',body:text,...edit.ghost};
+      const base = {body:text,start:edit.start,deletedText:edit.deletedText,insertedText:edit.insertedText};
+      if (edit.alt) return {...base,kind:'alt',span:edit.alt.span,target:edit.alt.after};
+      if (edit.move) return {...base,kind:'move',move:edit.move};
+      if (edit.swap) return {...base,kind:'swap',...edit.swap};
+      if (edit.overflow) return {...base,kind:'overflow',...edit.overflow};
+      return {...base,kind:'edit'};
+    });
+    const json = JSON.stringify(operations);
+    MarkdownEditor.ghostTransportBounds(body, target, json);
+    return {applied,json};
+  }
+
+  replayGhostHistory(index, source, steps) {
+    const api = this.ghostHistoryApi();
+    const s = this.surface;
+    const entry = s.history[index];
+    const {applied,json} = MarkdownEditor.nativeGhostHistoryOperations(s.getText(), steps, entry.text);
+    const result = this.runGhostHistoryTransaction(api,
+      () => api.begin_document_history_replay(s.getText(), entry.text, json), (started) => {
+        if (!started.annotations) throw new Error('Missing native history annotations');
+        s.historyIndex = index;
+        this.paintGhostHistory(started.annotations, applied);
+        const last = applied[applied.length - 1];
+        if (source === 'undo' && last) s.setSelectionOffsets(last.edit.start + last.edit.insertedText.length);
+        else s.setSelectionOffsets(entry.start, entry.end);
+      });
+    if (!result) throw new Error('Native mixed history begin returned an invalid no-op');
+    this.notifyGhostHistory(source === 'undo' ? 'historyUndo' : 'historyRedo', result.annotations);
+  }
+
+  notifyGhostHistory(inputType, annotations = null) {
+    // Native and registry already replayed every edit. Notify observers once
+    // without an edit envelope (so ranges are not mapped twice), only after
+    // final acknowledgement. Suppress only the duplicate model mirror.
+    try {
+      if (annotations) {
+        const count = annotations.setAside.spans.length + annotations.setAside.ghosts.length;
+        const notice = count === 0 ? null : `${count} ${count === 1 ? 'annotation (alternatives or ghost) is' : 'annotations (alternatives or ghosts) are'} out of step with the text. ${count === 1 ? 'It is' : 'They are'} preserved and saved with the document, and ${count === 1 ? 'is' : 'are'} re-attached if the text returns.`;
+        // Publish only the final acknowledged native aggregate, never a
+        // tentative edit outcome or a second resync. Reuse malformed policy.
+        this.reflectSetAside(count, notice);
+      }
+      const previous = this.suppressModelSync;
+      this.suppressModelSync = true;
+      try {
+        this.surface.emitChange(null, inputType === 'historyUndo' ? 'undo' : inputType === 'historyRedo' ? 'redo' : 'trim');
+      } finally { this.suppressModelSync = previous; }
+      if (this.indicators) this.indicators.flush();
+      this.surface.dispatchInput(inputType, null);
+    }
+    catch (error) { this.ghostHistoryNotice(error); }
+  }
+
   /** Subscribe the model to surface edits and align it with the surface. */
   connectDocumentModel() {
     const api = this.documentApi();
@@ -1777,6 +2052,10 @@ class MarkdownEditor {
 
   mirrorEdit(change) {
     if (this.suppressModelSync) return;
+    if (this.ghostHistoryConflict) {
+      this.ghostHistoryNotice(new Error('Explicitly reopen before mirroring edits after a ghost history conflict'));
+      return;
+    }
     const api = this.documentApi();
     if (!api) return;
     if (change.edit && change.edit.alt && typeof api.alt_restore === 'function') {
@@ -1977,7 +2256,8 @@ class MarkdownEditor {
       throw new Error('The WASM document API has no knowledge-graph support');
     }
     const summary = api.kg_load_thesaurus(typeof json === 'string' ? json : JSON.stringify(json));
-    if (this.indicators) this.indicators.flush();
+    if (!this.graphRoleListenerApi) this.syncGraphRole();
+    this.redrawRoleIndicators();
     return summary;
   }
 
@@ -1985,7 +2265,155 @@ class MarkdownEditor {
   clearThesaurus() {
     const api = this.documentApi();
     if (api && typeof api.kg_clear_thesaurus === 'function') api.kg_clear_thesaurus();
-    if (this.indicators) this.indicators.flush();
+    if (!this.graphRoleListenerApi) this.syncGraphRole();
+    this.redrawRoleIndicators();
+  }
+
+  /** Optional, lazy Worker graph service. Ordinary editing never needs it. */
+  get rolegraph() {
+    if (this.destroyed) throw new Error('The editor is destroyed');
+    if (this.graphClient) return this.graphClient;
+    if (typeof window.TeRoleGraphClient !== 'function') throw new Error('The graph client script is unavailable');
+    const api = this.requireDocumentApi();
+    for (const name of ['kg_role_snapshot_json', 'kg_prepare_role', 'kg_commit_prepared_role', 'kg_discard_prepared_role', 'kg_set_role_change_listener']) {
+      if (typeof api[name] !== 'function') throw new Error('The WASM module has no browser role coordination API');
+    }
+    this.observeRolePublications();
+    const options = Object.assign({}, this.config.rolegraph || {}, {
+      assetBase: this.config.rolegraphAssetBase || new URL('.', document.baseURI).href,
+      roleCoordinator: {
+        prepare: (text) => api.kg_prepare_role(text),
+        commit: (token) => {
+          // Check before publishing: activation must follow the authoritative generation.
+          const current = JSON.parse(api.kg_role_snapshot_json());
+          if (String(BigInt(current.generation) + 1n) !== this.graphClient.generation) {
+            throw new Error('Stale graph role publication');
+          }
+          let result;
+          // Only this synchronous commit is already activated in this Worker.
+          // External prepared commits, like legacy load/clear, must synchronize.
+          this.graphRoleCommitInProgress = true;
+          try { result = JSON.parse(api.kg_commit_prepared_role(token)); }
+          finally { this.graphRoleCommitInProgress = false; }
+          this.redrawRoleIndicators();
+          return result;
+        },
+        discard: (token) => api.kg_discard_prepared_role(token),
+      },
+      onStateChange: (state) => this.graphStateChanged(state),
+    });
+    const client = this.graphClient = new window.TeRoleGraphClient(options);
+    client.attachDocument = (options) => this.attachGraphDocument(options);
+    client.detachDocument = () => this.detachGraphDocument();
+    this.syncGraphRole();
+    return client;
+  }
+
+  /** One authoritative observer for ordinary KG and optional graph consumers. */
+  observeRolePublications() {
+    const api = this.documentApi();
+    if (!api || typeof api.kg_set_role_change_listener !== 'function' ||
+        typeof api.kg_role_snapshot_json !== 'function' || this.graphRoleListenerApi) return;
+    api.kg_set_role_change_listener(() => {
+      if (this.destroyed) return;
+      // Every successful publication reaches Lab, including coordinated commits.
+      // Event detail contains metadata only, never aliases or document text.
+      try {
+        const snapshot = JSON.parse(api.kg_role_snapshot_json());
+        this.root.dispatchEvent(new CustomEvent('te:role-change', {
+          bubbles: true,
+          detail: { editor: this, generation: snapshot.generation,
+            loaded: snapshot.loaded === true, protectionReady: snapshot.protectionReady === true },
+        }));
+      } catch (_) { /* Notification cannot undo authoritative publication. */ }
+      if (this.graphRoleCommitInProgress) return;
+      try { this.syncGraphRole(); } catch (_) { /* Rust also isolates observers. */ }
+    });
+    this.graphRoleListenerApi = api;
+  }
+
+  /** Notify only an already-requested graph; retain synchronous KG load/clear. */
+  syncGraphRole() {
+    if (!this.graphClient || this.destroyed) return;
+    const api = this.documentApi();
+    const snapshot = JSON.parse(api.kg_role_snapshot_json());
+    this.graphRoleSync = this.graphClient.syncRole(snapshot);
+    this.graphRoleSync.catch(() => {}); // State event reports failure; main KG stays valid.
+  }
+
+  /** Redraw is not part of role publication and cannot undo a successful commit. */
+  redrawRoleIndicators() {
+    try {
+      if (this.indicators) this.indicators.flush();
+    } catch (_) {
+      // Keep the main KG/Worker associated even if a renderer fails.
+      try {
+        if (this.root && !this.destroyed) this.root.dispatchEvent(new CustomEvent('te:rolegraph-error', {
+          bubbles: true, detail: { editor: this, code: 'render_failed' },
+        }));
+      } catch (_) { /* Reporting failure cannot change role commit semantics. */ }
+    }
+  }
+
+  graphStateChanged(state) {
+    if (!this.root || this.destroyed) return;
+    this.root.dataset.rolegraphState = state.state;
+    this.root.dispatchEvent(new CustomEvent('te:rolegraph-state', {
+      bubbles: true, detail: Object.assign({ editor: this }, state),
+    }));
+  }
+
+  /** Explicitly index original surface Markdown; never silently use clean export. */
+  attachGraphDocument({ id, indexSource = 'markdown' } = {}) {
+    if (typeof id !== 'string' || !id.trim() || indexSource !== 'markdown') {
+      return Promise.reject(new Error('Graph attachment requires an id and markdown source'));
+    }
+    const client = this.rolegraph;
+    this.detachGraphDocument();
+    const attachment = this.graphAttachment = { id, timer: null };
+    const index = () => {
+      if (this.destroyed || this.graphAttachment !== attachment) return;
+      clearTimeout(attachment.timer);
+      attachment.timer = setTimeout(() => {
+        if (this.destroyed || this.graphAttachment !== attachment || client.state !== 'ready' || !client.hasRole) return;
+        client.indexDocuments([{ id, title: id, body: this.surface.getText() }]).catch((error) => {
+          if (!this.destroyed && this.graphAttachment === attachment) {
+            this.root.dispatchEvent(new CustomEvent('te:rolegraph-error', {
+              bubbles: true, detail: { editor: this, code: error.code || 'worker_failed' },
+            }));
+          }
+        });
+      }, 120);
+    };
+    attachment.unsubscribe = this.surface.onChange(index);
+    attachment.unsubscribeState = client.onStateChange(({ state }) => { if (state === 'ready') index(); });
+    return (async () => {
+      // Follow the current lane, including a load/import that superseded editor sync.
+      // Only a superseded lane's failure is obsolete; current failures propagate.
+      let lane, epoch;
+      do {
+        lane = client.lifecycle; epoch = client.epoch;
+        try { await lane; } catch (error) { if (lane === client.lifecycle) throw error; }
+        if (this.destroyed || this.graphAttachment !== attachment) throw new Error('Graph attachment cancelled');
+      } while (lane !== client.lifecycle);
+      if (client.destroyed || epoch !== client.epoch || client.state !== 'ready' || !client.hasRole) {
+        throw new Error('Graph attachment requires a ready current role');
+      }
+      return client.indexDocuments([{ id, title: id, body: this.surface.getText() }]);
+    })().catch((error) => {
+      if (this.graphAttachment === attachment) this.detachGraphDocument();
+      throw error;
+    });
+  }
+
+  /** Detach without deleting a corpus entry or durable checkpoint. */
+  detachGraphDocument() {
+    const attachment = this.graphAttachment;
+    if (!attachment) return;
+    clearTimeout(attachment.timer);
+    if (attachment.unsubscribe) attachment.unsubscribe();
+    if (attachment.unsubscribeState) attachment.unsubscribeState();
+    this.graphAttachment = null;
   }
 
   /**
@@ -2262,6 +2690,11 @@ class MarkdownEditor {
 
   /** Make sure the model body is exactly the surface text before reading it. */
   alignDocumentModel(api) {
+    if (this.ghostHistoryConflict) throw new Error('Ghost history conflict: explicitly reopen before model alignment');
+    if (this.ghostHistoryActive) {
+      if (api.document_body() !== this.surface.getText()) throw new Error('Ghost transaction body conflict; implicit resync is forbidden');
+      return;
+    }
     // Text typed in the Overflow panel reaches the model before any read
     // (a no-op unless panel input is waiting for its debounce).
     if (this.overflow) this.overflow.flush();
@@ -2306,9 +2739,25 @@ class MarkdownEditor {
    */
   openDocument(source, name) {
     const api = this.requireDocumentApi();
+    if (this.ghostHistoryActive) throw new Error('Cannot reopen during an active ghost transaction');
+    if (this.ghostHistoryConflict && !this.ghostHistoryConflict.token && !this.ghostHistoryConflict.nativeRetired) {
+      throw new Error('Native recovery token unavailable; ghost history remains blocked');
+    }
     const key = typeof name === 'string' ? name : name && typeof name.name === 'string' ? name.name : null;
+    let opened;
+    if (this.ghostHistoryConflict && this.ghostHistoryConflict.token) {
+      if (typeof api.recover_document_history_transaction !== 'function') throw new Error('Native conflict recovery is unavailable');
+      const token = this.ghostHistoryConflict.token;
+      const recovered = api.recover_document_history_transaction(token, String(source));
+      MarkdownEditor.ghostAcknowledgement(recovered, token, 'recovered');
+      if (recovered.rolledBack !== false || !recovered.opened) throw new Error('Invalid native recovery acknowledgement');
+      opened = recovered.opened;
+      this.ghostHistoryConflict = {token:null,nativeRetired:true}; // native retired; surface not yet canonical
+    } else opened = api.open_document(String(source));
+    if (this.ghostHistoryConflict && opened.kind === 'malformed') {
+      throw new Error('Recovery source has malformed annotations; ghost history remains blocked');
+    }
     if (key) this.documentKey = key;
-    const opened = api.open_document(String(source));
     this.suppressModelSync = true;
     try {
       this.surface.setText(opened.body, { source: 'open', selectStart: 0, selectEnd: 0 });
@@ -2331,6 +2780,7 @@ class MarkdownEditor {
     }
     this.setAsideCount = synced.changed ? synced.unresolved : opened.unresolved;
     this.showWarning(warning, kind);
+    this.ghostHistoryConflict = null; // only after explicit canonical reopen/reset
     if (this.chrome && typeof this.chrome.documentChanged === 'function') {
       try {
         this.chrome.documentChanged();
@@ -2369,6 +2819,14 @@ class MarkdownEditor {
     const api = this.requireDocumentApi();
     this.alignDocumentModel(api);
     return api.export_document();
+  }
+
+  /** Portable graph of committed document alternatives, using Rust synonym types. */
+  exportKnowledgeGraph() {
+    const api = this.requireDocumentApi();
+    this.alignDocumentModel(api);
+    if (typeof api.export_knowledge_graph !== 'function') throw new Error('Knowledge graph export needs an updated editor build.');
+    return api.export_knowledge_graph();
   }
 
   /** { words, chars } of the body, ghosted text included. */
@@ -2632,9 +3090,19 @@ const initEditor = () => {
 };
 
 // Make sure config is loaded before initializing
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   if (window.TE_EMBED || !document.getElementById('app')) return;
   if (window.EditorConfig) {
+    try {
+      const ready = window.TerraphimRuntimeAssets?.ready;
+      if (!ready || typeof ready.then !== 'function') {
+        throw new Error('Local runtime asset readiness is unavailable');
+      }
+      await ready;
+    } catch (error) {
+      console.error('Editor startup failed: local runtime assets unavailable', error);
+      return;
+    }
     initEditor();
   } else {
     console.error('Editor configuration not found. Make sure config.js is loaded before editor.js');

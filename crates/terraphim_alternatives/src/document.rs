@@ -99,6 +99,9 @@ pub struct Document {
 /// returned.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum EditError {
+    /// No fresh identity can be allocated safely.
+    #[error("annotation ID allocation exhausted or collided")]
+    IdAllocation,
     /// No span has this id.
     #[error("no span with id {0:?}")]
     UnknownSpan(String),
@@ -206,7 +209,7 @@ impl Document {
             return Err(EditError::Overlap(other.id.clone()));
         }
         let text = self.body[byte_start..byte_end].to_string();
-        let id = self.next_id('s');
+        let id = self.next_id('s')?;
         let anchor = self.anchor_over(start, end, byte_start, byte_end);
         self.annotations.spans.push(Span {
             id: id.clone(),
@@ -355,6 +358,20 @@ impl Document {
     /// id of the merged ghost that starts first, or a fresh `g<n>` id when
     /// nothing was merged.
     pub fn ghost(&mut self, start: usize, end: usize) -> Result<String, EditError> {
+        let id = self.next_id('g');
+        self.ghost_with_allocator(start, end, || id)
+    }
+
+    /// Ordinary merge semantics, with a session-owned checked allocator. The
+    /// hook is called only when no merged ghost supplies the identity, and
+    /// before any model mutation. The allocated ID must be absent from all
+    /// live annotations; historical reservations belong to the caller.
+    pub fn ghost_with_allocator(
+        &mut self,
+        start: usize,
+        end: usize,
+        allocate: impl FnOnce() -> Result<String, EditError>,
+    ) -> Result<String, EditError> {
         let (byte_start, byte_end) = self.byte_range(start, end)?;
         if byte_start == byte_end {
             return Err(EditError::InvalidRange { start, end });
@@ -375,7 +392,7 @@ impl Document {
         let new_end = merged.iter().map(|g| g.anchor.end).fold(end, usize::max);
         let id = match merged.iter().min_by_key(|g| g.anchor.start) {
             Some(first) => first.id.clone(),
-            None => self.next_id('g'),
+            None => self.checked_allocated_id(allocate()?)?,
         };
         self.annotations.ghosts = kept;
         let ghost = self.ghost_over(id.clone(), new_start, new_end);
@@ -398,6 +415,18 @@ impl Document {
     /// the id, the right part gets a fresh one). Returns whether any ghost
     /// changed.
     pub fn revive(&mut self, start: usize, end: usize) -> Result<bool, EditError> {
+        let id = self.next_id('g');
+        self.revive_with_allocator(start, end, || id)
+    }
+
+    /// Revive with a checked session allocator for the right-hand split.
+    /// Allocation is preflighted before removing or trimming any ghost.
+    pub fn revive_with_allocator(
+        &mut self,
+        start: usize,
+        end: usize,
+        allocate: impl FnOnce() -> Result<String, EditError>,
+    ) -> Result<bool, EditError> {
         let (byte_start, byte_end) = self.byte_range(start, end)?;
         if byte_start == byte_end {
             return Err(EditError::InvalidRange { start, end });
@@ -414,6 +443,14 @@ impl Document {
         if affected.is_empty() {
             return Ok(false);
         }
+        let split_id = if affected
+            .iter()
+            .any(|g| g.anchor.start < start && end < g.anchor.end)
+        {
+            Some(self.checked_allocated_id(allocate()?)?)
+        } else {
+            None
+        };
         let mut pieces: Vec<(Option<String>, usize, usize)> = Vec::new();
         let mut kept = Vec::new();
         for ghost in std::mem::take(&mut self.annotations.ghosts) {
@@ -432,7 +469,7 @@ impl Document {
         }
         self.annotations.ghosts = kept;
         for (id, piece_start, piece_end) in pieces {
-            let id = id.unwrap_or_else(|| self.next_id('g'));
+            let id = id.unwrap_or_else(|| split_id.clone().expect("split preflighted"));
             let ghost = self.ghost_over(id, piece_start, piece_end);
             self.annotations.ghosts.push(ghost);
         }
@@ -494,13 +531,28 @@ impl Document {
             .collect();
         ranges.sort_unstable();
 
+        // Exclusion is a union only in this export projection. Persistent
+        // adjacent ghosts keep their independent identities and receipts.
+        let mut exclusions: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
+        for (start, end) in ranges {
+            if let Some(last) = exclusions.last_mut().filter(|last| start <= last.1) {
+                last.1 = last.1.max(end);
+            } else {
+                exclusions.push((start, end));
+            }
+        }
+
         let mut out = String::with_capacity(self.body.len());
         let mut cursor = 0;
-        for (start, end) in ranges {
-            if start < cursor {
+        for (start, end) in exclusions {
+            if end <= cursor {
                 continue;
             }
-            out.push_str(&self.body[cursor..start]);
+            // Tidying may already have consumed a whitespace prefix of this
+            // exclusion across a whitespace-only gap. Still drop its suffix.
+            if cursor < start {
+                out.push_str(&self.body[cursor..start]);
+            }
             cursor = end;
             let rest = &self.body[cursor..];
             let next = rest.chars().next();
@@ -770,13 +822,49 @@ impl Document {
 
     /// A fresh id `<prefix><n>`, one past the highest number used with that
     /// prefix across spans and ghosts, so it is unique in both.
-    fn next_id(&self, prefix: char) -> String {
+    fn next_id(&self, prefix: char) -> Result<String, EditError> {
         let max = self
             .ids()
             .filter_map(|id| id.strip_prefix(prefix)?.parse::<u64>().ok())
             .max()
             .unwrap_or(0);
-        format!("{prefix}{}", max + 1)
+        let next = max.checked_add(1).ok_or(EditError::IdAllocation)?;
+        Ok(format!("{prefix}{next}"))
+    }
+
+    fn checked_allocated_id(&self, id: String) -> Result<String, EditError> {
+        if id.is_empty() || self.ids().any(|live| live == id) {
+            return Err(EditError::IdAllocation);
+        }
+        Ok(id)
+    }
+
+    /// Creates a separate ghost, even when adjacent to another. Overlaps
+    /// are refused; spans remain independent. Uses the same checked allocation
+    /// seam as merge/split operations, without exposing anchor internals.
+    pub fn create_independent_ghost(
+        &mut self,
+        start: usize,
+        end: usize,
+        allocate: impl FnOnce() -> Result<String, EditError>,
+    ) -> Result<String, EditError> {
+        let (a, b) = self.byte_range(start, end)?;
+        if a == b {
+            return Err(EditError::InvalidRange { start, end });
+        }
+        if let Some(g) = self
+            .annotations
+            .ghosts
+            .iter()
+            .find(|g| g.anchor.overlaps(start, end))
+        {
+            return Err(EditError::Overlap(g.id.clone()));
+        }
+        let id = self.checked_allocated_id(allocate()?)?;
+        let ghost = self.ghost_over(id.clone(), start, end);
+        self.annotations.ghosts.push(ghost);
+        self.sort_ghosts();
+        Ok(id)
     }
 
     /// A ghost over `start..end` whose text is read from the body. Callers

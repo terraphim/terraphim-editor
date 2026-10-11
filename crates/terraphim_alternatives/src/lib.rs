@@ -80,6 +80,8 @@ mod document;
 mod model;
 pub mod offset;
 pub mod reanchor;
+mod synonyms;
+pub mod text;
 pub mod words;
 
 pub use article::{Article, article_for, preceding_article, respell};
@@ -90,3 +92,4 @@ pub use model::{
 };
 pub use offset::{byte_to_utf16, utf16_len, utf16_to_byte};
 pub use reanchor::{ReanchorReport, Unresolved, UnresolvedGhost, UnresolvedReason};
+pub use synonyms::{SynonymExportError, SynonymGroup};

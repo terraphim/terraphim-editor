@@ -1,0 +1,24 @@
+   Compiling terraphim-editor v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor)
+    Finished `test` profile [optimized] target(s) in 0.72s
+     Running tests/trim_unicode_normalization.rs (/private/tmp/terraphim-editor-publication-build/debug/deps/trim_unicode_normalization-f2512068636baf52)
+
+running 1 test
+test sigma_equivalence_is_independent_of_context_outside_the_match ... FAILED
+
+failures:
+
+---- sigma_equivalence_is_independent_of_context_outside_the_match stdout ----
+
+thread 'sigma_equivalence_is_independent_of_context_outside_the_match' (42658106) panicked at tests/trim_unicode_normalization.rs:124:9:
+assertion `left == right` failed: ΟΣ·Α
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    sigma_equivalence_is_independent_of_context_outside_the_match
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test trim_unicode_normalization`

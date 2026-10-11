@@ -128,7 +128,10 @@ pub use rolegraph::{
     CONCEPT_CONNECTIVITY_WEIGHT, CONCEPT_PRESENCE, CONCEPT_RANK_WEIGHT, RoleGraphData,
     RoleKnowledge, edge_id,
 };
-pub use trim::{Cut, CutId, Tier, TrimLevel, TrimPlan, TrimStatus, trim_plan};
+pub use terraphim_automata as automata;
+pub use terraphim_types as types;
+pub use text::Folded;
+pub use trim::{Cut, CutId, Tier, TrimLevel, TrimPlan, TrimStatus, trim_plan, trim_plan_excluding};
 pub use weak::{T_FUNCTION, T_LOW_CENTRALITY, T_REDUNDANCY, W_GRAPH, W_STYLE};
 
 /// Errors from building a [`LabConfig`]. Marking itself never fails.

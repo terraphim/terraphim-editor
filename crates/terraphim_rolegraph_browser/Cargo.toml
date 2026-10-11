@@ -1,0 +1,18 @@
+[package]
+name = "terraphim_rolegraph_browser"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ahash = "0.8"
+terraphim_rolegraph = { version = "=2.0.1", registry = "terraphim", default-features = false, features = ["kg-integration"] }
+terraphim_automata = { version = "=2.1.0", registry = "terraphim", default-features = false }
+terraphim_types = { version = "=1.22.3", registry = "terraphim", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+thiserror = "2"
+wasm-bindgen = "=0.2.129"

@@ -102,22 +102,18 @@ let teAltPanelInstances = 0;
 const TE_ALT_KINDS = ['word', 'sentence', 'paragraph'];
 const TE_ALT_KIND_LABEL = { word: 'Word', sentence: 'Sentence', paragraph: 'Paragraph' };
 
-/** Text helpers (pure, exposed for tests as TeAlternativesPanel.text). */
+/** Shared Rust targeting adapters, exposed for tests as TeAlternativesPanel.text. */
 const teAltText = {
-  isWordChar(ch) {
-    return !!ch && /[\p{L}\p{N}_'’-]/u.test(ch);
+  binding(api, name) {
+    if (!api || typeof api[name] !== 'function') {
+      throw new Error('Shared text WASM bindings are unavailable. Reload with the current editor WASM package.');
+    }
+    return api[name];
   },
 
   /** [start, end) of the word at `pos`, or null. */
-  wordAt(text, pos) {
-    let p = pos;
-    if (!teAltText.isWordChar(text[p]) && teAltText.isWordChar(text[p - 1])) p -= 1;
-    if (!teAltText.isWordChar(text[p])) return null;
-    let s = p;
-    let e = p + 1;
-    while (s > 0 && teAltText.isWordChar(text[s - 1])) s -= 1;
-    while (e < text.length && teAltText.isWordChar(text[e])) e += 1;
-    return { start: s, end: e };
+  wordAt(text, pos, api = window.wasmBindings) {
+    return teAltText.rangeFor('word', text, pos, api);
   },
 
   /** Trim whitespace and a leading Markdown heading or list marker. */
@@ -131,43 +127,21 @@ const teAltText = {
     return e > s ? { start: s, end: e } : null;
   },
 
-  /** The paragraph (between blank lines) around `pos`, trimmed. */
-  paragraphAt(text, pos) {
-    const before = text.lastIndexOf('\n\n', Math.max(0, pos - 1));
-    const s = before === -1 ? 0 : before + 2;
-    const after = text.indexOf('\n\n', pos);
-    const e = after === -1 ? text.length : after;
-    return teAltText.trimRange(text, s, e);
+  /** The mdast prose paragraph/title around `pos`, in original UTF-16. */
+  paragraphAt(text, pos, api = window.wasmBindings) {
+    return teAltText.rangeFor('paragraph', text, pos, api);
   },
 
   /**
-   * The sentence around `pos`: within its paragraph, ending after `.`, `!`
-   * or `?` (plus closing quotes or brackets) followed by whitespace, or at a
-   * line break. A heading line is one sentence (R-2.3: headlines are
-   * sentence-level spans).
+   * Shared Unicode/Markdown sentence policy, not a second JavaScript parser.
    */
-  sentenceAt(text, pos) {
-    const para = teAltText.paragraphAt(text, pos);
-    if (!para) return null;
-    const p = Math.min(Math.max(pos, para.start), para.end);
-    let s = para.start;
-    const re = /[.!?]+["')\]”’]*(?=\s|$)|\n/g;
-    re.lastIndex = para.start;
-    let m;
-    while ((m = re.exec(text)) && m.index < para.end) {
-      const end = m.index + m[0].length;
-      if (end > p || (end === p && m[0] !== '\n' && p === para.end)) {
-        return teAltText.trimRange(text, s, m[0] === '\n' ? m.index : end);
-      }
-      s = end;
-    }
-    return teAltText.trimRange(text, s, para.end);
+  sentenceAt(text, pos, api = window.wasmBindings) {
+    return teAltText.rangeFor('sentence', text, pos, api);
   },
 
-  rangeFor(kind, text, pos) {
-    if (kind === 'paragraph') return teAltText.paragraphAt(text, pos);
-    if (kind === 'sentence') return teAltText.sentenceAt(text, pos);
-    return teAltText.wordAt(text, pos);
+  rangeFor(kind, text, pos, api = window.wasmBindings) {
+    if (!Number.isInteger(pos) || pos < 0 || pos > text.length) throw new Error('Caret offset is outside the current text.');
+    return teAltText.binding(api, 'text_range_at')(text, pos, kind);
   },
 
   /**
@@ -175,12 +149,8 @@ const teAltText = {
    * phrase of up to four words without closing punctuation -> word;
    * anything else -> sentence.
    */
-  inferKind(text) {
-    const t = text.trim();
-    if (/\n/.test(t) || /[.!?]["')\]]*\s+\S/.test(t)) return 'paragraph';
-    const words = t.split(/\s+/).filter(Boolean).length;
-    if (words <= 4 && !/[.!?]["')\]]*$/.test(t)) return 'word';
-    return 'sentence';
+  inferKind(text, api = window.wasmBindings) {
+    return teAltText.binding(api, 'text_infer_kind')(text);
   },
 };
 
@@ -494,6 +464,19 @@ class TeAlternativesPanel {
 
   /** Work out what to show for `where` (see open()). */
   resolve(where) {
+    try {
+      this.resolveTarget(where);
+    } catch (error) {
+      this.targetingRefusal(error);
+    }
+  }
+
+  targetingRefusal(error) {
+    this.span = null;
+    this.target = { message: String(error && error.message ? error.message : error) };
+  }
+
+  resolveTarget(where) {
     const spans = this.liveSpans();
     const text = this.surface.getText();
     if (where && where.spanId) {
@@ -509,7 +492,9 @@ class TeAlternativesPanel {
         this.showSpan(inside);
         return;
       }
-      const kind = where.kind || teAltText.inferKind(text.slice(where.start, where.end));
+      if (where.start < 0 || where.end > text.length) throw new Error('Selected range is outside the current text.');
+      const kind = where.kind || teAltText.inferKind(text.slice(where.start, where.end), this.editor.documentApi());
+      if (!TE_ALT_KINDS.includes(kind)) throw new Error(`Unknown text kind: ${kind}`);
       this.tab = kind;
       this.reference = where.start;
       this.setPending(spans, kind, where.start, where.end);
@@ -528,13 +513,19 @@ class TeAlternativesPanel {
   /** Resolve the current tab around this.reference. */
   resolveTab(spans = this.liveSpans()) {
     const text = this.surface.getText();
-    const pos = Math.min(this.reference, text.length);
+    const pos = this.reference;
     const at = TeAlternativesPanel.spanAround(spans, pos, pos);
     if (at && at.kind === this.tab) {
       this.showSpan(at);
       return;
     }
-    const range = teAltText.rangeFor(this.tab, text, pos);
+    let range;
+    try {
+      range = teAltText.rangeFor(this.tab, text, pos, this.editor.documentApi());
+    } catch (error) {
+      this.targetingRefusal(error);
+      return;
+    }
     if (!range) {
       this.target = { message: `Put the caret in a ${this.tab} to list its alternatives.` };
       this.span = null;
@@ -567,6 +558,15 @@ class TeAlternativesPanel {
 
   /** Re-read the model for the current target (after edits, undo, redo). */
   refresh() {
+    try {
+      this.refreshTarget();
+    } catch (error) {
+      this.targetingRefusal(error);
+      this.render();
+    }
+  }
+
+  refreshTarget() {
     if (!this.opened || this.destroyed) return;
     const spans = this.liveSpans();
     const t = this.target || {};
@@ -579,7 +579,7 @@ class TeAlternativesPanel {
         // offer its text again as a pending span of the same kind.
         const text = this.surface.getText();
         const { kind, start } = this.lastSpan;
-        const range = teAltText.rangeFor(kind, text, Math.min(start, text.length));
+        const range = teAltText.rangeFor(kind, text, Math.min(start, text.length), this.editor.documentApi());
         this.tab = kind;
         if (range) this.setPending(spans, kind, range.start, range.end);
         else this.resolveTab(spans);
@@ -642,7 +642,7 @@ class TeAlternativesPanel {
   /** [{ text, source, active }] for the lines shown (pending: the original only). */
   lines() {
     if (this.span) {
-      return this.span.alts.map((a, i) => ({ text: a.text, source: a.source, active: i === this.span.active }));
+      return this.span.alts.map((a, i) => ({ text: a.text, source: a.source, model: a.model, active: i === this.span.active }));
     }
     if (this.target && this.target.pending) {
       return [{ text: this.target.pending.text, source: 'original', active: true }];
@@ -724,7 +724,9 @@ class TeAlternativesPanel {
     input.dataset.committed = line.text;
     input.spellcheck = false;
     input.setAttribute('autocomplete', 'off');
-    const who = line.source === 'ai' ? 'suggested by AI' : line.source === 'original' ? 'original, read-only' : 'written by you';
+    const who = line.source === 'ai'
+      ? (line.model === 'kg' ? 'knowledge graph synonym' : 'suggested by AI')
+      : line.source === 'original' ? 'original, read-only' : 'written by you';
     input.setAttribute('aria-label', `Alternative ${index + 1} of ${total}, ${who}${line.active ? ', active' : ''}`);
     if (index === 0) input.readOnly = true;
     li.append(glyph, input);

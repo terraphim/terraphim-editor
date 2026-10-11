@@ -1,0 +1,7 @@
+{
+  "result": "PASS",
+  "path": "/private/tmp/terraphim-vscode-native-proof-20261011/writing.clean.md",
+  "sha256": "0cfe09781de48df01b80fd7c2a6dd5be61ec829a4dd33c352382410b48de3512",
+  "actual": "Pass me a thumbtack.\n\nKeep this sentence.\n\nMove this paragraph to Overflow.\n\n",
+  "expected": "Pass me a thumbtack.\n\nKeep this sentence.\n\nMove this paragraph to Overflow.\n\n"
+}

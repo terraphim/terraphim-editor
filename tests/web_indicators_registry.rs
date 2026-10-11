@@ -26,6 +26,7 @@ fn test_registry_merges_named_layers_into_one_render() {
           const s = ed.surface;
           const reg = ed.decorations;
           s.setText('alpha beta gamma delta');
+          const initialNames = reg.names();
           s.setDecorations([{ id: 'direct', start: 0, end: 5, className: 'te-direct' }]);
           let renders = s.renderCount;
           if (!reg.set('ghosts', [{ id: 'g1', start: 3, end: 10, className: 'te-ghost' }])) out.push('set did not render');
@@ -45,7 +46,10 @@ fn test_registry_merges_named_layers_into_one_render() {
             reg.set('menu', [{ start: 17, end: 22, className: 'te-menu', attributes: { 'data-x': '1' } }]);
           });
           if (s.renderCount !== renders + 1) out.push('batch renders ' + (s.renderCount - renders));
-          if (reg.names().join(',') !== 'ghosts,menu') out.push('names ' + reg.names().join(','));
+          // Existing layers (including plain-mode headings) retain their
+          // registration and merge order even when their current items are empty.
+          const expectedNames = Array.from(new Set([...initialNames, 'ghosts', 'menu']));
+          if (JSON.stringify(reg.names()) !== JSON.stringify(expectedNames)) out.push('names ' + reg.names().join(','));
           const menu = s.root.querySelector('.te-menu');
           if (!menu || menu.getAttribute('data-x') !== '1' || menu.getAttribute('data-te-decoration') !== 'menu:0') out.push('menu span');
           // Live offsets follow edits; clear() removes only that layer.

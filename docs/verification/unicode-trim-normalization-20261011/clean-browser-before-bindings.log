@@ -1,0 +1,197 @@
+[INFO]: 🎯  Checking for the Wasm target...
+   Compiling terraphim-editor v0.1.0 (/private/tmp/terraphim-editor-publication-source-20261011)
+    Finished `dev` profile [optimized] target(s) in 11.20s
+    Finished `test` profile [optimized] target(s) in 0.20s
+     Running tests/web_trim_protection.rs (/private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_trim_protection-9fc5bc7c9a34c77a.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:50723/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 3 tests
+test raw_publication_and_coordinated_commit_invalidate_without_graph_startup ... FAIL
+test no_role_and_empty_role_fail_closed_but_unicode_role_is_supported ... FAIL
+test every_occurrence_protected_and_unicode_document_plans_without_mutation ... FAIL
+
+failures:
+
+---- raw_publication_and_coordinated_commit_invalidate_without_graph_startup output ----
+    error output:
+        wasm-bindgen: imported JS function that was not marked as `catch` threw an error: Cannot read properties of null (reading 'roleGeneration')
+        
+        Stack:
+        TypeError: Cannot read properties of null (reading 'roleGeneration')
+            at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:5:34)
+            at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:20:4)
+            at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:20:61)
+            at eval (<anonymous>)
+            at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48)
+            at http://127.0.0.1:50722/wasm-bindgen-test:1691:25
+            at logError (http://127.0.0.1:50722/wasm-bindgen-test:2516:18)
+            at __wbg_js_eval_5e23203346f9f13b (http://127.0.0.1:50722/wasm-bindgen-test:1690:61)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.web_trim_protection[b6b072029bbfca2b]::support::js_eval::__wbg_js_eval_5e23203346f9f13b externref shim (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4283]:0x21c2ad)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.web_trim_protection[b6b072029bbfca2b]::support::js_string (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2752]:0x1f9411)
+    
+    JS exception that was thrown:
+        TypeError: Cannot read properties of null (reading 'roleGeneration')
+            at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:5:34)
+            at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:20:4)
+            at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:20:61)
+            at eval (<anonymous>)
+            at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48)
+            at http://127.0.0.1:50722/wasm-bindgen-test:1691:25
+            at logError (http://127.0.0.1:50722/wasm-bindgen-test:2516:18)
+            at __wbg_js_eval_5e23203346f9f13b (http://127.0.0.1:50722/wasm-bindgen-test:1690:61)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.web_trim_protection[b6b072029bbfca2b]::support::js_eval::__wbg_js_eval_5e23203346f9f13b externref shim (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4283]:0x21c2ad)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.web_trim_protection[b6b072029bbfca2b]::support::js_string (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2752]:0x1f9411)
+
+---- no_role_and_empty_role_fail_closed_but_unicode_role_is_supported output ----
+    error output:
+        panicked at tests/web_trim_protection.rs:12:5:
+        assertion `left == right` failed
+          left: "step 1: unicode-role levels disabled"
+         right: ""
+        
+        Stack:
+        
+        Error
+            at http://127.0.0.1:50722/wasm-bindgen-test:1713:25
+            at logError (http://127.0.0.1:50722/wasm-bindgen-test:2516:18)
+            at __wbg_new_227d7c05414eb861 (http://127.0.0.1:50722/wasm-bindgen-test:1712:57)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4389]:0x21cc39)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[1018]:0x15de6f)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4885]:0x21e8c3)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2419]:0x1e723f)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3156]:0x209325)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4844]:0x21e750)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3982]:0x219a55)
+        
+        
+    
+    JS exception that was thrown:
+        RuntimeError: unreachable
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::__rust_abort (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4982]:0x21eb84)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::__rust_start_panic (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4938]:0x21ea70)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_panic (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4579]:0x21d9c0)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2419]:0x1e7297)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3156]:0x209325)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4844]:0x21e750)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3982]:0x219a55)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.core[608f92abc48d28da]::panicking::panic_fmt (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3705]:0x215e58)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.core[608f92abc48d28da]::panicking::assert_failed_inner (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2252]:0x1dc62b)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.core[608f92abc48d28da]::panicking::assert_failed::<alloc[cb2b8d99256f33df]::string::String, &str> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3754]:0x216a56)
+
+---- every_occurrence_protected_and_unicode_document_plans_without_mutation output ----
+    error output:
+        panicked at tests/web_trim_protection.rs:56:5:
+        assertion `left == right` failed
+          left: "step 1: missing safe level; missing safe level; missing safe level; missing safe level; unicode document failed to plan; unicode document levels disabled"
+         right: ""
+        
+        Stack:
+        
+        Error
+            at http://127.0.0.1:50722/wasm-bindgen-test:1713:25
+            at logError (http://127.0.0.1:50722/wasm-bindgen-test:2516:18)
+            at __wbg_new_227d7c05414eb861 (http://127.0.0.1:50722/wasm-bindgen-test:1712:57)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4389]:0x21cc39)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[1018]:0x15de6f)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4885]:0x21e8c3)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2419]:0x1e723f)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3156]:0x209325)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4844]:0x21e750)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3982]:0x219a55)
+        
+        
+    
+    JS exception that was thrown:
+        RuntimeError: unreachable
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::__rust_abort (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4982]:0x21eb84)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::__rust_start_panic (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4938]:0x21ea70)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_panic (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4579]:0x21d9c0)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2419]:0x1e7297)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3156]:0x209325)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4844]:0x21e750)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3982]:0x219a55)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.core[608f92abc48d28da]::panicking::panic_fmt (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3705]:0x215e58)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.core[608f92abc48d28da]::panicking::assert_failed_inner (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2252]:0x1dc62b)
+            at web_trim_protection-9fc5bc7c9a34c77a.wasm.core[608f92abc48d28da]::panicking::assert_failed::<alloc[cb2b8d99256f33df]::string::String, &str> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3754]:0x216a56)
+
+failures:
+
+    raw_publication_and_coordinated_commit_invalidate_without_graph_startup
+    no_role_and_empty_role_fail_closed_but_unicode_role_is_supported
+    every_occurrence_protected_and_unicode_document_plans_without_mutation
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 filtered out; finished in 5.26s
+
+console output:
+    using deprecated parameters for the initialization function; pass a single object instead
+    Invoking test: raw_publication_and_coordinated_commit_invalidate_without_graph_startup
+    wasm-bindgen: imported JS function that was not marked as `catch` threw an error:
+    Cannot read properties of null (reading 'roleGeneration')
+    
+    Stack:
+    TypeError: Cannot read properties of null (reading 'roleGeneration')
+        at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:5:34)
+        at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:20:4)
+        at eval (eval at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48), <anonymous>:20:61)
+        at eval (<anonymous>)
+        at js_eval (http://127.0.0.1:50722/snippets/terraphim-editor-4393c013e21836c2/inline0.js:2:48)
+        at http://127.0.0.1:50722/wasm-bindgen-test:1691:25
+        at logError (http://127.0.0.1:50722/wasm-bindgen-test:2516:18)
+        at __wbg_js_eval_5e23203346f9f13b (http://127.0.0.1:50722/wasm-bindgen-test:1690:61)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.web_trim_protection[b6b072029bbfca2b]::support::js_eval::__wbg_js_eval_5e23203346f9f13b externref shim (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4283]:0x21c2ad)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.web_trim_protection[b6b072029bbfca2b]::support::js_string (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2752]:0x1f9411)
+    Invoking test: no_role_and_empty_role_fail_closed_but_unicode_role_is_supported
+    panicked at tests/web_trim_protection.rs:12:5:
+    assertion `left == right` failed
+      left: "step 1: unicode-role levels disabled"
+     right: ""
+    
+    Stack:
+    
+    Error
+        at http://127.0.0.1:50722/wasm-bindgen-test:1713:25
+        at logError (http://127.0.0.1:50722/wasm-bindgen-test:2516:18)
+        at __wbg_new_227d7c05414eb861 (http://127.0.0.1:50722/wasm-bindgen-test:1712:57)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4389]:0x21cc39)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[1018]:0x15de6f)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4885]:0x21e8c3)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2419]:0x1e723f)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3156]:0x209325)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4844]:0x21e750)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3982]:0x219a55)
+    
+    
+    Invoking test: every_occurrence_protected_and_unicode_document_plans_without_mutation
+    panicked at tests/web_trim_protection.rs:56:5:
+    assertion `left == right` failed
+      left: "step 1: missing safe level; missing safe level; missing safe level; missing safe level; unicode document failed to plan; unicode document levels disabled"
+     right: ""
+    
+    Stack:
+    
+    Error
+        at http://127.0.0.1:50722/wasm-bindgen-test:1713:25
+        at logError (http://127.0.0.1:50722/wasm-bindgen-test:2516:18)
+        at __wbg_new_227d7c05414eb861 (http://127.0.0.1:50722/wasm-bindgen-test:1712:57)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4389]:0x21cc39)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[1018]:0x15de6f)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4885]:0x21e8c3)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[2419]:0x1e723f)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3156]:0x209325)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[4844]:0x21e750)
+        at web_trim_protection-9fc5bc7c9a34c77a.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:50722/wasm-bindgen-test_bg.wasm:wasm-function[3982]:0x219a55)
+    
+    
+Error: some tests failed
+error: test failed, to rerun pass `--test web_trim_protection`
+
+Caused by:
+  process didn't exit successfully: `/Users/alex/.cargo/bin/wasm-bindgen-test-runner /private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_trim_protection-9fc5bc7c9a34c77a.wasm` (exit status: 1)
+note: test exited abnormally; to see the full output pass --no-capture to the harness.
+Error: Running Wasm tests with wasm-bindgen-test failed
+Caused by: Running Wasm tests with wasm-bindgen-test failed
+Caused by: failed to execute `cargo test`: exited with exit status: 1
+  full command: cd "/private/tmp/terraphim-editor-publication-source-20261011" && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="/Users/alex/.cargo/bin/wasm-bindgen-test-runner" CHROMEDRIVER="/Users/alex/Library/Caches/.wasm-pack/chromedriver-bd0f73ace8fc0e68/chromedriver" WASM_BINDGEN_TEST_ONLY_WEB="1" "cargo" "test" "--target" "wasm32-unknown-unknown" "--test" "web_trim_unicode" "--test" "web_trim_protection"

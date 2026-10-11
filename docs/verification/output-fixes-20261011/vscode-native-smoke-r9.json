@@ -1,0 +1,10 @@
+{
+  "qualification": "SMOKE ONLY; webview interaction/all 41 unverified",
+  "checks": [
+    "existing extension activates",
+    "custom editor command registered",
+    "native document preserves exact Unicode CRLF",
+    "registered custom provider opens without changing source"
+  ],
+  "result": "PASS"
+}

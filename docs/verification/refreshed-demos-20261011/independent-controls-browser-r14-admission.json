@@ -1,0 +1,28 @@
+{
+  "scope": "Independent exact-byte admission for local browser recording; no runtime/all41 acceptance",
+  "sourceHead": "affee07596f9856df60afe1dc2848ef988534d60",
+  "manifest": "/private/tmp/terraphim-controls-browser-manifest-r14-20261011.json",
+  "manifestSha256": "1c0c80819b482a93e8cbbadd38ce579c452ba462f6d22973401cfd23e3cb7ca3",
+  "assetRoot": "/private/tmp/terraphim-editor-controls-browser-r14-20261011",
+  "assets": 129,
+  "allHashesMatch": true,
+  "staticImportClosure": "PASS",
+  "trackedSnapshotFilesMatchHEAD": 461,
+  "untrackedSnapshotPaths": [
+    "demos/out/ retained recordings"
+  ],
+  "deltaAgainstR4": {
+    "changed": [
+      "index.html",
+      "terraphim-editor.min.css"
+    ],
+    "added": [
+      "write-on-6a8fd9449457dd74.css"
+    ],
+    "removed": [
+      "write-on-d8d89c7405e4744a.css"
+    ]
+  },
+  "exactDeltaVerified": "Only chrome group z-index20\u219221 and comment, bundled CSS counterpart, indexCSS fingerprint and matchingSHA384integrity. Allother asset records unchanged.",
+  "providerSaveReview": "False-save throws\u2192reject source correct; real refused/cancelled save regression absent. Native successfulSave doesnotqualify falsebranch."
+}

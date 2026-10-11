@@ -77,6 +77,9 @@ pub fn setup() {
             click(el) {{ el.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true }})); }},
           }};
           const ed = window.__teEditor;
+          // Explicit public local-role prerequisite, deliberately absent from
+          // this fixture: eligible protection preserves the original engine oracle.
+          ed.loadThesaurus('{{"name":"trim-public-test","data":{{"unmentioned":{{"id":1,"nterm":"unmentioned"}}}}}}');
           ed.openDocument(teTrim.fixture, 'trim-test-' + Math.random());
           ed.chrome.setMode('write-on');
           return ed.lab && ed.lab.trim ? 'ok' : 'no trim';

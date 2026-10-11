@@ -1,0 +1,13 @@
+# Synonym sharing verification — 2026-10-11
+
+User-approved story: create Risk/Concern alternatives, swap words, share actual document graph, search the exported brief by Concern, compare synthesis off/on.
+
+Shared-crate export tests:4pass, including separate IDs, collision refusal, exact typed comma/multiline alternatives and direct-parse stale attachment. Session tests:2pass for swap/reopen/snapshot restoration/detachment and malformed blocks. Existing110library tests and4actual RoleGraph registration tests pass. Strict native Clippy passed. WASM/worker release build succeeded; Trunk emits an existing deprecated address-field warning.
+
+Actual Chrome interaction test tests/browser/synonym-sharing.cjs: add through visible panel, native Ctrl+Z/Ctrl+Shift+Z removes/restores real graph membership, swap both ways, reopen annotated source, inspect actual synonyms:: Risk, Concern, download graph JSON and clean Markdown, assert graph identity and absence of literal Concern in saved prose. PASS. This browser history result is distinct from the Rust snapshot-restoration test.
+
+Actual CLI binary from clients commit f0410af (including the reviewed synthesis-status repair): old role0matches; downloaded new graph3actual excerpts; --answer produces an answer from the same3chunks. A first one-risk draft was correctly refused as insufficient evidence; the authored final example contains3distinct risk/decision pairs. The first answer overstated plans as completed actions. A regression-first prompt fix preserved modality and action status, with76grep library tests and strict library Clippy passing (pre-existing manifest warnings remain). Two fresh actual answers were independently reviewed against all3exact source citations and correctly retained unknown implementation status. Rejected output is retained outside publication.
+
+Source review found and resolved a shared-crate stale-anchor export issue. No remaining source blocker reported. Zed fork untouched; this work does not establish all41host requirements.
+
+The new80-second video records editor4050ac9, actual graph/text downloads and fresh same-input CLI executions. The final capture has zero page errors and exact downloaded-file identities. British female Emma narration uses its natural rate; all8takes and the final mux transcribe with1.0word similarity, no clipping, full MP4 decode succeeds. The video and portable outputs are packaged under the website `static/demos/synonym-search/`, with an immutable file manifest. Website14tests pass; all132source and Zola output assets verify against the independent manifest. Deployment verification is separate from these local results.

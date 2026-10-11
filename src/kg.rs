@@ -54,7 +54,9 @@ use wasm_bindgen::prelude::*;
 use crate::document::{
     with_session, AltChange, DocumentSession, EditOutcome, SwapEdit, SwapOutcome,
 };
+use crate::protection::ConceptProtection;
 use crate::providers::{append_from_providers, AlternativesProvider, ProviderContext, Suggestion};
+use terraphim_lab::types::Thesaurus;
 
 /// The model name recorded on alternatives appended from the KG (R-8.6).
 pub const KG_MODEL: &str = "kg";
@@ -87,6 +89,9 @@ pub enum KgError {
     /// The document model refused the change.
     #[error("{0}")]
     Model(String),
+    /// A role preparation token is stale, missing, or the limit was exceeded.
+    #[error("{0}")]
+    Preparation(String),
 }
 
 /// A loaded thesaurus: the engine plus a generation counter so cached
@@ -96,8 +101,25 @@ struct Kg {
     engine: KgEngine,
     name: Option<String>,
     generation: u64,
+    /// Original text stays opaque at the JavaScript boundary (u64 IDs).
+    thesaurus_json: Option<String>,
+    thesaurus: Option<Thesaurus>,
+    protection: Option<Result<ConceptProtection, String>>,
+    prepared: Option<PreparedRole>,
+    next_preparation: u64,
     /// The last [`kg_spans`] result, keyed by body and live spans.
     cache: Option<Cached>,
+}
+
+#[derive(Debug)]
+struct PreparedRole {
+    token: String,
+    base_generation: u64,
+    engine: KgEngine,
+    name: Option<String>,
+    thesaurus_json: String,
+    thesaurus: Thesaurus,
+    protection: Result<ConceptProtection, String>,
 }
 
 #[derive(Debug)]
@@ -110,6 +132,24 @@ struct Cached {
 
 thread_local! {
     static KG: RefCell<Kg> = RefCell::new(Kg::default());
+}
+
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static ROLE_CHANGE_LISTENER: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
+}
+
+/// Browser observers run after publication and after releasing all KG borrows.
+/// Their exceptions cannot undo a successful authoritative role mutation.
+fn notify_role_change() {
+    crate::lab::invalidate_trim_plan();
+    #[cfg(target_arch = "wasm32")]
+    {
+        let listener = ROLE_CHANGE_LISTENER.with(|cell| cell.borrow().clone());
+        if let Some(listener) = listener {
+            let _ = listener.call0(&JsValue::NULL);
+        }
+    }
 }
 
 /// A derived knowledge-graph span (see the module docs).
@@ -161,11 +201,25 @@ fn with_kg<R>(f: impl FnOnce(&mut Kg) -> R) -> R {
     KG.with(|cell| f(&mut cell.borrow_mut()))
 }
 
+/// Load the bundled standalone-page role using the existing Terraphim KG engine.
+///
+/// The same JSON bytes are shipped as `roles/default.json` for local CLI search.
+/// Embedding hosts choose their own role and do not call this initializer.
+///
+/// # Errors
+/// Returns an error if the bundled role cannot be parsed or published.
+pub fn load_default_thesaurus() -> Result<Value, KgError> {
+    load_thesaurus(include_str!("../public/roles/default.json"))
+}
+
 /// Loads a thesaurus (the JSON written by terraphim's thesaurus builders),
 /// replacing the current one. On error the previous thesaurus stays.
 /// Returns `{ name, concepts, skipped }`.
 pub fn load_thesaurus(json: &str) -> Result<Value, KgError> {
     let engine = KgEngine::from_json(json).map_err(|e| KgError::Thesaurus(e.to_string()))?;
+    let thesaurus: Thesaurus =
+        serde_json::from_str(json).map_err(|e| KgError::Thesaurus(e.to_string()))?;
+    let protection = ConceptProtection::from_thesaurus(&thesaurus);
     let name = serde_json::from_str::<Value>(json)
         .ok()
         .and_then(|v| v.get("name").and_then(Value::as_str).map(str::to_owned));
@@ -174,22 +228,159 @@ pub fn load_thesaurus(json: &str) -> Result<Value, KgError> {
         "concepts": engine.concept_index().len(),
         "skipped": engine.skipped_patterns(),
     });
-    with_kg(|kg| {
+    with_kg(|kg| -> Result<(), KgError> {
+        let generation = kg
+            .generation
+            .checked_add(1)
+            .ok_or_else(|| KgError::Preparation("role generation exhausted".into()))?;
         kg.engine = engine;
         kg.name = name;
-        kg.generation += 1;
+        kg.generation = generation;
+        kg.thesaurus_json = Some(json.to_owned());
+        kg.thesaurus = Some(thesaurus);
+        kg.protection = Some(protection);
+        kg.prepared = None;
         kg.cache = None;
-    });
+        Ok(())
+    })?;
+    notify_role_change();
     Ok(summary)
 }
 
 /// Forgets the thesaurus: no KG spans until the next load.
 pub fn clear_thesaurus() {
-    with_kg(|kg| {
+    try_clear_thesaurus().expect("role generation exhausted; previous role retained");
+}
+
+fn try_clear_thesaurus() -> Result<(), KgError> {
+    with_kg(|kg| -> Result<(), KgError> {
+        let generation = kg
+            .generation
+            .checked_add(1)
+            .ok_or_else(|| KgError::Preparation("role generation exhausted".into()))?;
         kg.engine = KgEngine::empty();
         kg.name = None;
-        kg.generation += 1;
+        kg.generation = generation;
+        kg.thesaurus_json = None;
+        kg.thesaurus = None;
+        kg.protection = None;
+        kg.prepared = None;
         kg.cache = None;
+        Ok(())
+    })?;
+    notify_role_change();
+    Ok(())
+}
+
+/// Immutable authoritative capability snapshot; no ranked/UI matching involved.
+pub(crate) struct ActiveRoleSnapshot {
+    pub generation: u64,
+    pub protection: Result<ConceptProtection, String>,
+}
+
+pub(crate) fn active_role_snapshot() -> Option<ActiveRoleSnapshot> {
+    with_kg(|kg| {
+        kg.thesaurus.as_ref().map(|_| ActiveRoleSnapshot {
+            generation: kg.generation,
+            protection: kg
+                .protection
+                .clone()
+                .expect("loaded role has a capability result"),
+        })
+    })
+}
+
+/// Active role metadata with an exact decimal generation and opaque JSON text.
+/// Reading the snapshot does not publish a role or change document annotations.
+pub fn role_snapshot_json() -> String {
+    with_kg(|kg| {
+        json!({
+            "generation": kg.generation.to_string(),
+            "name": kg.name,
+            "thesaurusText": kg.thesaurus_json,
+            "loaded": kg.thesaurus.is_some(),
+            "protectionReady": kg.protection.as_ref().is_some_and(Result::is_ok),
+            "protectionError": kg.protection.as_ref().and_then(|p| p.as_ref().err()),
+        })
+        .to_string()
+    })
+}
+
+/// Validate a role without publishing it. Only the latest preparation is kept.
+/// Normal load/clear invalidates it, so late Worker responses cannot resurrect a role.
+pub fn prepare_thesaurus(json: &str) -> Result<String, KgError> {
+    if json.len() > 16 * 1024 * 1024 {
+        return Err(KgError::Preparation(
+            "role exceeds the 16 MiB import limit".into(),
+        ));
+    }
+    let engine = KgEngine::from_json(json).map_err(|e| KgError::Thesaurus(e.to_string()))?;
+    let thesaurus: Thesaurus =
+        serde_json::from_str(json).map_err(|e| KgError::Thesaurus(e.to_string()))?;
+    let protection = ConceptProtection::from_thesaurus(&thesaurus);
+    let name = serde_json::from_str::<Value>(json)
+        .ok()
+        .and_then(|v| v.get("name").and_then(Value::as_str).map(str::to_owned));
+    with_kg(|kg| {
+        let next = kg
+            .next_preparation
+            .checked_add(1)
+            .ok_or_else(|| KgError::Preparation("role preparation counter exhausted".into()))?;
+        kg.next_preparation = next;
+        let token = format!("role-{next}");
+        kg.prepared = Some(PreparedRole {
+            token: token.clone(),
+            base_generation: kg.generation,
+            engine,
+            name,
+            thesaurus_json: json.to_owned(),
+            thesaurus,
+            protection,
+        });
+        Ok(token)
+    })
+}
+
+/// Atomically publish a previously validated role, refusing stale tokens.
+pub fn commit_prepared_thesaurus(token: &str) -> Result<Value, KgError> {
+    let summary = with_kg(|kg| {
+        let prepared = kg
+            .prepared
+            .as_ref()
+            .ok_or_else(|| KgError::Preparation("no prepared role".into()))?;
+        if prepared.token != token || prepared.base_generation != kg.generation {
+            return Err(KgError::Preparation("stale role preparation".into()));
+        }
+        let generation = kg
+            .generation
+            .checked_add(1)
+            .ok_or_else(|| KgError::Preparation("role generation exhausted".into()))?;
+        let prepared = kg.prepared.take().expect("validated preparation");
+        let summary = json!({
+            "name": prepared.name,
+            "concepts": prepared.engine.concept_index().len(),
+            "skipped": prepared.engine.skipped_patterns(),
+            "generation": generation.to_string(),
+        });
+        kg.engine = prepared.engine;
+        kg.name = prepared.name;
+        kg.thesaurus_json = Some(prepared.thesaurus_json);
+        kg.thesaurus = Some(prepared.thesaurus);
+        kg.protection = Some(prepared.protection);
+        kg.generation = generation;
+        kg.cache = None;
+        Ok(summary)
+    })?;
+    notify_role_change();
+    Ok(summary)
+}
+
+/// Discard this preparation without discarding a newer role or active state.
+pub fn discard_prepared_thesaurus(token: &str) {
+    with_kg(|kg| {
+        if kg.prepared.as_ref().is_some_and(|p| p.token == token) {
+            kg.prepared = None;
+        }
     });
 }
 
@@ -538,6 +729,17 @@ pub fn thesaurus_name() -> Option<String> {
 // JavaScript exports (`window.wasmBindings.<name>` in the Trunk build).
 // ---------------------------------------------------------------------------
 
+/// Replace the single opt-in browser role observer; `None` unregisters it.
+/// Called synchronously, with no arguments, only after successful load, clear,
+/// or prepared commit. Read the authoritative snapshot inside the callback.
+#[wasm_bindgen]
+pub fn kg_set_role_change_listener(listener: Option<js_sys::Function>) {
+    #[cfg(target_arch = "wasm32")]
+    ROLE_CHANGE_LISTENER.with(|cell| *cell.borrow_mut() = listener);
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = listener;
+}
+
 pub(crate) fn to_js(value: &Value) -> JsValue {
     js_sys::JSON::parse(&value.to_string()).unwrap_or(JsValue::NULL)
 }
@@ -555,7 +757,35 @@ pub fn kg_load_thesaurus(json: &str) -> Result<JsValue, JsValue> {
 /// Forgets the thesaurus: no KG spans until the next load.
 #[wasm_bindgen]
 pub fn kg_clear_thesaurus() {
-    clear_thesaurus();
+    if let Err(error) = try_clear_thesaurus() {
+        wasm_bindgen::throw_str(&error.to_string());
+    }
+}
+
+/// Read-only active role snapshot for the Worker coordinator.
+#[wasm_bindgen]
+pub fn kg_role_snapshot_json() -> String {
+    role_snapshot_json()
+}
+
+/// Prepare local role JSON without replacing the current KG engine.
+#[wasm_bindgen]
+pub fn kg_prepare_role(json: &str) -> Result<String, JsValue> {
+    prepare_thesaurus(json).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Publish a prepared role and return its summary as JSON text.
+#[wasm_bindgen]
+pub fn kg_commit_prepared_role(token: &str) -> Result<String, JsValue> {
+    commit_prepared_thesaurus(token)
+        .map(|v| v.to_string())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Discard a prepared role; active state is untouched.
+#[wasm_bindgen]
+pub fn kg_discard_prepared_role(token: &str) {
+    discard_prepared_thesaurus(token);
 }
 
 /// The derived KG spans of the open document (see [`KgSpan::to_json`]).
@@ -598,5 +828,85 @@ pub fn alt_kg_append(start: u32, end: u32) -> Result<JsValue, JsValue> {
         Ok(Some(change)) => Ok(to_js(&change.to_json())),
         Ok(None) => Ok(JsValue::NULL),
         Err(error) => Err(JsValue::from_str(&error.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod protection_tests {
+    use super::*;
+    const ROLE: &str = r#"{"name":"public","data":{"x":{"id":1,"nterm":"x"}}}"#;
+
+    #[test]
+    fn bundled_default_role_registers_real_synonyms_and_uses_shipped_bytes() {
+        clear_thesaurus();
+        let summary = load_default_thesaurus().unwrap();
+        assert_eq!(summary["name"], "terraphim-editor-default");
+        assert_eq!(
+            thesaurus_name().as_deref(),
+            Some("terraphim-editor-default")
+        );
+        let mut session = DocumentSession::new();
+        session.open("Decision: launch the pilot.");
+        let spans = kg_spans(&session);
+        let decision = spans
+            .iter()
+            .find(|span| span.term.text == "Decision")
+            .unwrap();
+        assert!(decision.alts.iter().any(|term| term == "Judgment"));
+        assert!(decision.alts.iter().any(|term| term == "Choice"));
+        with_kg(|kg| {
+            assert_eq!(
+                kg.thesaurus_json.as_deref(),
+                Some(include_str!("../public/roles/default.json"))
+            )
+        });
+        clear_thesaurus();
+    }
+
+    #[test]
+    fn generation_exhaustion_refuses_all_publication_paths_without_mutation() {
+        load_thesaurus(ROLE).unwrap();
+        with_kg(|kg| kg.generation = u64::MAX);
+        let token = prepare_thesaurus(ROLE).unwrap();
+        let before = role_snapshot_json();
+        assert!(load_thesaurus(ROLE)
+            .unwrap_err()
+            .to_string()
+            .contains("exhausted"));
+        assert_eq!(role_snapshot_json(), before);
+        assert!(try_clear_thesaurus()
+            .unwrap_err()
+            .to_string()
+            .contains("exhausted"));
+        assert_eq!(role_snapshot_json(), before);
+        assert!(commit_prepared_thesaurus(&token)
+            .unwrap_err()
+            .to_string()
+            .contains("exhausted"));
+        assert_eq!(role_snapshot_json(), before);
+        with_kg(|kg| *kg = Kg::default());
+    }
+
+    #[test]
+    fn unicode_roles_are_trim_capable_but_empty_roles_are_not() {
+        let unicode = r#"{"name":"public","data":{"Straße":{"id":1,"nterm":"strasse"}}}"#;
+        let token = prepare_thesaurus(unicode).unwrap();
+        commit_prepared_thesaurus(&token).unwrap();
+        let snapshot: Value = serde_json::from_str(&role_snapshot_json()).unwrap();
+        assert_eq!(snapshot["protectionReady"], true);
+        let protection = active_role_snapshot().unwrap().protection.unwrap();
+        assert_eq!(protection.occurrences("STRAẞE").unwrap().len(), 1);
+        {
+            let role = r#"{"name":"public","data":{}}"#;
+            let token = prepare_thesaurus(role).unwrap();
+            commit_prepared_thesaurus(&token).unwrap();
+            let snapshot: Value = serde_json::from_str(&role_snapshot_json()).unwrap();
+            assert_eq!(snapshot["loaded"], true);
+            assert_eq!(snapshot["protectionReady"], false);
+            assert!(snapshot["protectionError"].is_string());
+            assert!(active_role_snapshot().unwrap().protection.is_err());
+        }
+        load_thesaurus(ROLE).unwrap();
+        assert!(active_role_snapshot().unwrap().protection.is_ok());
     }
 }

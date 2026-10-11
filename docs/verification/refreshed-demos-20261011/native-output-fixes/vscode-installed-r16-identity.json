@@ -1,0 +1,9 @@
+{
+  "result": "PASS",
+  "runtimeFilesIdenticalToInstalled": 140,
+  "vsixSha256": "0e868e3701e77d2ac6cf3ecf63d4eec30712d2f256699f3fe6e65999dff7e1ab",
+  "installedDirectory": "/Users/alex/.vscode/extensions/applied-knowledge-systems.terraphim-it-0.0.4",
+  "sourceAdapterSha256": "bc3049a1a9455f4e012619e768177db52fca3a0d2992e34866cdd122a285fbd9",
+  "assetManifestSha256": "3c6de9ee6158f3729dae38233ff0745f009a2adc272d62cf5c994c106ad1b6bc",
+  "qualification": "Installed runtime bytes match reviewed r16 package; native capture r14/r16 stages are separately identified."
+}

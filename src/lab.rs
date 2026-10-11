@@ -25,16 +25,38 @@
 
 use std::cell::{OnceCell, RefCell};
 
+use crate::protection::ConceptProtection;
 use serde_json::{json, Value};
+#[cfg(test)]
+use terraphim_lab::trim_plan;
 use terraphim_lab::{
-    make_cuts, mark, trim_plan, CutId, LabAction, LabConfig, LabError, TrimLevel, TrimPlan,
+    make_cuts, mark, Cut, CutId, LabAction, LabConfig, LabError, TrimLevel, TrimPlan,
 };
 use wasm_bindgen::prelude::*;
 
 thread_local! {
     static CONFIG: OnceCell<Result<LabConfig, LabError>> = const { OnceCell::new() };
     // Trim (issue #15): the last plan and the exact body it was computed for.
-    static TRIM: RefCell<Option<(String, TrimPlan)>> = const { RefCell::new(None) };
+    static TRIM: RefCell<Option<ProtectedPlan>> = const { RefCell::new(None) };
+}
+
+struct ProtectedPlan {
+    body: String,
+    generation: u64,
+    plan: TrimPlan,
+    protection: ConceptProtection,
+    count: usize,
+}
+
+/// Authoritative role publication invalidates cached plans before JS callbacks.
+pub(crate) fn invalidate_trim_plan() {
+    TRIM.with(|cell| *cell.borrow_mut() = None);
+}
+
+fn require_role() -> Result<crate::kg::ActiveRoleSnapshot, String> {
+    crate::kg::active_role_snapshot().ok_or_else(|| {
+        "role_required: load a nonempty local role/thesaurus to trim with KG protection".into()
+    })
 }
 
 /// The serde id of an action (`"weakest_sentences"`, ...).
@@ -181,6 +203,7 @@ pub fn status_json(plan: &TrimPlan, level: &str, kept: &str) -> Result<Value, St
 }
 
 /// "Make the cuts" over `body` with `plan` (see [`trim_make_cuts`]).
+#[cfg(test)]
 pub fn make_cuts_json(
     body: &str,
     plan: &TrimPlan,
@@ -196,32 +219,170 @@ pub fn make_cuts_json(
 /// Compute and cache the plan for the open document's body.
 pub fn session_trim_plan_json() -> Result<Value, String> {
     let body = crate::with_session(|s| s.body().to_string());
-    let plan = with_config(|config| trim_plan(&body, config))?;
-    let value = plan_json(&plan)?;
-    TRIM.with(|cell| *cell.borrow_mut() = Some((body, plan)));
+    let role = require_role()?;
+    let protection = role.protection?;
+    let count = protection.occurrences(&body)?.len();
+    let plan = with_config(|config| protection.plan(&body, config))??;
+    let mut value = plan_json(&plan)?;
+    value["roleGeneration"] = json!(role.generation.to_string());
+    value["kgProtected"] = json!(true);
+    value["protectionCount"] = json!(count);
+    for (entry, level) in value["levels"]
+        .as_array_mut()
+        .expect("plan levels")
+        .iter_mut()
+        .zip(TrimLevel::ALL)
+    {
+        entry["achieved"] = json!(plan.status(level, &[]).percent);
+    }
+    TRIM.with(|cell| {
+        *cell.borrow_mut() = Some(ProtectedPlan {
+            body,
+            generation: role.generation,
+            plan,
+            protection,
+            count,
+        })
+    });
     Ok(value)
 }
 
 /// Runs `f` with the cached plan, refusing when the body has changed since.
-fn with_fresh_plan<R>(f: impl FnOnce(&str, &TrimPlan) -> Result<R, String>) -> Result<R, String> {
+fn with_fresh_plan<R>(f: impl FnOnce(&ProtectedPlan) -> Result<R, String>) -> Result<R, String> {
     let body = crate::with_session(|s| s.body().to_string());
+    let role = require_role()?;
+    role.protection?;
     TRIM.with(|cell| match &*cell.borrow() {
         None => Err("no trim plan: compute one first".to_string()),
-        Some((planned, _)) if *planned != body => {
+        Some(planned) if planned.body != body || planned.generation != role.generation => {
             Err("stale trim plan: the text changed since it was computed".to_string())
         }
-        Some((_, plan)) => f(&body, plan),
+        Some(plan) => f(plan),
     })
 }
 
 /// Status card JSON for the open document (refuses a stale plan).
 pub fn session_trim_status(level: &str, kept: &str) -> Result<Value, String> {
-    with_fresh_plan(|_, plan| status_json(plan, level, kept))
+    with_fresh_plan(|cached| {
+        let active = cached.plan.active(parse_level(level)?, &parse_kept(kept)?);
+        cached.protection.validate_ranges(&cached.body, &active)?;
+        cached
+            .protection
+            .validate_retention(&cached.body, &make_cuts(&cached.body, &active))?;
+        let mut value = status_json(&cached.plan, level, kept)?;
+        value["roleGeneration"] = json!(cached.generation.to_string());
+        value["kgProtected"] = json!(true);
+        value["protectionCount"] = json!(cached.count);
+        Ok(value)
+    })
 }
 
 /// Make-the-cuts JSON for the open document (refuses a stale plan).
 pub fn session_trim_make_cuts(level: &str, kept: &str) -> Result<Value, String> {
-    with_fresh_plan(|body, plan| make_cuts_json(body, plan, level, kept))
+    with_fresh_plan(|cached| {
+        let active = cached.plan.active(parse_level(level)?, &parse_kept(kept)?);
+        cached.protection.validate_ranges(&cached.body, &active)?;
+        let made = make_cuts(&cached.body, &active);
+        cached.protection.validate_retention(&cached.body, &made)?;
+        serde_json::to_value(made).map_err(|e| e.to_string())
+    })
+}
+
+/// Fresh, fully validated UTF-16 fades for the later atomic Done transaction.
+/// Callers cannot supply arbitrary ranges or bypass the active role/body guard.
+pub fn protected_trim_ranges(level: &str, kept: &str) -> Result<Vec<(usize, usize)>, String> {
+    with_fresh_plan(|cached| {
+        let active = cached.plan.active(parse_level(level)?, &parse_kept(kept)?);
+        cached.protection.validate_ranges(&cached.body, &active)?;
+        cached
+            .protection
+            .validate_retention(&cached.body, &make_cuts(&cached.body, &active))?;
+        Ok(active.iter().map(|c| (c.start, c.end)).collect())
+    })
+}
+
+/// Promotion-only coverage projection. Preview/walk cuts and Make-cuts retain
+/// their original identities and nesting. Stored ghosts are never normalized.
+fn promotion_fragments(body: &str, active: &[Cut]) -> Result<Vec<Cut>, String> {
+    let mut boundary = 0;
+    let mut boundaries = std::collections::BTreeSet::from([0]);
+    for ch in body.chars() {
+        boundary += ch.len_utf16();
+        boundaries.insert(boundary);
+    }
+    for (i, cut) in active.iter().enumerate() {
+        if cut.start >= cut.end
+            || !boundaries.contains(&cut.start)
+            || !boundaries.contains(&cut.end)
+        {
+            return Err("unsafe_promotion: invalid UTF-16 fragment".into());
+        }
+        for prior in &active[..i] {
+            let overlap = cut.start < prior.end && prior.start < cut.end;
+            let contained = (cut.start <= prior.start && prior.end <= cut.end)
+                || (prior.start <= cut.start && cut.end <= prior.end);
+            if overlap && !contained {
+                return Err("unsafe_promotion: crossing active fragments".into());
+            }
+        }
+    }
+    let mut ordered = active.to_vec();
+    ordered.sort_by_key(|c| (c.start, std::cmp::Reverse(c.end), c.id.0));
+    let mut projected: Vec<Cut> = Vec::new();
+    for cut in ordered {
+        if projected
+            .last()
+            .is_some_and(|outer| outer.start <= cut.start && cut.end <= outer.end)
+        {
+            continue;
+        }
+        projected.push(cut);
+    }
+    // Interval union is used only as a proof of exact coverage, never to create
+    // stored ghosts. In particular, touching projected fragments stay separate.
+    fn coverage(cuts: &[Cut]) -> Vec<(usize, usize)> {
+        let mut ranges: Vec<_> = cuts.iter().map(|c| (c.start, c.end)).collect();
+        ranges.sort_unstable();
+        let mut union: Vec<(usize, usize)> = Vec::new();
+        for (start, end) in ranges {
+            if let Some(last) = union.last_mut().filter(|last| start <= last.1) {
+                last.1 = last.1.max(end);
+            } else {
+                union.push((start, end));
+            }
+        }
+        union
+    }
+    if coverage(active) != coverage(&projected) {
+        return Err("unsafe_promotion: coverage changed".into());
+    }
+    Ok(projected)
+}
+
+/// Private protected-begin seam: fresh B guards on both original and projected
+/// fragments. No public arbitrary-range binding or change to preview semantics.
+pub(crate) fn protected_trim_promotion_ranges(
+    level: &str,
+    kept: &str,
+) -> Result<Vec<(usize, usize)>, String> {
+    with_fresh_plan(|cached| {
+        let active = cached.plan.active(parse_level(level)?, &parse_kept(kept)?);
+        cached.protection.validate_ranges(&cached.body, &active)?;
+        let original = make_cuts(&cached.body, &active);
+        cached
+            .protection
+            .validate_retention(&cached.body, &original)?;
+        let projected = promotion_fragments(&cached.body, &active)?;
+        cached
+            .protection
+            .validate_ranges(&cached.body, &projected)?;
+        let made = make_cuts(&cached.body, &projected);
+        cached.protection.validate_retention(&cached.body, &made)?;
+        if original != made {
+            return Err("unsafe_promotion: Make-cuts result changed".into());
+        }
+        Ok(projected.iter().map(|c| (c.start, c.end)).collect())
+    })
 }
 
 /// Computes the trim plan for the current document body and returns
@@ -255,6 +416,311 @@ pub fn trim_make_cuts(level: &str, kept: &str) -> Result<JsValue, JsValue> {
 }
 
 // ===== end trim levels (issue #15) =======================================
+
+#[cfg(test)]
+mod promotion_tests {
+    use super::*;
+    use crate::{
+        abort_history_transaction_json, begin_trim_ghost_transaction_json,
+        finish_history_transaction_json, with_session,
+    };
+
+    const BODY: &str = include_str!("../tests/fixtures/lab/lab.md");
+    const ROLE: &str =
+        r#"{"name":"trim-public-test","data":{"unmentioned":{"id":1,"nterm":"unmentioned"}}}"#;
+
+    // Internal test-only cache publication: the real private production function,
+    // not a new public native/WASM API or a separately compiled session model.
+    fn publish(body: &str) -> Value {
+        with_session(|s| {
+            s.open(body);
+        });
+        crate::kg::load_thesaurus(ROLE).unwrap();
+        session_trim_plan_json().unwrap()
+    }
+
+    fn cut(start: usize, end: usize, id: u32) -> Cut {
+        let mut c = trim_plan(BODY, &LabConfig::with_defaults().unwrap()).cuts()[0].clone();
+        c.start = start;
+        c.end = end;
+        c.id = CutId(id);
+        c
+    }
+
+    #[test]
+    fn containment_duplicates_adjacency_crossing_and_scalar_boundaries() {
+        let active = vec![cut(2, 4, 2), cut(0, 10, 1), cut(0, 10, 0), cut(10, 12, 3)];
+        let projected = promotion_fragments("abcdefghijkl", &active).unwrap();
+        assert_eq!(
+            projected
+                .iter()
+                .map(|c| (c.id.0, c.start, c.end))
+                .collect::<Vec<_>>(),
+            [(0, 0, 10), (3, 10, 12)]
+        );
+        for ranges in [
+            vec![cut(0, 6, 0), cut(4, 10, 1)],
+            vec![cut(0, 12, 0), cut(0, 6, 1), cut(4, 10, 2)],
+        ] {
+            assert_eq!(
+                promotion_fragments("abcdefghijkl", &ranges).unwrap_err(),
+                "unsafe_promotion: crossing active fragments"
+            );
+        }
+        assert!(promotion_fragments("a😀中b", &[cut(1, 3, 0), cut(3, 4, 1)]).is_ok());
+        assert!(promotion_fragments("a😀中b", &[cut(1, 2, 0)]).is_err());
+        assert!(promotion_fragments("abc", &[cut(1, 1, 0)]).is_err());
+        assert!(promotion_fragments("abc", &[cut(0, 4, 0)]).is_err());
+    }
+
+    #[test]
+    fn exact_cached_fixture_begin_abort_finish_manual_and_kept_oracles() {
+        for manual in [false, true] {
+            for keep in [false, true] {
+                let plan_before = publish(BODY);
+                if manual {
+                    with_session(|s| {
+                        s.ghost_ranges_atomic(BODY, &[(0, 1)]).unwrap();
+                    });
+                }
+                let initial = session_trim_status("sharper", "[]").unwrap();
+                let kept = if keep {
+                    serde_json::to_string(&vec![initial["active"][0]["id"].as_u64().unwrap()])
+                        .unwrap()
+                } else {
+                    "[]".into()
+                };
+                let preview_before = session_trim_status("sharper", &kept).unwrap();
+                let made_before = session_trim_make_cuts("sharper", &kept).unwrap();
+                let raw = protected_trim_ranges("sharper", &kept).unwrap();
+                let projected = protected_trim_promotion_ranges("sharper", &kept).unwrap();
+                let expected: Vec<_> = [
+                    (152, 179),
+                    (218, 247),
+                    (323, 331),
+                    (365, 426),
+                    (441, 450),
+                    (700, 752),
+                    (752, 801),
+                    (862, 868),
+                ]
+                .into_iter()
+                .filter(|r| !keep || *r != (152, 179))
+                .collect();
+                assert_eq!(projected, expected);
+                assert_eq!(raw.len(), if keep { 11 } else { 12 });
+                assert!(projected.windows(2).all(|w| w[0].1 <= w[1].0));
+                let before = with_session(|s| s.clone());
+                let reservations = with_session(|s| s.ghost_snapshot().reserved_ids);
+                // Raw primitive stays strict even on these original active cuts.
+                assert_eq!(
+                    with_session(|s| s.ghost_ranges_atomic(BODY, &raw))
+                        .err()
+                        .unwrap(),
+                    "independent ghost range overlaps existing ghost or another range"
+                );
+                assert!(with_session(|s| s.clone()) == before);
+                let started = begin_trim_ghost_transaction_json(BODY, "sharper", &kept)
+                    .unwrap()
+                    .unwrap();
+                let token = started["token"].as_str().unwrap();
+                let after = with_session(|s| s.clone());
+                let ghosts = with_session(|s| s.ghost_snapshot().live);
+                assert_eq!(ghosts.len(), projected.len() + usize::from(manual));
+                let promoted: Vec<_> = ghosts
+                    .iter()
+                    .filter(|g| !manual || g.id != "g1")
+                    .map(|g| (g.anchor.start, g.anchor.end))
+                    .collect();
+                assert_eq!(promoted, projected);
+                if manual {
+                    assert_eq!(
+                        (
+                            ghosts[0].id.as_str(),
+                            ghosts[0].anchor.start,
+                            ghosts[0].anchor.end
+                        ),
+                        ("g1", 0, 1)
+                    );
+                }
+                assert_eq!(
+                    session_trim_status("sharper", &kept).unwrap(),
+                    preview_before
+                );
+                assert_eq!(
+                    session_trim_make_cuts("sharper", &kept).unwrap(),
+                    made_before
+                );
+                let ack = abort_history_transaction_json(token).unwrap();
+                assert!(ack["ok"] == true && ack["rolledBack"] == true && ack["token"] == token);
+                assert!(with_session(|s| s.clone()) == before);
+                assert_eq!(
+                    with_session(|s| s.ghost_snapshot().reserved_ids),
+                    reservations
+                );
+                // No pending checkpoint after acknowledged retirement. Fresh begin
+                // allocates the same ghost IDs despite a distinct opaque token.
+                let next = begin_trim_ghost_transaction_json(BODY, "sharper", &kept)
+                    .unwrap()
+                    .unwrap();
+                assert_ne!(next["token"], started["token"]);
+                assert!(with_session(|s| s.clone()) == after);
+                let token = next["token"].as_str().unwrap();
+                let ack = finish_history_transaction_json(token).unwrap();
+                assert!(ack["ok"] == true && ack["finalized"] == true && ack["token"] == token);
+                assert!(with_session(|s| s.clone()) == after);
+                assert!(abort_history_transaction_json(token).is_err());
+                assert_eq!(session_trim_plan_json().unwrap(), plan_before);
+            }
+        }
+    }
+
+    #[test]
+    fn all_levels_all_keeps_preserve_preview_make_cuts_and_split_coverage() {
+        publish(BODY);
+        TRIM.with(|cell| {
+            let borrowed = cell.borrow();
+            let cached = borrowed.as_ref().unwrap();
+            for level in TrimLevel::ALL {
+                for kept in
+                    std::iter::once(vec![]).chain(cached.plan.cuts().iter().map(|c| vec![c.id]))
+                {
+                    let active = cached.plan.active(level, &kept);
+                    let crossing = active.iter().enumerate().any(|(i, c)| {
+                        active[..i].iter().any(|p| {
+                            c.start < p.end
+                                && p.start < c.end
+                                && !((c.start <= p.start && p.end <= c.end)
+                                    || (p.start <= c.start && c.end <= p.end))
+                        })
+                    });
+                    let result = promotion_fragments(BODY, &active);
+                    if crossing {
+                        assert_eq!(
+                            result.unwrap_err(),
+                            "unsafe_promotion: crossing active fragments"
+                        );
+                        let kept_json = serde_json::to_string(&kept).unwrap();
+                        let before = with_session(|s| s.clone());
+                        let error =
+                            begin_trim_ghost_transaction_json(BODY, &level_id(level), &kept_json)
+                                .unwrap_err();
+                        assert_eq!(error.kind, "protection-refusal");
+                        assert_eq!(error.message, "unsafe_promotion: crossing active fragments");
+                        assert!(with_session(|s| s.clone()) == before);
+                        println!(
+                            "strict_crossing level={} kept={:?}",
+                            level_id(level),
+                            kept.iter().map(|id| id.0).collect::<Vec<_>>()
+                        );
+                        continue;
+                    }
+                    let projected = result.unwrap();
+                    assert_eq!(make_cuts(BODY, &active), make_cuts(BODY, &projected));
+                    cached.protection.validate_ranges(BODY, &projected).unwrap();
+                    cached
+                        .protection
+                        .validate_retention(BODY, &make_cuts(BODY, &projected))
+                        .unwrap();
+                    for id in &kept {
+                        let retained = cached.plan.get(*id).unwrap();
+                        assert!(projected
+                            .iter()
+                            .all(|c| c.end <= retained.start || retained.end <= c.start));
+                    }
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn nine_occurrences_and_unicode_remain_protected() {
+        let role = r#"{"name":"B9","data":{"async":{"id":1,"nterm":"async"},"rust async":{"id":2,"nterm":"rust async"},"α":{"id":3,"nterm":"α"},"я":{"id":4,"nterm":"я"},"中":{"id":5,"nterm":"中"}}}"#;
+        let body = "Rust\r\n async rust async Rust Async α я 中\n\nThe editor is basically quite useful. It is really just a bit too much for one small team to read.";
+        with_session(|s| {
+            s.open(body);
+        });
+        crate::kg::load_thesaurus(role).unwrap();
+        let plan = session_trim_plan_json().unwrap();
+        assert_eq!(plan["protectionCount"], 9);
+        for level in TrimLevel::ALL {
+            let id = level_id(level);
+            let preview = session_trim_status(&id, "[]").unwrap();
+            let made = session_trim_make_cuts(&id, "[]").unwrap();
+            let projected = protected_trim_promotion_ranges(&id, "[]").unwrap();
+            assert!(projected.windows(2).all(|w| w[0].1 <= w[1].0));
+            assert_eq!(session_trim_status(&id, "[]").unwrap(), preview);
+            assert_eq!(session_trim_make_cuts(&id, "[]").unwrap(), made);
+        }
+    }
+
+    #[test]
+    fn cached_body_role_finish_guards_and_manual_overlap_preserve_state() {
+        publish(BODY);
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            begin_trim_ghost_transaction_json("wrong", "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "body-conflict"
+        );
+        assert!(with_session(|s| s.clone()) == before);
+        with_session(|s| {
+            s.apply_edit(BODY.encode_utf16().count(), 0, "X").unwrap();
+        });
+        let changed = with_session(|s| s.clone());
+        let changed_body = format!("{BODY}X");
+        assert_eq!(
+            begin_trim_ghost_transaction_json(&changed_body, "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "protection-refusal"
+        );
+        assert!(with_session(|s| s.clone()) == changed);
+        publish(BODY);
+        let before = with_session(|s| s.clone());
+        crate::kg::load_thesaurus(ROLE).unwrap();
+        assert_eq!(
+            begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "protection-refusal"
+        );
+        assert!(with_session(|s| s.clone()) == before);
+        session_trim_plan_json().unwrap();
+        let started = begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+            .unwrap()
+            .unwrap();
+        crate::kg::clear_thesaurus();
+        let token = started["token"].as_str().unwrap();
+        assert_eq!(
+            finish_history_transaction_json(token).unwrap_err().kind,
+            "role-conflict"
+        );
+        let ack = abort_history_transaction_json(token).unwrap();
+        assert!(ack["ok"] == true && ack["rolledBack"] == true && ack["token"] == token);
+        assert!(with_session(|s| s.clone()) == before);
+        assert!(crate::kg::active_role_snapshot().is_none());
+        publish(BODY);
+        with_session(|s| {
+            s.ghost_ranges_atomic(BODY, &[(365, 366)]).unwrap();
+        });
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "model-refusal"
+        );
+        assert!(with_session(|s| s.clone()) == before);
+        // A refusal leaves the bridge available, with exact acknowledged abort.
+        let probe = crate::begin_history_replay_json(BODY, BODY, "[]").unwrap();
+        let token = probe["token"].as_str().unwrap();
+        let ack = abort_history_transaction_json(token).unwrap();
+        assert!(ack["ok"] == true && ack["rolledBack"] == true && ack["token"] == token);
+        assert!(with_session(|s| s.clone()) == before);
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -464,6 +930,10 @@ mod tests {
 
     #[test]
     fn session_trim_refuses_a_stale_plan_and_recomputes() {
+        crate::kg::load_thesaurus(
+            r#"{"name":"public-test","data":{"unmentioned":{"id":1,"nterm":"unmentioned"}}}"#,
+        )
+        .unwrap();
         crate::with_session(|s| {
             s.open(TRIM_BODY);
         });
@@ -509,5 +979,53 @@ mod tests {
             })
         });
         assert!(nested, "no nested cut at Half");
+    }
+
+    #[test]
+    fn protection_role_and_body_guards_are_atomic() {
+        const ROLE: &str =
+            r#"{"name":"public-test","data":{"unmentioned":{"id":1,"nterm":"unmentioned"}}}"#;
+        crate::kg::clear_thesaurus();
+        crate::with_session(|s| s.open(TRIM_BODY));
+        assert!(session_trim_plan_json()
+            .unwrap_err()
+            .contains("role_required"));
+        crate::kg::load_thesaurus(ROLE).unwrap();
+        let planned = session_trim_plan_json().unwrap();
+        assert_eq!(planned["kgProtected"], true);
+        assert_eq!(planned["protectionCount"], 0);
+        assert_eq!(
+            session_trim_make_cuts("sharper", "[]").unwrap()["text"],
+            "The editor is the only target here today."
+        );
+        assert!(crate::kg::load_thesaurus("invalid").is_err());
+        assert!(session_trim_status("sharper", "[]").is_ok());
+        crate::kg::load_thesaurus(ROLE).unwrap();
+        assert!(session_trim_make_cuts("sharper", "[]").is_err());
+        let changed = session_trim_plan_json().unwrap();
+        assert_ne!(planned["roleGeneration"], changed["roleGeneration"]);
+        let token = crate::kg::prepare_thesaurus(ROLE).unwrap();
+        crate::kg::commit_prepared_thesaurus(&token).unwrap();
+        assert!(protected_trim_ranges("half", "[]").is_err());
+        crate::with_session(|s| s.sync_body("Straße"));
+        assert_eq!(session_trim_plan_json().unwrap()["kgProtected"], true);
+        assert_eq!(
+            session_trim_make_cuts("sharper", "[]").unwrap()["text"],
+            "Straße"
+        );
+        assert_eq!(crate::with_session(|s| s.body().to_owned()), "Straße");
+        crate::kg::load_thesaurus(
+            r#"{"name":"unsupported","data":{"Straße":{"id":2,"nterm":"strasse"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(session_trim_plan_json().unwrap()["protectionCount"], 1);
+        assert_eq!(
+            session_trim_make_cuts("sharper", "[]").unwrap()["text"],
+            "Straße"
+        );
+        crate::kg::clear_thesaurus();
+        assert!(protected_trim_ranges("half", "[]")
+            .unwrap_err()
+            .contains("role_required"));
     }
 }

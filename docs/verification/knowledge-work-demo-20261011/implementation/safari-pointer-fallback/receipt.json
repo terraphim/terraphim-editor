@@ -1,0 +1,13 @@
+{
+  "scope": "Real Chrome DOM plus real WASM fallback contract; not trusted Safari acceptance",
+  "baseline": "New pointer stash regression fails; six prior cases pass",
+  "newRegression": "PASS 1 (5.24s); exact stash/history/save/reopen plus refusals",
+  "strictClippy": "PASS",
+  "format": "PASS",
+  "combinedRunner": "20s budget exceeded in existing last test; retained; new regression split into separate binary, timeout unchanged",
+  "originalSuite": "PASS 6 (19.03s), original suite unchanged",
+  "nativeSafari": "NOT EXECUTED on new candidate",
+  "panelToPage": "Existing HTML path; not repaired or accepted by this change",
+  "issue118Closed": false,
+  "independentReview": "No actionable issue after added negative cases; native Safari remains pending"
+}

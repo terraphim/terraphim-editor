@@ -1,0 +1,82 @@
+{
+  "result": "PASS",
+  "qualification": "Actual native files reopened in the installed real WASM; native webview query not asserted",
+  "checks": [
+    {
+      "name": "ghost-saved.md",
+      "ghostCount": 1,
+      "directive": "synonyms:: paperclip, eraser, thumbtack\n",
+      "registeredTerms": [
+        "paperclip",
+        "eraser",
+        "thumbtack"
+      ],
+      "conceptIds": [
+        1,
+        1,
+        1
+      ],
+      "removedTermAbsent": false
+    },
+    {
+      "name": "ghost-undo-saved.md",
+      "ghostCount": 0,
+      "directive": "synonyms:: paperclip, eraser, thumbtack\n",
+      "registeredTerms": [
+        "paperclip",
+        "eraser",
+        "thumbtack"
+      ],
+      "conceptIds": [
+        1,
+        1,
+        1
+      ],
+      "removedTermAbsent": false
+    },
+    {
+      "name": "alternative-removal-saved.md",
+      "ghostCount": 1,
+      "directive": "synonyms:: paperclip, eraser\n",
+      "registeredTerms": [
+        "paperclip",
+        "eraser"
+      ],
+      "conceptIds": [
+        1,
+        1
+      ],
+      "removedTermAbsent": true
+    },
+    {
+      "name": "alternative-undo-saved.md",
+      "ghostCount": 1,
+      "directive": "synonyms:: paperclip, eraser, thumbtack\n",
+      "registeredTerms": [
+        "paperclip",
+        "eraser",
+        "thumbtack"
+      ],
+      "conceptIds": [
+        1,
+        1,
+        1
+      ],
+      "removedTermAbsent": false
+    },
+    {
+      "name": "alternative-redo-saved.md",
+      "ghostCount": 1,
+      "directive": "synonyms:: paperclip, eraser\n",
+      "registeredTerms": [
+        "paperclip",
+        "eraser"
+      ],
+      "conceptIds": [
+        1,
+        1
+      ],
+      "removedTermAbsent": true
+    }
+  ]
+}

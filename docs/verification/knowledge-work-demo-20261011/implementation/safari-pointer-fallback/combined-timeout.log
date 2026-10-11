@@ -1,0 +1,45 @@
+[INFO]: 🎯  Checking for the Wasm target...
+   Compiling terraphim-editor v0.1.0 (/private/tmp/terraphim-editor-publication-source-20261011)
+    Finished `dev` profile [optimized] target(s) in 8.98s
+    Finished `test` profile [optimized] target(s) in 0.13s
+     Running tests/web_overflow.rs (/private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_overflow-a60e05f8acabcc9e.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:61020/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 7 tests
+test test_xyz_toggles_the_panel_with_aria_escape_and_mode_gating ... ok
+test test_stash_is_a_move_and_one_undo_step ... ok
+test test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures ... ok
+test test_panel_width_matches_the_video ... ok
+test test_panel_text_persists_is_not_exported_and_destroy_cleans_up ... ok
+test test_panel_drag_accepts_only_its_owned_plain_text_dragover ... ok
+Failed to detect test as having been run. It might have timed out.
+console output:
+    using deprecated parameters for the initialization function; pass a single object instead
+    Invoking test: test_xyz_toggles_the_panel_with_aria_escape_and_mode_gating
+    Invoking test: test_stash_is_a_move_and_one_undo_step
+    Invoking test: test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures
+    Invoking test: test_panel_width_matches_the_video
+    Invoking test: test_panel_text_persists_is_not_exported_and_destroy_cleans_up
+    Invoking test: test_panel_drag_accepts_only_its_owned_plain_text_dragover
+    Invoking test: test_ctrl_enter_and_drop_insert_at_the_caret
+driver status: signal: 9 (SIGKILL)
+driver stdout:
+    Starting ChromeDriver 155.0.8059.39 (3ff7ac5a9224be9156d7f8703a06e22890aafd34-refs/branch-heads/8059@{#935}) on port 61020
+    Only local connections are allowed.
+    Please see https://chromedriver.chromium.org/security-considerations for suggestions on keeping ChromeDriver safe.
+    ChromeDriver was started successfully on port 61020.
+
+driver stdout truncated, a child process still holds the pipe
+Error: some tests failed
+error: test failed, to rerun pass `--test web_overflow`
+
+Caused by:
+  process didn't exit successfully: `/Users/alex/.cargo/bin/wasm-bindgen-test-runner /private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_overflow-a60e05f8acabcc9e.wasm` (exit status: 1)
+note: test exited abnormally; to see the full output pass --no-capture to the harness.
+Error: Running Wasm tests with wasm-bindgen-test failed
+Caused by: Running Wasm tests with wasm-bindgen-test failed
+Caused by: failed to execute `cargo test`: exited with exit status: 1
+  full command: cd "/private/tmp/terraphim-editor-publication-source-20261011" && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="/Users/alex/.cargo/bin/wasm-bindgen-test-runner" CHROMEDRIVER="/Users/alex/Library/Caches/.wasm-pack/chromedriver-bd0f73ace8fc0e68/chromedriver" WASM_BINDGEN_TEST_ONLY_WEB="1" "cargo" "test" "--target" "wasm32-unknown-unknown" "--test" "web_overflow"

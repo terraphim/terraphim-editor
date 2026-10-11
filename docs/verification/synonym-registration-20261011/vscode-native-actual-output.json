@@ -1,0 +1,77 @@
+{
+  "scope": "Actual VS Code TextDocument/native undo-redo with the shared WASM engine; no webview visual/all41 claim",
+  "checks": [
+    "actual native edit acknowledged; Choice and Decision resolve to one KG concept",
+    "actual saved Markdown bytes match acknowledged annotated output",
+    "native undo removes authored KG synonym membership",
+    "native redo restores exact annotated source and KG membership",
+    "native close/reopen and fresh engine restore typed KG synonyms from saved Markdown"
+  ],
+  "outputs": [
+    {
+      "step": "saved",
+      "source": "Decision matters. Café 😀\r\n\r\n\r\n```terraphim-alternatives\r\n{\r\n  \"version\": 1,\r\n  \"spans\": [\r\n    {\r\n      \"id\": \"s1\",\r\n      \"kind\": \"word\",\r\n      \"anchor\": {\r\n        \"start\": 0,\r\n        \"end\": 8,\r\n        \"text\": \"Decision\",\r\n        \"before\": \"\",\r\n        \"after\": \" matters. Café 😀\\r\\n\"\r\n      },\r\n      \"active\": 0,\r\n      \"alts\": [\r\n        {\r\n          \"text\": \"Decision\",\r\n          \"source\": \"original\"\r\n        },\r\n        {\r\n          \"text\": \"Choice\",\r\n          \"source\": \"human\"\r\n        }\r\n      ]\r\n    }\r\n  ],\r\n  \"ghosts\": []\r\n}\r\n```\r\n",
+      "synonyms": [
+        "decision",
+        "choice"
+      ]
+    },
+    {
+      "step": "native undo",
+      "source": "Decision matters. Café 😀\r\n",
+      "synonyms": []
+    },
+    {
+      "step": "native redo",
+      "source": "Decision matters. Café 😀\r\n\r\n\r\n```terraphim-alternatives\r\n{\r\n  \"version\": 1,\r\n  \"spans\": [\r\n    {\r\n      \"id\": \"s1\",\r\n      \"kind\": \"word\",\r\n      \"anchor\": {\r\n        \"start\": 0,\r\n        \"end\": 8,\r\n        \"text\": \"Decision\",\r\n        \"before\": \"\",\r\n        \"after\": \" matters. Café 😀\\r\\n\"\r\n      },\r\n      \"active\": 0,\r\n      \"alts\": [\r\n        {\r\n          \"text\": \"Decision\",\r\n          \"source\": \"original\"\r\n        },\r\n        {\r\n          \"text\": \"Choice\",\r\n          \"source\": \"human\"\r\n        }\r\n      ]\r\n    }\r\n  ],\r\n  \"ghosts\": []\r\n}\r\n```\r\n",
+      "synonyms": [
+        "decision",
+        "choice"
+      ]
+    },
+    {
+      "step": "reopen",
+      "source": "Decision matters. Café 😀\r\n\r\n\r\n```terraphim-alternatives\r\n{\r\n  \"version\": 1,\r\n  \"spans\": [\r\n    {\r\n      \"id\": \"s1\",\r\n      \"kind\": \"word\",\r\n      \"anchor\": {\r\n        \"start\": 0,\r\n        \"end\": 8,\r\n        \"text\": \"Decision\",\r\n        \"before\": \"\",\r\n        \"after\": \" matters. Café 😀\\r\\n\"\r\n      },\r\n      \"active\": 0,\r\n      \"alts\": [\r\n        {\r\n          \"text\": \"Decision\",\r\n          \"source\": \"original\"\r\n        },\r\n        {\r\n          \"text\": \"Choice\",\r\n          \"source\": \"human\"\r\n        }\r\n      ]\r\n    }\r\n  ],\r\n  \"ghosts\": []\r\n}\r\n```\r\n",
+      "groups": [
+        {
+          "alternatives": [
+            {
+              "source": "original",
+              "text": "Decision"
+            },
+            {
+              "source": "human",
+              "text": "Choice"
+            }
+          ],
+          "attached": true,
+          "markdown": "synonyms:: Decision, Choice\n",
+          "spanId": "s1",
+          "synonyms": [
+            "decision",
+            "choice"
+          ],
+          "thesaurus": {
+            "data": {
+              "choice": {
+                "display_value": "Decision",
+                "id": 1,
+                "nterm": "decision",
+                "pinned": false
+              },
+              "decision": {
+                "display_value": "Decision",
+                "id": 1,
+                "nterm": "decision",
+                "pinned": false
+              }
+            },
+            "name": "alternative:s1"
+          },
+          "typedSynonyms": []
+        }
+      ]
+    }
+  ],
+  "result": "PASS"
+}

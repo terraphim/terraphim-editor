@@ -1,0 +1,283 @@
+{
+  "qualification": "NOT ACCEPTED: all 41 requirements remain individually open for full cross-host acceptance",
+  "requirementsSha256": "54b4ecf346639a9684bb6e50ee1bcdde5b3fc46a35407a3cedbaf06a0392ce17",
+  "hosts": [
+    "Chrome",
+    "Firefox",
+    "Safari",
+    "existing stock Zed extension",
+    "existing VS Code extension"
+  ],
+  "priorBrowserAndZedLedger": "../independent-requirement-ledger-20261010.md",
+  "requirements": [
+    {
+      "id": "R-2.1",
+      "requirement": "Plain mode by default.",
+      "vscodeEvidence": "Native r8 starts with text and counter; clicking counter exposes Write_On controls. Complete layout/token audit remains pending.",
+      "accepted": false
+    },
+    {
+      "id": "R-2.2",
+      "requirement": "Span-anchored alternatives.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-2.3",
+      "requirement": "Three granularities.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-2.4",
+      "requirement": "In-place cycling.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-2.5",
+      "requirement": "Persistence.",
+      "vscodeEvidence": "Real core/bridge persistence and conflict tests pass; native editor create/save/reopen with full annotations pending.",
+      "accepted": false
+    },
+    {
+      "id": "R-2.6",
+      "requirement": "Grammar fix-ups on swap.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-2.7",
+      "requirement": "Emptying removes the indicator.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-3.1",
+      "requirement": "Underline.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-3.2",
+      "requirement": "Dot row (word/sentence/headline).",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-3.3",
+      "requirement": "Active-dot highlight.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-3.4",
+      "requirement": "Paragraph indicator.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-3.5",
+      "requirement": "Headline rendering.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-3.6",
+      "requirement": "Hover target.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-4.1",
+      "requirement": "Placement and toggle.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-4.2",
+      "requirement": "Tabs.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-4.3",
+      "requirement": "Alternative list.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-4.4",
+      "requirement": "Provenance marker.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-4.5",
+      "requirement": "Keyboard navigation.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-4.6",
+      "requirement": "Undo.",
+      "vscodeEvidence": "Native surface Undo changed apple\u2192a and Redo restored the exact annotated saved file. Earlier panel Undo required two Redos; reviewer identified an input-history bypass, now fixed in source with native retest pending. Bot-line/indicator acceptance remains pending.",
+      "accepted": false
+    },
+    {
+      "id": "R-5.1",
+      "requirement": "Ghost.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-5.2",
+      "requirement": "Revive.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-5.3",
+      "requirement": "Ghosting is an independent layer, persisted with the document",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-6.1",
+      "requirement": "Placement and toggle.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-6.2",
+      "requirement": "Content.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-6.3",
+      "requirement": "Stash.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-6.4",
+      "requirement": "Pull back.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-6.5",
+      "requirement": "Persistence.",
+      "vscodeEvidence": "Real core/bridge persistence and conflict tests pass; native editor create/save/reopen with full annotations pending.",
+      "accepted": false
+    },
+    {
+      "id": "R-7.1",
+      "requirement": "Layout.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-7.2",
+      "requirement": "Corner controls (Write_On mode on)",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-7.3",
+      "requirement": "Context menu on selection",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-7.4",
+      "requirement": "Existing shortcuts",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-8.1",
+      "requirement": "Lab popover.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-8.2",
+      "requirement": "Mark actions",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-8.3",
+      "requirement": "Trim levels.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-8.4",
+      "requirement": "Trim behaviour.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-8.5",
+      "requirement": "Review.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-8.6",
+      "requirement": "AI alternatives.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-8.7",
+      "requirement": "Provider abstraction.",
+      "vscodeEvidence": "Native UI/output acceptance pending; shared UI is included in the local VSIX.",
+      "accepted": false
+    },
+    {
+      "id": "R-9.1",
+      "requirement": "Document = Markdown + annotations.",
+      "vscodeEvidence": "Real core/bridge persistence and conflict tests pass; native editor create/save/reopen with full annotations pending.",
+      "accepted": false
+    },
+    {
+      "id": "R-9.2",
+      "requirement": "Annotation schema (proposal).",
+      "vscodeEvidence": "Real core/bridge persistence and conflict tests pass; native editor create/save/reopen with full annotations pending.",
+      "accepted": false
+    },
+    {
+      "id": "R-9.3",
+      "requirement": "Export.",
+      "vscodeEvidence": "Real core exact export test passes; native picker/output bytes and repeated exports still pending.",
+      "accepted": false
+    }
+  ],
+  "remainingFailures": {
+    "Safari": [
+      "trusted stash drag",
+      "trusted pull-back drag"
+    ],
+    "Zed": [
+      "native immediate-save corruption qualification",
+      "Done/reopen persistence qualification",
+      "repeat-export native qualification",
+      "stock host visual UI gaps"
+    ],
+    "VSCode": [
+      "latest r10 packaged native interaction retest",
+      "reopen/export/split-view",
+      "41-row visual/semantic acceptance",
+      "demo video"
+    ]
+  },
+  "zedFork": "excluded and untouched",
+  "draftPRs": [
+    "https://git.terraphim.cloud/terraphim/terraphim-editor/pulls/130",
+    "https://git.terraphim.cloud/terraphim/terraphim-ai/pulls/3484"
+  ]
+}

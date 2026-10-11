@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terraphim.ai/contracts/rolegraph-browser.schema.json",
+  "title": "RoleGraph browser protocol v1",
+  "description": "Graph JSON and thesaurus JSON are opaque strings. Never parse their numeric identities in JavaScript. Requests with malformed envelopes may fail at transport level.",
+  "oneOf": [{"$ref":"#/$defs/request"},{"$ref":"#/$defs/success"},{"$ref":"#/$defs/failure"},{"$ref":"#/$defs/snapshot"}],
+  "$defs": {
+    "decimal": {"type":"string","pattern":"^(0|[1-9][0-9]{0,19})$","description":"Canonical unsigned u64 decimal; Rust additionally rejects values above 18446744073709551615."},
+    "text": {"type":"object","required":["text"],"properties":{"text":{"type":"string","maxLength":4096}},"additionalProperties":false},
+    "id": {"type":"object","required":["id"],"properties":{"id":{"type":"string","minLength":1,"maxLength":4096}},"additionalProperties":false},
+    "empty": {"type":"object","additionalProperties":false},
+    "page": {"type":"object","properties":{"offset":{"type":"integer","minimum":0,"maximum":4294967295},"limit":{"type":"integer","minimum":0,"maximum":100}},"additionalProperties":false},
+    "textPage": {"type":"object","required":["text"],"properties":{"text":{"type":"string","maxLength":4096},"offset":{"type":"integer","minimum":0,"maximum":4294967295},"limit":{"type":"integer","minimum":0,"maximum":100,"default":100}},"additionalProperties":false},
+    "source": {"type":"object","required":["id","title","body"],"properties":{"id":{"type":"string","minLength":1,"maxLength":4096},"title":{"type":"string"},"body":{"type":"string"}},"additionalProperties":false},
+    "edge": {"type":"object","required":["id","rank","doc_hash"],"properties":{"id":{"$ref":"#/$defs/decimal"},"rank":{"$ref":"#/$defs/decimal"},"doc_hash":{"type":"object","additionalProperties":{"$ref":"#/$defs/decimal"}}},"additionalProperties":false},
+    "learning": {"type":"object","required":["id","rank","nodes"],"properties":{"id":{"type":"string","minLength":1,"maxLength":4096},"rank":{"$ref":"#/$defs/decimal"},"nodes":{"type":"array","maxItems":10000,"items":{"$ref":"#/$defs/decimal"}},"tags":{"type":"array","maxItems":1000,"items":{"type":"string"}},"matched_edges":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/edge"}}},"additionalProperties":false},
+    "prepareRole": {"type":"object","required":["thesaurusText"],"properties":{"thesaurusText":{"type":"string"},"roleName":{"type":["string","null"]}},"additionalProperties":false},
+    "prepareSnapshot": {"type":"object","required":["snapshotText"],"properties":{"snapshotText":{"type":"string"}},"additionalProperties":false},
+    "activate": {"type":"object","required":["token","nextGeneration"],"properties":{"token":{"type":"string"},"nextGeneration":{"$ref":"#/$defs/decimal"}},"additionalProperties":false},
+    "clear": {"type":"object","required":["nextGeneration"],"properties":{"nextGeneration":{"$ref":"#/$defs/decimal"}},"additionalProperties":false},
+    "index": {"type":"object","required":["documents"],"properties":{"documents":{"type":"array","maxItems":1000,"items":{"$ref":"#/$defs/source"}}},"additionalProperties":false},
+    "query": {"type":"object","required":["text","mode"],"properties":{"text":{"type":"string","maxLength":4096},"mode":{"enum":["graph","fallback","operators"]},"operator":{"enum":["and","or",null]},"terms":{"type":"array","maxItems":100,"items":{"type":"string"}},"offset":{"type":"integer","minimum":0,"maximum":4294967295},"limit":{"type":"integer","minimum":0,"maximum":100},"skipDirect":{"const":false}},"additionalProperties":false,"allOf":[{"if":{"properties":{"mode":{"const":"operators"}}},"then":{"required":["operator"],"properties":{"operator":{"enum":["and","or"]}}}}]},
+    "triggers": {"type":"object","required":["descriptions","pinnedNodeIds","threshold"],"properties":{"descriptions":{"type":"object","maxProperties":10000,"propertyNames":{"$ref":"#/$defs/decimal"},"additionalProperties":{"type":"string"}},"pinnedNodeIds":{"type":"array","maxItems":10000,"items":{"$ref":"#/$defs/decimal"}},"threshold":{"type":"number","minimum":0,"maximum":1}},"additionalProperties":false},
+    "indexLearning": {"type":"object","required":["document"],"properties":{"document":{"$ref":"#/$defs/learning"}},"additionalProperties":false},
+    "adjust": {"type":"object","required":["id","increase","adjustment"],"properties":{"id":{"type":"string"},"increase":{"type":"boolean"},"adjustment":{"$ref":"#/$defs/decimal"}},"additionalProperties":false},
+    "request": {
+      "type":"object","required":["version","requestId","generation","expectedRevision","op","payload"],"additionalProperties":false,
+      "properties":{"version":{"const":1},"requestId":{"type":"string","maxLength":4096},"generation":{"$ref":"#/$defs/decimal"},"expectedRevision":{"oneOf":[{"$ref":"#/$defs/decimal"},{"type":"null"}]},"op":{"enum":["prepare_role","prepare_snapshot","activate_role","clear_role","index_documents","remove_document","match","connected","query","set_triggers","document","documents_for_term","nodes","edges","index_learning","learning_documents","adjust_learning_rank","stats","export_snapshot"]},"payload":{"type":"object"}},
+      "allOf":[
+        {"if":{"properties":{"op":{"const":"prepare_role"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/prepareRole"}}}},
+        {"if":{"properties":{"op":{"const":"prepare_snapshot"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/prepareSnapshot"}}}},
+        {"if":{"properties":{"op":{"const":"activate_role"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/activate"}}}},
+        {"if":{"properties":{"op":{"const":"clear_role"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/clear"}}}},
+        {"if":{"properties":{"op":{"const":"index_documents"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/index"}}}},
+        {"if":{"properties":{"op":{"enum":["remove_document","document"]}}},"then":{"properties":{"payload":{"$ref":"#/$defs/id"}}}},
+        {"if":{"properties":{"op":{"const":"connected"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/text"}}}},
+        {"if":{"properties":{"op":{"enum":["match","documents_for_term","learning_documents"]}}},"then":{"properties":{"payload":{"$ref":"#/$defs/textPage"}}}},
+        {"if":{"properties":{"op":{"enum":["nodes","edges"]}}},"then":{"properties":{"payload":{"$ref":"#/$defs/page"}}}},
+        {"if":{"properties":{"op":{"const":"query"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/query"}}}},
+        {"if":{"properties":{"op":{"const":"set_triggers"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/triggers"}}}},
+        {"if":{"properties":{"op":{"const":"index_learning"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/indexLearning"}}}},
+        {"if":{"properties":{"op":{"const":"adjust_learning_rank"}}},"then":{"properties":{"payload":{"$ref":"#/$defs/adjust"}}}},
+        {"if":{"properties":{"op":{"enum":["stats","export_snapshot"]}}},"then":{"properties":{"payload":{"$ref":"#/$defs/empty"}}}}
+      ]
+    },
+    "node": {"type":"object","required":["id","rank","connected_with"],"properties":{"id":{"$ref":"#/$defs/decimal"},"rank":{"$ref":"#/$defs/decimal"},"connected_with":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/decimal"}}},"additionalProperties":false},
+    "indexed": {"type":"object","required":["id","rank","nodes","tags","matched_edges"],"properties":{"id":{"type":"string"},"rank":{"$ref":"#/$defs/decimal"},"nodes":{"type":"array","items":{"$ref":"#/$defs/decimal"}},"tags":{"type":"array","items":{"type":"string"}},"matched_edges":{"type":"array","items":{"$ref":"#/$defs/edge"}},"sourceAvailable":{"type":"boolean"},"source":{"$ref":"#/$defs/source"}},"additionalProperties":false},
+    "stats": {"type":"object","required":["node_count","edge_count","document_count","thesaurus_size","is_populated"],"properties":{"node_count":{"type":"integer","minimum":0,"maximum":10000},"edge_count":{"type":"integer","minimum":0,"maximum":100000},"document_count":{"type":"integer","minimum":0,"maximum":1000},"thesaurus_size":{"type":"integer","minimum":0,"maximum":10000},"is_populated":{"type":"boolean"}},"additionalProperties":false},
+    "result": {"anyOf":[
+      {"type":"boolean"},
+      {"type":"array","maxItems":100,"items":{"anyOf":[{"type":"string"},{"$ref":"#/$defs/node"},{"$ref":"#/$defs/edge"},{"$ref":"#/$defs/indexed"}]}},
+      {"$ref":"#/$defs/indexed"},{"$ref":"#/$defs/stats"},
+      {"type":"object","required":["token","thesaurusText"],"properties":{"token":{"type":"string"},"thesaurusText":{"type":"string"}},"additionalProperties":false},
+      {"type":"object","required":["generation"],"properties":{"generation":{"$ref":"#/$defs/decimal"},"name":{"type":"string"}},"additionalProperties":false},
+      {"type":"object","required":["snapshotText"],"properties":{"snapshotText":{"type":"string"}},"additionalProperties":false},
+      {"type":"object","anyOf":[{"required":["indexed"]},{"required":["removed"]},{"required":["updated"]},{"required":["adjusted"]}],"properties":{"indexed":{"type":["integer","boolean"],"minimum":0,"maximum":1000},"removed":{"type":"boolean"},"updated":{"type":"boolean"},"adjusted":{"type":"boolean"}},"additionalProperties":false}
+    ]},
+    "success": {"type":"object","required":["version","requestId","generation","revision","ok","result"],"properties":{"version":{"const":1},"requestId":{"type":"string"},"generation":{"$ref":"#/$defs/decimal"},"revision":{"$ref":"#/$defs/decimal"},"ok":{"const":true},"result":{"$ref":"#/$defs/result"}},"additionalProperties":false},
+    "failure": {"type":"object","required":["version","requestId","generation","revision","ok","error"],"properties":{"version":{"const":1},"requestId":{"type":"string"},"generation":{"$ref":"#/$defs/decimal"},"revision":{"$ref":"#/$defs/decimal"},"ok":{"const":false},"error":{"type":"object","required":["code","message"],"properties":{"code":{"enum":["role_required","syncing","stale_generation","stale_revision","invalid_input","invalid_snapshot","unsupported_version","resource_limit","not_found","worker_failed","timeout","storage_failed"]},"message":{"type":"string"}},"additionalProperties":false}},"additionalProperties":false},
+    "snapshot": {"type":"object","required":["version","rolegraphVersion","graphJson","documents","generation","revision"],"properties":{"version":{"const":1},"rolegraphVersion":{"const":"2.0.0"},"graphJson":{"type":"string","description":"Opaque upstream numeric JSON. Parse only with Rust serde."},"documents":{"type":"array","maxItems":1000,"items":{"$ref":"#/$defs/source"}},"generation":{"$ref":"#/$defs/decimal"},"revision":{"$ref":"#/$defs/decimal"},"triggerThreshold":{"type":"number","minimum":0,"maximum":1,"default":0.3}},"additionalProperties":false}
+  }
+}

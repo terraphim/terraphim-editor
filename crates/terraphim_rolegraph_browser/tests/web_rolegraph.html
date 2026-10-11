@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>RoleGraph bridge shared scenario</title>
+<pre id="result">Running real WASM engine…</pre>
+<script type="module">
+// Serve this file beside bindgen output and scenario.json. No mock engine.
+import init, { BrowserRoleGraph } from './terraphim_rolegraph_browser.js';
+const output = document.querySelector('#result');
+try {
+  await init();
+  const steps = await (await fetch('./scenario.json')).json();
+  const graph = new BrowserRoleGraph();
+  let snapshot;
+  for (const [i, step] of steps.entries()) {
+    const payload = structuredClone(step.payload);
+    if (payload.snapshotText === '$snapshot') payload.snapshotText = snapshot;
+    if (payload.snapshotText === '$corruptSnapshot') {
+      const wrapper = JSON.parse(snapshot); // wrapper only; never parse graphJson
+      wrapper.graphJson = wrapper.graphJson.replace('"rank":1,', '"rank":999,');
+      payload.snapshotText = JSON.stringify(wrapper);
+    }
+    const response = JSON.parse(graph.dispatch(JSON.stringify({ version: 1, requestId: String(i), generation: step.generation, expectedRevision: step.expectedRevision ?? null, op: step.op, payload })));
+    for (const [pointer, expected] of Object.entries(step.expect)) {
+      const actual = pointer.slice(1).split('/').reduce((v, key) => v?.[key], response);
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`step ${i} ${step.op} ${pointer}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
+    }
+    if (step.op === 'export_snapshot') snapshot = response.result.snapshotText;
+  }
+  graph.free();
+  globalThis.rolegraphTest = { ok: true, steps: steps.length };
+  output.textContent = JSON.stringify(globalThis.rolegraphTest);
+} catch (error) {
+  globalThis.rolegraphTest = { ok: false, error: String(error) };
+  output.textContent = JSON.stringify(globalThis.rolegraphTest);
+}
+</script>

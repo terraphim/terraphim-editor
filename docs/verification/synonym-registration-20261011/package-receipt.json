@@ -1,0 +1,12 @@
+{
+  "package": "/Users/alex/.codex/visualizations/2026/10/09/01a1221d-a378-7a00-8943-4c42925945f0/host-framework-delivery-20261011/terraphim-it-0.0.4-synonyms.vsix",
+  "sha256": "d73e282b382a2ab6d906e683742e24433e427bf9ab6270b6c2c5091310929813",
+  "bytes": 4518520,
+  "importedAssets": 122,
+  "packagedEditorFiles": 123,
+  "additionalPackagedEditorFile": "host-assets.json",
+  "wasmSha256": "4d4b7ddea0312114ec89c7da38bb7a32f8d9e854eb574169cf9613dfb89397d7",
+  "nativeReport": "vscode-native-actual-output.json",
+  "scope": "Document-scoped derived KG synonym registration, not active shared-role mutation or custom-webview visual acceptance",
+  "sourceBuild": "Stable246-file fingerprint includes earlier uncommitted editor work; not clean-release claim"
+}

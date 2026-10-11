@@ -1,0 +1,45 @@
+   Compiling rustix v1.1.4
+   Compiling bitflags v2.13.1
+   Compiling tempfile v3.27.0
+   Compiling terraphim_lsp v1.22.0 (/private/tmp/terraphim-ai-output-fixes-20261011/crates/terraphim_lsp)
+    Finished `test` profile [optimized] target(s) in 8.71s
+     Running tests/hover_provenance_tests.rs (/Users/alex/.cargo/build/by-project/terraphim-terraphim-ai/debug/deps/hover_provenance_tests-bf9db41e0736ad3f)
+
+running 13 tests
+test hover_on_a_kg_term_lists_its_synonyms_as_kg ... ok
+test no_kg_rewrite_of_a_stored_word_span_only_its_stored_alternatives ... ok
+test no_kg_rewrite_inside_a_ghost ... ok
+test hover_on_a_sentence_span_that_is_no_kg_term_shows_its_alternatives ... ok
+test a_plain_client_gets_changes_not_document_changes ... ok
+test hover_names_the_model_of_an_ai_alternative ... ok
+ACTUAL AUTHORED KG HOVER OUTPUT:
+**decision**
+
+decision
+
+**Alternatives** (word span)
+- decision (original, active)
+- Judgment (human)
+
+**Document KG synonyms** (span `s1`; local concept 1)
+
+```markdown
+synonyms:: decision, Judgment
+```
+
+- decision → concept 1
+- judgment → concept 1
+
+**KG synonyms**
+- choice (kg)
+- option (kg)
+test hover_on_a_stored_span_lists_its_alternatives_with_provenance ... ok
+test no_kg_rewrite_inside_a_stored_sentence_span_but_one_outside ... ok
+test no_kg_rewrite_whose_article_fix_up_falls_in_a_stored_anchor ... ok
+test replace_with_a_stored_alternative_round_trips_and_updates_active ... ok
+test the_kind_is_requested_by_prefix_and_hidden_otherwise ... ok
+test a_malformed_block_or_stale_anchor_falls_back_to_the_kg ... ok
+test authored_kg_synonyms_follow_committed_changes_history_and_reopen ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

@@ -1,0 +1,27 @@
+Running Terraphim AI pre-commit checks...
+Checking for large files...
+[0;32m✓[0m No large files found
+Checking for secrets and sensitive data...
+grep: stdout: Broken pipe
+grep: stdout: Broken pipe
+[0;32m✓[0m No secrets detected
+No Rust files in staged changes, skipping Rust-specific checks
+Checking for trailing whitespace...
+[0;32m✓[0m No trailing whitespace found
+Checking configuration file syntax...
+Running Ultimate Bug Scanner on staged files...
+ℹ Ignoring paths from /private/tmp/terraphim-ai-output-fixes-20261011/.ubsignore → target **/target .opencode node_modules vs-code-terraphim-it .terraphim .playwright-mcp
+✓ No changed files to scan.
+[0;32m✓[0m No critical issues found by UBS
+[0;32m✓[0m All pre-commit checks passed!
+
+Validating conventional commit format...
+Commit message: fix: persist native ghosts and load local editor role
+
+[0;32m✓[0m Conventional commit format is valid!
+
+[codex/alternative-control-output-fixes d15b38b3c] fix: persist native ghosts and load local editor role
+ 9 files changed, 187 insertions(+), 117 deletions(-)
+ create mode 100644 vs-code-terraphim-it/tests/fixtures/README.md
+ create mode 100644 vs-code-terraphim-it/tests/fixtures/native-removed-alternative.md
+ create mode 100644 vs-code-terraphim-it/tests/fixtures/native-three-alternatives.md

@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/alex/projects/terraphim/terraphim-editor/demos/verify-native-saved-output.py", line 41, in <module>
+    print(json.dumps(verify(args.path), indent=2))
+                     ^^^^^^^^^^^^^^^^^
+  File "/Users/alex/projects/terraphim/terraphim-editor/demos/verify-native-saved-output.py", line 28, in verify
+    assert len(annotations['ghosts']) == 1, 'Ghost changed visibly but was not saved'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Ghost changed visibly but was not saved

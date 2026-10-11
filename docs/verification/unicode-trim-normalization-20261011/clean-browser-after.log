@@ -1,0 +1,29 @@
+[INFO]: 🎯  Checking for the Wasm target...
+   Compiling terraphim-editor v0.1.0 (/private/tmp/terraphim-editor-publication-source-20261011)
+    Finished `dev` profile [optimized] target(s) in 6.49s
+    Finished `test` profile [optimized] target(s) in 0.12s
+     Running tests/web_trim_protection.rs (/private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_trim_protection-9fc5bc7c9a34c77a.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:50809/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 3 tests
+test raw_publication_and_coordinated_commit_invalidate_without_graph_startup ... ok
+test no_role_and_empty_role_fail_closed_but_unicode_role_is_supported ... ok
+test every_occurrence_protected_and_unicode_document_plans_without_mutation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 filtered out; finished in 8.98s
+
+     Running tests/web_trim_unicode.rs (/private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_trim_unicode-67c2f1e6c8ef9edf.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:50858/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 1 test
+test unicode_trim_reduces_and_preserves_originals_through_done_save_and_history ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 filtered out; finished in 4.93s
+
+[WARN]: ⚠️   There's a newer version of wasm-pack available, the new version is: 0.15.0, you are using: 0.13.1. To update, navigate to: https://rustwasm.github.io/wasm-pack/installer/

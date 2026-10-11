@@ -1,0 +1,34 @@
+{
+  "result": "PASS",
+  "scope": "finite actual native creation, a/an correction, exact saved body/annotations and uniform CRLF; not all41",
+  "sha256": "6c7793933d4cd2381adbd39d4dc866220f0971885ad5903151f714b6725bb0c4",
+  "body": "an apple. Caf\u00e9 \ud83d\ude00\r\nSecond line.\r\n",
+  "annotations": {
+    "version": 1,
+    "spans": [
+      {
+        "id": "s1",
+        "kind": "word",
+        "anchor": {
+          "start": 3,
+          "end": 8,
+          "text": "apple",
+          "before": "an ",
+          "after": ". Caf\u00e9 \ud83d\ude00\r\nSecond line.\r\n"
+        },
+        "active": 1,
+        "alts": [
+          {
+            "text": "banana",
+            "source": "original"
+          },
+          {
+            "text": "apple",
+            "source": "human"
+          }
+        ]
+      }
+    ],
+    "ghosts": []
+  }
+}

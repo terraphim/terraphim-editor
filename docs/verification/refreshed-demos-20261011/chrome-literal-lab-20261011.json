@@ -1,0 +1,40 @@
+{
+  "browser": "chrome",
+  "scope": "finite literal Lab examples; no general semantic-quality claim",
+  "manifestSha256": "b4287a48bae6211fce7c7fe350c96b6722b694f18f3f548d3329029f87dcce42",
+  "runnerSha256": "33ca0457250f89d5891bd7ceb321abdd3ca7938f4c9cad816663f065624c83bc",
+  "checks": [
+    {
+      "action": "typos_and_punctuation",
+      "input": "I recieve teh letter. Tehran is correct.",
+      "expected": [
+        {
+          "start": 2,
+          "end": 9,
+          "text": "recieve"
+        },
+        {
+          "start": 10,
+          "end": 13,
+          "text": "teh"
+        }
+      ],
+      "actual": [
+        {
+          "start": 2,
+          "end": 9,
+          "text": "recieve"
+        },
+        {
+          "start": 10,
+          "end": 13,
+          "text": "teh"
+        }
+      ],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    }
+  ],
+  "browserVersion": "155.0.8059.40",
+  "status": "FAIL"
+}

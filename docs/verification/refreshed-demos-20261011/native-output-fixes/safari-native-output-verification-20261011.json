@@ -1,0 +1,9 @@
+{
+  "nativeSave": "PASS exact 179 downloaded bytes",
+  "nativePickerReopen": "PASS exact serialised bytes and Overflow restored",
+  "nativePullKeyboard": "PASS exact body +14 chars",
+  "nativeDrag": "FAIL unchanged output, no dragstart observed",
+  "receipts": 5,
+  "reopenedReceiptID": 5,
+  "reopenedSourceSha256": "76915d870d65ef83947406fef8628e30c56aac8d094f288d82f7f4c13c274027"
+}

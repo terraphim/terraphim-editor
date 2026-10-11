@@ -51,6 +51,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::rc::Rc;
 
 use crate::providers::Suggestion;
 
@@ -114,6 +115,9 @@ pub struct EditOutcome {
 /// annotation block kept for saving.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DocumentSession {
+    /// Clones retain identity; an explicit open always starts a new session,
+    /// even when all serialized/model values happen to be identical.
+    identity: SessionIdentity,
     doc: Document,
     /// The unreadable block exactly as found, written back verbatim on save.
     raw_block: Option<String>,
@@ -121,7 +125,28 @@ pub struct DocumentSession {
     /// Spans and ghosts out of the model, kept whole and saved (see the
     /// module docs).
     set_aside: SetAside,
+    /// Session-only identities, including ghosts removed by edits/history.
+    reserved_ids: HashSet<String>,
+    /// Exact receipts issued by this open session; rejects forged replay targets.
+    ghost_receipts: HashSet<String>,
 }
+
+#[derive(Debug, Clone)]
+struct SessionIdentity(Rc<()>);
+
+impl Default for SessionIdentity {
+    fn default() -> Self {
+        Self(Rc::new(()))
+    }
+}
+
+impl PartialEq for SessionIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for SessionIdentity {}
 
 /// Annotations temporarily out of the model: spans an edit detached (it
 /// changed their text) and spans or ghosts that re-anchoring could not place.
@@ -210,7 +235,16 @@ fn fresh_id(prefix: char, used: &HashSet<String>) -> String {
         .filter_map(|id| id.strip_prefix(prefix)?.parse::<u64>().ok())
         .max()
         .unwrap_or(0);
-    format!("{prefix}{}", max + 1)
+    if let Some(next) = max.checked_add(1) {
+        return format!("{prefix}{next}");
+    }
+    // Save/reattach collision repair must remain lossless even when the
+    // numeric namespace is exhausted. New ghost allocation instead refuses.
+    let mut suffix = String::from("~");
+    while used.contains(&format!("{prefix}{suffix}")) {
+        suffix.push('~');
+    }
+    format!("{prefix}{suffix}")
 }
 
 impl DocumentSession {
@@ -261,6 +295,7 @@ impl DocumentSession {
                 self.raw_block = Some(error.raw_block);
             }
         }
+        self.reserve_current_ids();
         let kind = if self.raw_block.is_some() {
             Some("malformed")
         } else if self.set_aside.is_empty() {
@@ -381,6 +416,57 @@ impl DocumentSession {
         doc
     }
 
+    /// Validate the complete session namespace with the real persisted schema.
+    /// Unresolved hints can overlap legitimately: move only their validation
+    /// anchors to checked, nonoverlapping slots, never rename an identity.
+    /// This also bounds the arithmetic used by the existing save projection.
+    fn validate_history_annotations(&self) -> Result<(), String> {
+        if self.raw_block.is_some() {
+            return Err(
+                "cannot validate annotations while a raw annotation block is preserved".into(),
+            );
+        }
+        let mut complete = self.doc.clone();
+        let mut next = complete
+            .annotations
+            .spans
+            .iter()
+            .map(|s| &s.anchor)
+            .chain(complete.annotations.ghosts.iter().map(|g| &g.anchor))
+            .chain(self.set_aside.spans.iter().map(|s| &s.anchor))
+            .chain(self.set_aside.ghosts.iter().map(|g| &g.anchor))
+            .map(|a| a.end)
+            .fold(utf16_len(self.body()), usize::max);
+        let mut place = |anchor: &mut Anchor| -> Result<(), String> {
+            let len = anchor
+                .end
+                .checked_sub(anchor.start)
+                .ok_or_else(|| "invalid set-aside anchor range".to_string())?;
+            let end = next
+                .checked_add(len)
+                .ok_or_else(|| "set-aside persistence offset exhausted".to_string())?;
+            anchor.start = next;
+            anchor.end = end;
+            next = end;
+            Ok(())
+        };
+        for span in &self.set_aside.spans {
+            let mut span = span.clone();
+            place(&mut span.anchor)?;
+            complete.annotations.spans.push(span);
+        }
+        for ghost in &self.set_aside.ghosts {
+            let mut ghost = ghost.clone();
+            place(&mut ghost.anchor)?;
+            complete.annotations.ghosts.push(ghost);
+        }
+        // Full schema checks shared IDs, alternatives/provenance, anchors,
+        // within-layer overlaps and overflow. Reservations are NOT live IDs.
+        parse(&write(&complete)).map_err(|e| e.to_string())?;
+        parse(&write(&self.persisted())).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     /// Clean Markdown for export (R-9.3): active alternatives only, ghosted
     /// text dropped, no overflow and no block.
     pub fn export(&self) -> String {
@@ -489,6 +575,7 @@ impl DocumentSession {
     /// together, so it still does not fit. This keeps typing cheap while
     /// something is set aside.
     fn reattach(&mut self, window: Option<(usize, usize)>) -> Vec<String> {
+        self.reserve_current_ids();
         if self.set_aside.is_empty() {
             return Vec::new();
         }
@@ -538,7 +625,7 @@ impl DocumentSession {
                 .iter()
                 .any(|g| g.anchor.start <= end && start <= g.anchor.end);
             if touches {
-                match self.doc.ghost(start, end) {
+                match self.ghost(start, end) {
                     Ok(id) => {
                         used.insert(id.clone());
                         reattached.push(id);
@@ -547,7 +634,13 @@ impl DocumentSession {
                 }
             } else {
                 if used.contains(&ghost.id) {
-                    ghost.id = fresh_id('g', &used);
+                    match allocate_ghost_id(&mut self.reserved_ids) {
+                        Ok(id) => ghost.id = id,
+                        Err(_) => {
+                            waiting.push(ghost);
+                            continue;
+                        }
+                    }
                 }
                 used.insert(ghost.id.clone());
                 reattached.push(ghost.id.clone());
@@ -589,7 +682,66 @@ impl DocumentSession {
             "overflow": annotations.overflow,
             "setAside": { "spans": self.set_aside.spans, "ghosts": self.set_aside.ghosts },
             "preservedBlock": self.raw_block.is_some(),
+            "synonymGroups": self.synonym_groups_json(),
         })
+    }
+
+    /// Current authored KG synonym registrations, including set-aside groups.
+    /// Exact annotations remain the durable source; no shared role is mutated.
+    pub fn synonym_groups_json(&self) -> Value {
+        let groups: Vec<_> = self
+            .doc
+            .annotations
+            .spans
+            .iter()
+            .map(|span| (span, true))
+            .chain(self.set_aside.spans.iter().map(|span| (span, false)))
+            .filter(|(span, _)| !span.is_inert())
+            .map(|(span, attached)| {
+                let group = terraphim_alternatives::SynonymGroup::from_span(span);
+                json!({"spanId":group.span_id,"attached":attached,
+                    "markdown":group.markdown,"typedSynonyms":group.typed_synonyms,
+                    "thesaurus":group.thesaurus,"synonyms":group.index.synonyms_of(1),
+                    "alternatives":group.alternatives})
+            })
+            .collect();
+        json!(groups)
+    }
+
+    /// Share attached committed alternatives using the existing Terraphim types.
+    ///
+    /// # Errors
+    /// Refuses malformed preserved annotations or ambiguous cross-group terms.
+    pub fn export_knowledge_graph(&self) -> Result<String, String> {
+        if self.raw_block.is_some() {
+            return Err(
+                "Repair the document's malformed annotations before sharing its graph.".into(),
+            );
+        }
+        let graph = self
+            .doc
+            .export_synonym_thesaurus()
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string_pretty(&serde_json::to_value(graph).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Query a live authored concept using Terraphim's registered synonym index.
+    /// Scope is this document plus `span_id`; detached/unknown groups return [].
+    pub fn synonyms_for(&self, span_id: &str, text: &str) -> Vec<String> {
+        self.doc
+            .annotations
+            .spans
+            .iter()
+            .find(|span| span.id == span_id && !span.is_inert())
+            .map(|span| {
+                terraphim_alternatives::SynonymGroup::from_span(span)
+                    .synonyms_of(text)
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Ghosts `start..end` (R-5.1, R-5.3) and returns the id of the ghost now
@@ -598,7 +750,16 @@ impl DocumentSession {
     /// in (see [`Document::ghost`]). The text is unchanged, so it stays
     /// counted and editable; export drops it. On error nothing changes.
     pub fn ghost(&mut self, start: usize, end: usize) -> Result<String, EditError> {
-        self.doc.ghost(start, end)
+        let saved = self.clone();
+        self.reserve_current_ids();
+        let reserved = &mut self.reserved_ids;
+        let result = self
+            .doc
+            .ghost_with_allocator(start, end, || allocate_ghost_id(reserved));
+        if result.is_err() {
+            *self = saved;
+        }
+        result
     }
 
     /// Revives `start..end` (R-5.2): ghosts inside it are removed, ghosts
@@ -606,8 +767,263 @@ impl DocumentSession {
     /// (see [`Document::revive`]). Returns whether any ghost changed. On
     /// error nothing changes.
     pub fn revive(&mut self, start: usize, end: usize) -> Result<bool, EditError> {
-        self.doc.revive(start, end)
+        let saved = self.clone();
+        self.reserve_current_ids();
+        let reserved = &mut self.reserved_ids;
+        let result = self
+            .doc
+            .revive_with_allocator(start, end, || allocate_ghost_id(reserved));
+        if result.is_err() {
+            *self = saved;
+        }
+        result
     }
+}
+
+fn allocate_ghost_id(reserved: &mut HashSet<String>) -> Result<String, EditError> {
+    allocate_reserved_id('g', reserved)
+}
+
+fn allocate_reserved_id(prefix: char, reserved: &mut HashSet<String>) -> Result<String, EditError> {
+    let max = reserved
+        .iter()
+        .filter_map(|id| id.strip_prefix(prefix)?.parse::<u64>().ok())
+        .max()
+        .unwrap_or(0);
+    let next = max.checked_add(1).ok_or(EditError::IdAllocation)?;
+    let id = format!("{prefix}{next}");
+    if !reserved.insert(id.clone()) {
+        return Err(EditError::IdAllocation);
+    }
+    Ok(id)
+}
+
+/// Ghost-only history state. Reservations are decimal-string IDs, never JS
+/// numbers. Replay does not roll this reservation set back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GhostSnapshot {
+    pub live: Vec<Ghost>,
+    pub set_aside: Vec<Ghost>,
+    pub reserved_ids: Vec<String>,
+}
+
+impl GhostSnapshot {
+    pub fn to_json(&self) -> Value {
+        json!({ "live": self.live, "setAside": self.set_aside, "reservedIds": self.reserved_ids })
+    }
+
+    fn from_json(value: &Value) -> Result<Self, String> {
+        Ok(Self {
+            live: serde_json::from_value(value["live"].clone()).map_err(|e| e.to_string())?,
+            set_aside: serde_json::from_value(value["setAside"].clone())
+                .map_err(|e| e.to_string())?,
+            reserved_ids: serde_json::from_value(value["reservedIds"].clone())
+                .map_err(|e| e.to_string())?,
+        })
+    }
+}
+
+/// Exact receipt for independent ghost promotion; body is only a guard.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GhostChange {
+    pub body: String,
+    pub before: GhostSnapshot,
+    pub after: GhostSnapshot,
+}
+
+impl GhostChange {
+    pub fn to_json(&self) -> Value {
+        json!({ "body": self.body, "before": self.before.to_json(), "after": self.after.to_json() })
+    }
+
+    pub fn from_json(value: &Value) -> Result<Self, String> {
+        Ok(Self {
+            body: value["body"]
+                .as_str()
+                .ok_or("receipt body must be text")?
+                .to_string(),
+            before: GhostSnapshot::from_json(&value["before"])?,
+            after: GhostSnapshot::from_json(&value["after"])?,
+        })
+    }
+}
+
+impl DocumentSession {
+    fn reserve_current_ids(&mut self) {
+        self.reserved_ids.extend(
+            self.doc
+                .annotations
+                .spans
+                .iter()
+                .map(|s| s.id.clone())
+                .chain(self.doc.annotations.ghosts.iter().map(|g| g.id.clone()))
+                .chain(self.set_aside.spans.iter().map(|s| s.id.clone()))
+                .chain(self.set_aside.ghosts.iter().map(|g| g.id.clone())),
+        );
+    }
+
+    pub fn ghost_snapshot(&self) -> GhostSnapshot {
+        let mut reserved_ids: Vec<_> = self.reserved_ids.iter().cloned().collect();
+        reserved_ids.sort();
+        GhostSnapshot {
+            live: self.doc.annotations.ghosts.clone(),
+            set_aside: self.set_aside.ghosts.clone(),
+            reserved_ids,
+        }
+    }
+
+    /// Creates independent ghosts over all ranges atomically. Adjacent ranges
+    /// remain distinct; overlap with another range or a manual ghost is refused.
+    /// Spans may coexist. Callers must validate their protected plan/role first.
+    pub fn ghost_ranges_atomic(
+        &mut self,
+        expected_body: &str,
+        ranges: &[(usize, usize)],
+    ) -> Result<Option<GhostChange>, String> {
+        if self.raw_block.is_some() {
+            return Err("preserved malformed block cannot save new ghosts".into());
+        }
+        if self.body() != expected_body {
+            return Err("ghost transaction body conflict".into());
+        }
+        for (i, &(start, end)) in ranges.iter().enumerate() {
+            if start >= end
+                || utf16_to_byte(self.body(), start).is_none()
+                || utf16_to_byte(self.body(), end).is_none()
+            {
+                return Err(EditError::InvalidRange { start, end }.to_string());
+            }
+            if ranges[..i].iter().any(|&(s, e)| start < e && s < end)
+                || self
+                    .doc
+                    .annotations
+                    .ghosts
+                    .iter()
+                    .any(|g| overlaps(&g.anchor, start, end))
+            {
+                return Err(
+                    "independent ghost range overlaps existing ghost or another range".into(),
+                );
+            }
+        }
+        if ranges.is_empty() {
+            return Ok(None);
+        }
+        let saved = self.clone();
+        self.reserve_current_ids();
+        let before = self.ghost_snapshot();
+        for &(start, end) in ranges {
+            let reserved = &mut self.reserved_ids;
+            if let Err(error) = self
+                .doc
+                .create_independent_ghost(start, end, || allocate_ghost_id(reserved))
+            {
+                *self = saved;
+                return Err(error.to_string());
+            }
+        }
+        let change = GhostChange {
+            body: expected_body.to_string(),
+            before,
+            after: self.ghost_snapshot(),
+        };
+        self.ghost_receipts.insert(change.to_json().to_string());
+        Ok(Some(change))
+    }
+
+    /// Read-only single-step preflight. JS must preflight its whole replay group
+    /// against a clone before changing history cursor or surface.
+    pub fn preflight_ghost_change(&self, change: &GhostChange, undo: bool) -> Result<(), String> {
+        let mut trial = self.clone();
+        trial.replay_ghost_change(change, undo)
+    }
+
+    /// Preflights an entire ordered history replay group against one clone.
+    /// A later conflict cannot leave earlier steps applied to the live session.
+    pub fn preflight_ghost_changes(&self, changes: &[(GhostChange, bool)]) -> Result<(), String> {
+        let mut trial = self.clone();
+        trial.replay_ghost_changes(changes)
+    }
+
+    /// Atomically replays an ordered ghost-only group after all guards pass.
+    /// Mixed text/annotation groups must be simulated by their controller on
+    /// a session clone; this method does not pretend to validate surface edits.
+    pub fn replay_ghost_changes(&mut self, changes: &[(GhostChange, bool)]) -> Result<(), String> {
+        let mut trial = self.clone();
+        for (change, undo) in changes {
+            trial.replay_ghost_change(change, *undo)?;
+        }
+        *self = trial;
+        Ok(())
+    }
+
+    /// Guarded ghost-only undo/redo. Never restores a stale whole document,
+    /// alternatives or overflow, and never releases historical identities.
+    pub fn replay_ghost_change(&mut self, change: &GhostChange, undo: bool) -> Result<(), String> {
+        if self.raw_block.is_some()
+            || self.body() != change.body
+            || !self.ghost_receipts.contains(&change.to_json().to_string())
+        {
+            return Err("unknown or stale ghost transaction receipt".into());
+        }
+        let (expected, target) = if undo {
+            (&change.after, &change.before)
+        } else {
+            (&change.before, &change.after)
+        };
+        if self.doc.annotations.ghosts != expected.live
+            || self.set_aside.ghosts != expected.set_aside
+        {
+            return Err("ghost transaction state conflict".into());
+        }
+        let mut ids = HashSet::new();
+        for ghost in target.live.iter().chain(target.set_aside.iter()) {
+            if !ids.insert(&ghost.id)
+                || !self.reserved_ids.contains(&ghost.id)
+                || self
+                    .doc
+                    .annotations
+                    .spans
+                    .iter()
+                    .chain(self.set_aside.spans.iter())
+                    .any(|s| s.id == ghost.id)
+            {
+                return Err("ghost transaction identity conflict".into());
+            }
+        }
+        if target
+            .live
+            .iter()
+            .any(|g| g.anchor.start >= g.anchor.end || !text_at(self.body(), &g.anchor))
+        {
+            return Err("ghost transaction anchor conflict".into());
+        }
+        self.doc.annotations.ghosts = target.live.clone();
+        self.set_aside.ghosts = target.set_aside.clone();
+        Ok(())
+    }
+}
+
+/// Replays an issued receipt, never arbitrary promotion ranges. Protected
+/// promotion is wired by Lab separately, not exposed as a JS bypass here.
+#[wasm_bindgen]
+pub fn replay_document_ghost_change(change_json: &str, undo: bool) -> Result<JsValue, JsValue> {
+    let value = serde_json::from_str(change_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let change = GhostChange::from_json(&value).map_err(|e| JsValue::from_str(&e))?;
+    with_session(|s| {
+        s.replay_ghost_change(&change, undo)
+            .map(|()| to_js(&s.annotations_json()))
+    })
+    .map_err(|e| JsValue::from_str(&e))
+}
+
+/// Synchronous model preflight for one issued receipt, before JS cursor/surface
+/// movement. Whole mixed replay groups require controller-level clone preflight.
+#[wasm_bindgen]
+pub fn preflight_document_ghost_change(change_json: &str, undo: bool) -> Result<(), JsValue> {
+    let value = serde_json::from_str(change_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let change = GhostChange::from_json(&value).map_err(|e| JsValue::from_str(&e))?;
+    with_session(|s| s.preflight_ghost_change(&change, undo)).map_err(|e| JsValue::from_str(&e))
 }
 
 fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
@@ -704,6 +1120,15 @@ pub fn export_document() -> String {
     with_session(|s| s.export())
 }
 
+/// Downloadable Terraphim graph of the current document's authored synonyms.
+///
+/// # Errors
+/// Refuses malformed annotations and ambiguous cross-group terms.
+#[wasm_bindgen]
+pub fn export_knowledge_graph() -> Result<String, JsValue> {
+    with_session(|s| s.export_knowledge_graph()).map_err(|e| JsValue::from_str(&e))
+}
+
 /// `{ words, chars }` of the body, ghosted text included.
 #[wasm_bindgen]
 pub fn document_counts() -> JsValue {
@@ -757,6 +1182,12 @@ pub fn document_annotations() -> JsValue {
         }
         value
     }))
+}
+
+/// Query the current browser document's scoped authored KG synonym concept.
+#[wasm_bindgen]
+pub fn document_synonyms(span_id: &str, text: &str) -> String {
+    with_session(|s| json!(s.synonyms_for(span_id, text)).to_string())
 }
 
 /// An error object for JavaScript: `{ ok: false, error, kind }`, where `kind`
@@ -991,6 +1422,24 @@ impl DocumentSession {
         })
     }
 
+    // A detached span still owns its identity, including while undo can
+    // restore it. The document allocator sees only live annotations.
+    fn create_reserved_span(
+        &mut self,
+        kind: SpanKind,
+        start: usize,
+        end: usize,
+    ) -> Result<String, String> {
+        self.reserve_current_ids();
+        let id = allocate_reserved_id('s', &mut self.reserved_ids).map_err(|e| e.to_string())?;
+        let temporary = self
+            .doc
+            .add_span(kind, start, end)
+            .map_err(|e| e.to_string())?;
+        self.live_span_mut(&temporary)?.id = id.clone();
+        Ok(id)
+    }
+
     /// Creates a span of `kind` over `start..end` together with its first
     /// alternative, as one operation (the panel never leaves an inert span
     /// behind, R-2.7). The new alternative is not made active.
@@ -1003,10 +1452,7 @@ impl DocumentSession {
         source: Source,
     ) -> Result<AltChange, String> {
         self.alt_change(None, |s| {
-            let id = s
-                .doc
-                .add_span(kind, start, end)
-                .map_err(|e| e.to_string())?;
+            let id = s.create_reserved_span(kind, start, end)?;
             if s.live_span(&id).is_some_and(|sp| sp.alts[0].text == text) {
                 return Err("the alternative is the same as the original".into());
             }
@@ -1159,7 +1605,12 @@ impl DocumentSession {
         inserted: &str,
     ) -> Result<EditOutcome, String> {
         let saved = self.clone();
-        let result = self.alt_restore_inner(id, target, start, deleted_len, inserted);
+        let result = self
+            .alt_restore_inner(id, target, start, deleted_len, inserted)
+            .and_then(|outcome| {
+                self.validate_history_annotations()?;
+                Ok(outcome)
+            });
         if result.is_err() {
             *self = saved;
         }
@@ -1674,10 +2125,7 @@ impl DocumentSession {
         self.alt_change(known.as_deref(), |s| {
             let id = match known.clone() {
                 Some(id) => id,
-                None => s
-                    .doc
-                    .add_span(kind, start, end)
-                    .map_err(|e| e.to_string())?,
+                None => s.create_reserved_span(kind, start, end)?,
             };
             let mut first = None;
             for suggestion in fresh {
@@ -2138,10 +2586,1584 @@ pub fn replay_document_overflow(from: &str, to: &str) -> JsValue {
 // End of overflow panel (issue #12).
 // ---------------------------------------------------------------------------
 
+/// Limits apply only to transaction transports, not ordinary document editing.
+pub const HISTORY_JSON_LIMIT: usize = 16 * 1024 * 1024;
+pub const HISTORY_OPERATION_LIMIT: usize = 4096;
+
+/// Typed refusal; no failed operation changes the pending checkpoint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryTransactionError {
+    pub kind: &'static str,
+    pub message: String,
+}
+
+impl std::fmt::Display for HistoryTransactionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.kind, self.message)
+    }
+}
+
+impl std::error::Error for HistoryTransactionError {}
+
+fn history_error(kind: &'static str, message: impl Into<String>) -> HistoryTransactionError {
+    HistoryTransactionError {
+        kind,
+        message: message.into(),
+    }
+}
+
+fn history_bytes(text: &str) -> Result<(), HistoryTransactionError> {
+    if text.len() > HISTORY_JSON_LIMIT {
+        return Err(history_error(
+            "limit",
+            "transaction argument exceeds 16 MiB",
+        ));
+    }
+    Ok(())
+}
+
+/// Allocation-free top-level array item budget check before serde decoding.
+/// This is not a JSON parser: serde remains the syntax/recursion authority.
+fn bounded_history_array(text: &str) -> Result<Value, HistoryTransactionError> {
+    history_bytes(text)?;
+    if !text.trim_start().starts_with('[') {
+        return Err(history_error("invalid-payload", "expected an array"));
+    }
+    let (mut depth, mut quoted, mut escaped, mut item, mut count) =
+        (0usize, false, false, false, 0usize);
+    for byte in text.bytes() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                quoted = false;
+            }
+            continue;
+        }
+        if depth == 1 && byte == b',' {
+            item = false;
+        } else if depth == 1 && !item && !byte.is_ascii_whitespace() && byte != b']' {
+            count = count
+                .checked_add(1)
+                .ok_or_else(|| history_error("limit", "item count exhausted"))?;
+            if count > HISTORY_OPERATION_LIMIT {
+                return Err(history_error("limit", "more than 4096 items"));
+            }
+            item = true;
+        }
+        match byte {
+            b'"' => quoted = true,
+            b'[' | b'{' => {
+                depth = depth
+                    .checked_add(1)
+                    .ok_or_else(|| history_error("limit", "nesting exhausted"))?
+            }
+            b']' | b'}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    let value: Value = serde_json::from_str(text)
+        .map_err(|_| history_error("invalid-payload", "invalid JSON or excessive nesting"))?;
+    let array = value
+        .as_array()
+        .ok_or_else(|| history_error("invalid-payload", "expected an array"))?;
+    if array.len() > HISTORY_OPERATION_LIMIT {
+        return Err(history_error("limit", "more than 4096 items"));
+    }
+    Ok(value)
+}
+
+fn history_fields(value: &Value, fields: &[&str]) -> Result<(), HistoryTransactionError> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| history_error("invalid-payload", "expected an object"))?;
+    if object.len() != fields.len() || fields.iter().any(|field| !object.contains_key(*field)) {
+        return Err(history_error(
+            "invalid-payload",
+            "unknown or missing history fields",
+        ));
+    }
+    Ok(())
+}
+
+fn history_string(value: &Value, field: &str) -> Result<String, HistoryTransactionError> {
+    let text = value[field]
+        .as_str()
+        .ok_or_else(|| history_error("invalid-payload", "expected a string"))?;
+    history_bytes(text)?;
+    Ok(text.to_string())
+}
+
+fn history_integer(value: &Value, field: &str) -> Result<usize, HistoryTransactionError> {
+    value[field]
+        .as_u64()
+        .filter(|n| *n <= u32::MAX as u64)
+        .map(|n| n as usize)
+        .ok_or_else(|| {
+            history_error(
+                "invalid-payload",
+                "expected an exact nonnegative 32-bit integer",
+            )
+        })
+}
+
+#[derive(Debug, Clone)]
+struct HistoryTextEdit {
+    start: usize,
+    deleted: String,
+    inserted: String,
+}
+
+#[derive(Debug, Clone)]
+enum HistoryKind {
+    Edit,
+    Ghost {
+        change: GhostChange,
+        undo: bool,
+    },
+    Alt {
+        span: String,
+        target: Option<Span>,
+    },
+    Move {
+        start: usize,
+        end: usize,
+        to: usize,
+    },
+    Swap {
+        span: String,
+        from: usize,
+        to: usize,
+    },
+    Overflow {
+        before: String,
+        after: String,
+    },
+}
+
+/// A strictly decoded operation. Private fields prevent unchecked construction.
+#[derive(Debug, Clone)]
+pub struct HistoryOperation {
+    body: String,
+    edit: Option<HistoryTextEdit>,
+    kind: HistoryKind,
+}
+
+/// Decode the six real history kinds, rejecting unknown/conflicting metadata.
+pub fn parse_history_operations(
+    text: &str,
+) -> Result<Vec<HistoryOperation>, HistoryTransactionError> {
+    let value = bounded_history_array(text)?;
+    let mut operations = Vec::new();
+    for value in value.as_array().expect("checked array") {
+        let kind = value["kind"]
+            .as_str()
+            .ok_or_else(|| history_error("invalid-payload", "history kind is required"))?;
+        let fields: &[&str] = match kind {
+            "edit" => &["kind", "body", "start", "deletedText", "insertedText"],
+            "ghost" => &["kind", "body", "change", "undo"],
+            "alt" => &[
+                "kind",
+                "body",
+                "start",
+                "deletedText",
+                "insertedText",
+                "span",
+                "target",
+            ],
+            "move" => &[
+                "kind",
+                "body",
+                "start",
+                "deletedText",
+                "insertedText",
+                "move",
+            ],
+            "swap" => &[
+                "kind",
+                "body",
+                "start",
+                "deletedText",
+                "insertedText",
+                "span",
+                "from",
+                "to",
+            ],
+            "overflow" => &[
+                "kind",
+                "body",
+                "start",
+                "deletedText",
+                "insertedText",
+                "before",
+                "after",
+            ],
+            _ => return Err(history_error("invalid-payload", "unknown history kind")),
+        };
+        history_fields(value, fields)?;
+        let body = history_string(value, "body")?;
+        let edit = if kind == "ghost" {
+            None
+        } else {
+            Some(HistoryTextEdit {
+                start: history_integer(value, "start")?,
+                deleted: history_string(value, "deletedText")?,
+                inserted: history_string(value, "insertedText")?,
+            })
+        };
+        let kind = match kind {
+            "edit" => HistoryKind::Edit,
+            "ghost" => {
+                let change = &value["change"];
+                history_fields(change, &["body", "before", "after"])?;
+                for side in ["before", "after"] {
+                    history_fields(&change[side], &["live", "setAside", "reservedIds"])?;
+                }
+                HistoryKind::Ghost {
+                    change: GhostChange::from_json(change)
+                        .map_err(|_| history_error("invalid-payload", "invalid ghost receipt"))?,
+                    undo: value["undo"].as_bool().ok_or_else(|| {
+                        history_error("invalid-payload", "ghost direction must be boolean")
+                    })?,
+                }
+            }
+            "alt" => {
+                let target: Option<Span> = serde_json::from_value(value["target"].clone())
+                    .map_err(|_| {
+                        history_error("invalid-payload", "invalid alternative snapshot")
+                    })?;
+                if let Some(span) = &target {
+                    // Reuse the schema's semantic validation, not a duplicate
+                    // alternative/anchor validator or serialized session clone.
+                    let mut fixture = Document::new("");
+                    fixture.annotations.spans.push(span.clone());
+                    parse(&write(&fixture)).map_err(|_| {
+                        history_error("invalid-payload", "invalid alternative snapshot")
+                    })?;
+                }
+                HistoryKind::Alt {
+                    span: history_string(value, "span")?,
+                    target,
+                }
+            }
+            "move" => {
+                history_fields(&value["move"], &["start", "end", "to"])?;
+                HistoryKind::Move {
+                    start: history_integer(&value["move"], "start")?,
+                    end: history_integer(&value["move"], "end")?,
+                    to: history_integer(&value["move"], "to")?,
+                }
+            }
+            "swap" => HistoryKind::Swap {
+                span: history_string(value, "span")?,
+                from: history_integer(value, "from")?,
+                to: history_integer(value, "to")?,
+            },
+            "overflow" => HistoryKind::Overflow {
+                before: history_string(value, "before")?,
+                after: history_string(value, "after")?,
+            },
+            _ => unreachable!("kind checked above"),
+        };
+        operations.push(HistoryOperation { body, edit, kind });
+    }
+    Ok(operations)
+}
+
+impl HistoryTextEdit {
+    fn checked_body(&self, body: &str) -> Result<String, HistoryTransactionError> {
+        let end = self
+            .start
+            .checked_add(utf16_len(&self.deleted))
+            .filter(|end| *end <= u32::MAX as usize)
+            .ok_or_else(|| history_error("invalid-range", "history edit end overflow"))?;
+        let (a, b) = utf16_to_byte(body, self.start)
+            .zip(utf16_to_byte(body, end))
+            .ok_or_else(|| {
+                history_error(
+                    "invalid-range",
+                    "history edit splits a scalar or is out of bounds",
+                )
+            })?;
+        if body[a..b] != self.deleted {
+            return Err(history_error(
+                "body-conflict",
+                "history deleted text does not match",
+            ));
+        }
+        let size = body
+            .len()
+            .checked_sub(b - a)
+            .and_then(|n| n.checked_add(self.inserted.len()))
+            .filter(|n| *n <= HISTORY_JSON_LIMIT)
+            .ok_or_else(|| history_error("limit", "history result exceeds 16 MiB"))?;
+        let mut result = String::with_capacity(size);
+        result.push_str(&body[..a]);
+        result.push_str(&self.inserted);
+        result.push_str(&body[b..]);
+        Ok(result)
+    }
+}
+
+impl DocumentSession {
+    /// Simulate the complete ordered group on one clone, publish only after
+    /// every metadata/body guard passes. Ghost-free legacy APIs are unchanged.
+    pub fn replay_history_group_atomic(
+        &mut self,
+        expected_body: &str,
+        target_body: &str,
+        operations: &[HistoryOperation],
+    ) -> Result<(), HistoryTransactionError> {
+        history_bytes(expected_body)?;
+        history_bytes(target_body)?;
+        if operations.len() > HISTORY_OPERATION_LIMIT {
+            return Err(history_error("limit", "more than 4096 operations"));
+        }
+        if self.body() != expected_body {
+            return Err(history_error(
+                "body-conflict",
+                "initial history body does not match",
+            ));
+        }
+        let mut trial = self.clone();
+        for op in operations {
+            let recorded = op
+                .edit
+                .as_ref()
+                .map(|edit| edit.checked_body(trial.body()))
+                .transpose()?;
+            let model_error = |message: String| history_error("model-refusal", message);
+            match &op.kind {
+                HistoryKind::Ghost { change, undo } => trial
+                    .replay_ghost_change(change, *undo)
+                    .map_err(model_error)?,
+                HistoryKind::Edit => {
+                    let e = op.edit.as_ref().expect("decoded edit");
+                    trial
+                        .apply_edit(e.start, utf16_len(&e.deleted), &e.inserted)
+                        .map_err(|e| model_error(e.to_string()))?;
+                }
+                HistoryKind::Alt { span, target } => {
+                    let e = op.edit.as_ref().expect("decoded edit");
+                    trial
+                        .alt_restore(
+                            span,
+                            target.clone(),
+                            e.start,
+                            utf16_len(&e.deleted),
+                            &e.inserted,
+                        )
+                        .map_err(model_error)?;
+                }
+                HistoryKind::Move { start, end, to } => {
+                    trial
+                        .move_range(*start, *end, *to)
+                        .map_err(|e| model_error(e.to_string()))?;
+                }
+                HistoryKind::Swap { span, from, to } => {
+                    if trial.live_span(span).map(|s| s.active) != Some(*from) {
+                        return Err(history_error(
+                            "model-refusal",
+                            "swap source index conflicts",
+                        ));
+                    }
+                    trial
+                        .set_active(span, *to)
+                        .map_err(|e| model_error(e.to_string()))?;
+                }
+                HistoryKind::Overflow { before, after } => {
+                    let e = op.edit.as_ref().expect("decoded edit");
+                    trial
+                        .apply_edit(e.start, utf16_len(&e.deleted), &e.inserted)
+                        .map_err(|e| model_error(e.to_string()))?;
+                    if !trial
+                        .replay_overflow(before, after)
+                        .map_err(|e| model_error(e.to_string()))?
+                        .applied
+                    {
+                        return Err(history_error(
+                            "model-refusal",
+                            "overflow replay could not be applied",
+                        ));
+                    }
+                }
+            }
+            if trial.body() != op.body || recorded.as_ref().is_some_and(|body| body != trial.body())
+            {
+                return Err(history_error(
+                    "body-conflict",
+                    "intermediate history body or replacement envelope conflicts",
+                ));
+            }
+        }
+        if trial.body() != target_body {
+            return Err(history_error(
+                "body-conflict",
+                "final history body does not match",
+            ));
+        }
+        trial
+            .validate_history_annotations()
+            .map_err(|e| history_error("model-refusal", e))?;
+        *self = trial;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct HistoryCheckpoint {
+    token: String,
+    before: DocumentSession,
+    after: DocumentSession,
+    role_generation: Option<u64>,
+}
+
+#[derive(Debug, Default)]
+struct HistoryBridge {
+    watermark: u64,
+    pending: Option<HistoryCheckpoint>,
+}
+
+thread_local! { static HISTORY_BRIDGE: RefCell<HistoryBridge> = RefCell::new(HistoryBridge::default()); }
+
+fn history_available() -> Result<(), HistoryTransactionError> {
+    HISTORY_BRIDGE.with(|cell| {
+        if cell.borrow().pending.is_some() {
+            Err(history_error(
+                "pending",
+                "finish, abort or explicitly recover the outstanding transaction",
+            ))
+        } else {
+            Ok(())
+        }
+    })
+}
+
+fn begin_history_checkpoint(
+    role_generation: Option<u64>,
+    op: impl FnOnce(&mut DocumentSession) -> Result<Option<Value>, HistoryTransactionError>,
+) -> Result<Option<Value>, HistoryTransactionError> {
+    HISTORY_BRIDGE.with(|cell| {
+        let mut bridge = cell.borrow_mut();
+        if bridge.pending.is_some() {
+            return Err(history_error(
+                "pending",
+                "an outstanding transaction requires acknowledgement or recovery",
+            ));
+        }
+        let next = bridge.watermark.checked_add(1).ok_or_else(|| {
+            history_error("token-exhausted", "transaction token allocation exhausted")
+        })?;
+        with_session(|session| {
+            let mut trial = session.clone();
+            let Some(payload) = op(&mut trial)? else {
+                return Ok(None);
+            };
+            trial
+                .validate_history_annotations()
+                .map_err(|e| history_error("model-refusal", e))?;
+            let token = format!("history-{next}");
+            let mut response = payload;
+            response
+                .as_object_mut()
+                .expect("internal response object")
+                .insert("token".into(), json!(token));
+            // Prepare response and checkpoint before publishing any state.
+            let checkpoint = HistoryCheckpoint {
+                token,
+                before: session.clone(),
+                after: trial.clone(),
+                role_generation,
+            };
+            bridge.watermark = next;
+            bridge.pending = Some(checkpoint);
+            *session = trial;
+            Ok(Some(response))
+        })
+    })
+}
+
+/// Native bridge for the future JS adapter. No document clones cross the bridge.
+pub fn begin_history_replay_json(
+    expected_body: &str,
+    target_body: &str,
+    operations_json: &str,
+) -> Result<Value, HistoryTransactionError> {
+    history_bytes(expected_body)?;
+    history_bytes(target_body)?;
+    let operations = parse_history_operations(operations_json)?;
+    history_available()?;
+    begin_history_checkpoint(None, |trial| {
+        trial.replay_history_group_atomic(expected_body, target_body, &operations)?;
+        Ok(Some(
+            json!({"ok":true,"annotations":trial.annotations_json()}),
+        ))
+    })?
+    .ok_or_else(|| history_error("model-refusal", "missing replay response"))
+}
+
+/// Protected-only promotion: exact native body guard before B's fresh range
+/// seam, called without a SESSION borrow (B reads SESSION itself). No sync or
+/// arbitrary-range WASM bypass. Finish also checks authoritative role state.
+pub fn begin_trim_ghost_transaction_json(
+    expected_body: &str,
+    level: &str,
+    kept_json: &str,
+) -> Result<Option<Value>, HistoryTransactionError> {
+    history_bytes(expected_body)?;
+    history_bytes(level)?;
+    let kept = bounded_history_array(kept_json)?;
+    if kept
+        .as_array()
+        .expect("checked array")
+        .iter()
+        .any(|id| id.as_u64().is_none_or(|n| n > u32::MAX as u64))
+    {
+        return Err(history_error(
+            "invalid-payload",
+            "kept IDs must be exact nonnegative 32-bit integers",
+        ));
+    }
+    history_available()?;
+    if !with_session(|s| s.body() == expected_body) {
+        return Err(history_error(
+            "body-conflict",
+            "promotion body does not match",
+        ));
+    }
+    let ranges = crate::lab::protected_trim_promotion_ranges(level, kept_json)
+        .map_err(|e| history_error("protection-refusal", e))?;
+    let role = crate::kg::active_role_snapshot()
+        .filter(|r| r.protection.is_ok())
+        .ok_or_else(|| history_error("role-conflict", "protected role is unavailable"))?;
+    if ranges.is_empty() {
+        return Ok(None);
+    }
+    begin_history_checkpoint(Some(role.generation), |trial| {
+        let change = trial
+            .ghost_ranges_atomic(expected_body, &ranges)
+            .map_err(|e| history_error("model-refusal", e))?;
+        Ok(change.map(|change| json!({"ok":true,"change":change.to_json(),"annotations":trial.annotations_json()})))
+    })
+}
+
+fn acknowledge_history(token: &str, abort: bool) -> Result<Value, HistoryTransactionError> {
+    history_bytes(token)?;
+    HISTORY_BRIDGE.with(|cell| {
+        let mut bridge = cell.borrow_mut();
+        let checkpoint = bridge
+            .pending
+            .as_ref()
+            .filter(|p| p.token == token)
+            .ok_or_else(|| {
+                history_error("unknown-token", "unknown or consumed transaction token")
+            })?;
+        if !with_session(|s| *s == checkpoint.after) {
+            return Err(history_error(
+                "session-conflict",
+                "document interleaved; explicit canonical recovery required",
+            ));
+        }
+        if !abort
+            && checkpoint.role_generation.is_some_and(|generation| {
+                !crate::kg::active_role_snapshot()
+                    .is_some_and(|role| role.generation == generation && role.protection.is_ok())
+            })
+        {
+            return Err(history_error(
+                "role-conflict",
+                "protected role changed; guarded document abort is still available",
+            ));
+        }
+        let response = if abort {
+            json!({"ok":true,"rolledBack":true,"token":token})
+        } else {
+            json!({"ok":true,"finalized":true,"token":token})
+        };
+        let checkpoint = bridge.pending.take().expect("validated pending token");
+        if abort {
+            with_session(|s| *s = checkpoint.before);
+        }
+        Ok(response)
+    })
+}
+
+pub fn finish_history_transaction_json(token: &str) -> Result<Value, HistoryTransactionError> {
+    acknowledge_history(token, false)
+}
+pub fn abort_history_transaction_json(token: &str) -> Result<Value, HistoryTransactionError> {
+    acknowledge_history(token, true)
+}
+
+/// Explicit canonical reopen/recovery, not a successful abort. Retires only
+/// the named pending checkpoint; does not restore interleaved/global role data
+/// or reset the token watermark. Ordinary open never silently retires it.
+pub fn recover_history_transaction_json(
+    token: &str,
+    source: &str,
+) -> Result<Value, HistoryTransactionError> {
+    history_bytes(token)?;
+    history_bytes(source)?;
+    HISTORY_BRIDGE.with(|cell| {
+        let mut bridge = cell.borrow_mut();
+        if !bridge.pending.as_ref().is_some_and(|p| p.token == token) { return Err(history_error("unknown-token", "unknown recovery token")); }
+        let mut trial = DocumentSession::new();
+        let opened = trial.open(source);
+        let response = json!({"ok":true,"recovered":true,"rolledBack":false,"token":token,"opened":opened.to_json(),"annotations":trial.annotations_json()});
+        with_session(|s| *s = trial);
+        bridge.pending = None;
+        Ok(response)
+    })
+}
+
+fn history_js_error(error: HistoryTransactionError) -> JsValue {
+    js_sys::JSON::parse(&json!({"ok":false,"kind":error.kind,"error":error.message}).to_string())
+        .unwrap_or_else(|_| JsValue::from_str(&error.to_string()))
+}
+
+fn history_js_value(value: &Value) -> Result<JsValue, HistoryTransactionError> {
+    js_sys::JSON::parse(&value.to_string()).map_err(|_| {
+        history_error(
+            "transport-refusal",
+            "transaction response could not be decoded",
+        )
+    })
+}
+
+fn history_begin_js(value: Value) -> Result<JsValue, JsValue> {
+    match history_js_value(&value) {
+        Ok(value) => Ok(value),
+        Err(error) => {
+            // Failed delivery is not acknowledgement. Restore the private
+            // native checkpoint, unless interleaved state now forbids rollback.
+            let token = value["token"].as_str().expect("internal token response");
+            abort_history_transaction_json(token).map_err(history_js_error)?;
+            Err(history_js_error(error))
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub fn begin_document_history_replay(
+    expected_body: &str,
+    target_body: &str,
+    operations_json: &str,
+) -> Result<JsValue, JsValue> {
+    history_begin_js(
+        begin_history_replay_json(expected_body, target_body, operations_json)
+            .map_err(history_js_error)?,
+    )
+}
+
+#[wasm_bindgen]
+pub fn begin_trim_ghost_transaction(
+    expected_body: &str,
+    level: &str,
+    kept_json: &str,
+) -> Result<JsValue, JsValue> {
+    match begin_trim_ghost_transaction_json(expected_body, level, kept_json)
+        .map_err(history_js_error)?
+    {
+        Some(value) => history_begin_js(value),
+        None => Ok(JsValue::NULL),
+    }
+}
+
+#[wasm_bindgen]
+pub fn finish_document_history_transaction(token: &str) -> Result<JsValue, JsValue> {
+    history_bytes(token).map_err(history_js_error)?;
+    let response = history_js_value(&json!({"ok":true,"finalized":true,"token":token}))
+        .map_err(history_js_error)?;
+    finish_history_transaction_json(token).map_err(history_js_error)?;
+    Ok(response)
+}
+
+#[wasm_bindgen]
+pub fn abort_document_history_transaction(token: &str) -> Result<JsValue, JsValue> {
+    history_bytes(token).map_err(history_js_error)?;
+    let response = history_js_value(&json!({"ok":true,"rolledBack":true,"token":token}))
+        .map_err(history_js_error)?;
+    abort_history_transaction_json(token).map_err(history_js_error)?;
+    Ok(response)
+}
+
+#[wasm_bindgen]
+pub fn recover_document_history_transaction(token: &str, source: &str) -> Result<JsValue, JsValue> {
+    recover_history_transaction_json(token, source)
+        .and_then(|v| history_js_value(&v))
+        .map_err(history_js_error)
+}
+
+#[cfg(test)]
+mod history_checkpoint_tests {
+    use super::*;
+
+    #[test]
+    fn full_namespace_validation_rejects_unresolved_collision_without_save_renaming() {
+        let mut s = DocumentSession::new();
+        s.open("abc");
+        let receipt = s.ghost_ranges_atomic("abc", &[(0, 1)]).unwrap().unwrap();
+        s.apply_edit(0, 1, "").unwrap();
+        assert_eq!(s.set_aside.ghosts[0].id, "g1");
+        let before = s.clone();
+        let target = json!({"id":"g1","kind":"word","anchor":{"start":0,"end":1,"text":"b"},"active":0,
+            "alts":[{"text":"b","source":"original"},{"text":"bee","source":"human"}]});
+        let ops = json!([{"kind":"alt","body":"bc","start":0,"deletedText":"","insertedText":"","span":"g1","target":target}]);
+        assert_eq!(
+            s.replay_history_group_atomic(
+                "bc",
+                "bc",
+                &parse_history_operations(&ops.to_string()).unwrap()
+            )
+            .unwrap_err()
+            .kind,
+            "model-refusal"
+        );
+        assert_eq!(s, before);
+        assert!(s.ghost_receipts.contains(&receipt.to_json().to_string()));
+        assert_eq!(s.set_aside.ghosts[0].id, "g1");
+        assert!(parse(&s.save()).is_ok());
+    }
+
+    #[test]
+    fn full_schema_validation_preserves_legitimate_overlapping_set_aside_hints() {
+        let mut s = DocumentSession::new();
+        s.open("abc");
+        s.set_aside.ghosts = vec![
+            Ghost {
+                id: "unresolved-one".into(),
+                anchor: Anchor::new(0, 1, "x"),
+            },
+            Ghost {
+                id: "unresolved-two".into(),
+                anchor: Anchor::new(0, 1, "y"),
+            },
+        ];
+        s.reserve_current_ids();
+        let before = s.clone();
+        s.replay_history_group_atomic("abc", "abc", &[]).unwrap();
+        assert_eq!(
+            s, before,
+            "validation must not move live hints or rename IDs"
+        );
+        assert!(parse(&s.save()).is_ok());
+        s.set_aside.ghosts[1].id = "unresolved-one".into();
+        let before = s.clone();
+        assert_eq!(
+            s.replay_history_group_atomic("abc", "abc", &[])
+                .unwrap_err()
+                .kind,
+            "model-refusal"
+        );
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn checkpoint_schema_refusal_preserves_watermark_pending_and_raw_block() {
+        with_session(|s| {
+            s.open("abc");
+        });
+        let watermark = HISTORY_BRIDGE.with(|b| b.borrow().watermark);
+        with_session(|s| {
+            s.doc.annotations.ghosts = vec![
+                Ghost {
+                    id: "duplicate".into(),
+                    anchor: Anchor::new(0, 1, "a"),
+                },
+                Ghost {
+                    id: "duplicate".into(),
+                    anchor: Anchor::new(1, 2, "b"),
+                },
+            ];
+        });
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            begin_history_replay_json("abc", "abc", "[]")
+                .unwrap_err()
+                .kind,
+            "model-refusal"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        HISTORY_BRIDGE.with(|b| {
+            assert!(b.borrow().pending.is_none());
+            assert_eq!(b.borrow().watermark, watermark);
+        });
+        with_session(|s| {
+            s.open("abc");
+        });
+        let started = begin_history_replay_json("abc", "abc", "[]").unwrap();
+        let token = started["token"].as_str().unwrap();
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            begin_history_replay_json("abc", "abc", "[]")
+                .unwrap_err()
+                .kind,
+            "pending"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        abort_history_transaction_json(token).unwrap();
+        with_session(|s| {
+            s.open("abc\n\n```terraphim-alternatives\n{\n```\n");
+        });
+        let before = with_session(|s| s.clone());
+        let body = before.body();
+        assert_eq!(
+            begin_history_replay_json(body, body, "[]")
+                .unwrap_err()
+                .kind,
+            "model-refusal"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        assert_eq!(with_session(|s| s.save()), before.save());
+    }
+
+    fn edit(body: &str, start: usize, deleted: &str, inserted: &str) -> Value {
+        json!({"kind":"edit","body":body,"start":start,"deletedText":deleted,"insertedText":inserted})
+    }
+
+    #[test]
+    fn mixed_history_intermediate_body_and_late_failure_are_atomic() {
+        let mut s = DocumentSession::new();
+        s.open("abc");
+        let change = s.ghost_ranges_atomic("abc", &[(0, 1)]).unwrap().unwrap();
+        s.apply_edit(3, 0, "X").unwrap();
+        let operations = json!([edit("abc", 3, "X", ""), {"kind":"ghost","body":"abc","change":change.to_json(),"undo":true}]);
+        let parsed = parse_history_operations(&operations.to_string()).unwrap();
+        let before = s.clone();
+        s.replay_history_group_atomic("abcX", "abc", &parsed)
+            .unwrap();
+        assert!(s.doc.annotations.ghosts.is_empty());
+        assert_eq!(s.reserved_ids, before.reserved_ids);
+        let mut s = before;
+        s.ghost(1, 2).unwrap();
+        let before = s.clone();
+        assert!(s
+            .replay_history_group_atomic("abcX", "abc", &parsed)
+            .is_err());
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn checkpoint_exact_abort_wrong_tokens_and_consumed_tokens() {
+        with_session(|s| {
+            s.open("abcX");
+        });
+        let before = with_session(|s| s.clone());
+        let ops = json!([edit("abc", 3, "X", "")]).to_string();
+        let started = begin_history_replay_json("abcX", "abc", &ops).unwrap();
+        let token = started["token"].as_str().unwrap();
+        assert!(finish_history_transaction_json("wrong").is_err());
+        assert!(abort_history_transaction_json("wrong").is_err());
+        assert_eq!(
+            abort_history_transaction_json(token).unwrap(),
+            json!({"ok":true,"rolledBack":true,"token":token})
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        assert!(finish_history_transaction_json(token).is_err());
+        let next = begin_history_replay_json("abcX", "abc", &ops).unwrap();
+        assert_ne!(next["token"], started["token"]);
+        finish_history_transaction_json(next["token"].as_str().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn protected_checkpoint_role_invalidation_aborts_document_only() {
+        const BODY: &str = "The editor is basically the only target here today.";
+        crate::kg::load_thesaurus(
+            r#"{"name":"public-test","data":{"unmentioned":{"id":1,"nterm":"unmentioned"}}}"#,
+        )
+        .unwrap();
+        with_session(|s| {
+            s.open(BODY);
+        });
+        crate::lab::session_trim_plan_json().unwrap();
+        let before = with_session(|s| s.clone());
+        let started = begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+            .unwrap()
+            .unwrap();
+        let token = started["token"].as_str().unwrap();
+        crate::kg::clear_thesaurus();
+        assert_eq!(
+            finish_history_transaction_json(token).unwrap_err().kind,
+            "role-conflict"
+        );
+        abort_history_transaction_json(token).unwrap();
+        assert_eq!(with_session(|s| s.clone()), before);
+        assert!(crate::kg::active_role_snapshot().is_none());
+    }
+
+    #[test]
+    fn protected_unsafe_role_and_joint_document_conflict_do_not_lose_checkpoint() {
+        const BODY: &str = "The editor is basically the only target here today.";
+        const ROLE: &str =
+            r#"{"name":"public-test","data":{"unmentioned":{"id":1,"nterm":"unmentioned"}}}"#;
+        const UNSAFE: &str =
+            r#"{"name":"unsupported","data":{"Straße":{"id":2,"nterm":"strasse"}}}"#;
+        crate::kg::load_thesaurus(ROLE).unwrap();
+        with_session(|s| {
+            s.open(BODY);
+        });
+        crate::lab::session_trim_plan_json().unwrap();
+        let before = with_session(|s| s.clone());
+        let started = begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+            .unwrap()
+            .unwrap();
+        let token = started["token"].as_str().unwrap();
+        crate::kg::load_thesaurus(UNSAFE).unwrap();
+        let newer_role = crate::kg::role_snapshot_json();
+        assert_eq!(
+            finish_history_transaction_json(token).unwrap_err().kind,
+            "role-conflict"
+        );
+        abort_history_transaction_json(token).unwrap();
+        assert_eq!(
+            with_session(|s| s.clone()),
+            before,
+            "failed record rollback releases new ghost reservations/receipt"
+        );
+        assert_eq!(crate::kg::role_snapshot_json(), newer_role);
+        assert!(crate::lab::session_trim_status("sharper", "[]").is_err());
+        crate::kg::load_thesaurus(ROLE).unwrap();
+        crate::lab::session_trim_plan_json().unwrap();
+        let started = begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+            .unwrap()
+            .unwrap();
+        let token = started["token"].as_str().unwrap();
+        crate::kg::clear_thesaurus();
+        with_session(|s| {
+            s.set_overflow("interleaved notes").unwrap();
+        });
+        let interleaved = with_session(|s| s.clone());
+        assert_eq!(
+            finish_history_transaction_json(token).unwrap_err().kind,
+            "session-conflict"
+        );
+        assert_eq!(
+            abort_history_transaction_json(token).unwrap_err().kind,
+            "session-conflict"
+        );
+        assert_eq!(with_session(|s| s.clone()), interleaved);
+        assert_eq!(
+            begin_history_replay_json(BODY, BODY, "[]")
+                .unwrap_err()
+                .kind,
+            "pending"
+        );
+        recover_history_transaction_json(token, &interleaved.save()).unwrap();
+        assert!(crate::kg::active_role_snapshot().is_none());
+    }
+
+    #[test]
+    fn same_body_alternatives_and_receipt_reservations_are_full_session_conflicts() {
+        for receipts in [false, true] {
+            with_session(|s| {
+                s.open("abc");
+            });
+            let started = begin_history_replay_json("abc", "abc", "[]").unwrap();
+            let token = started["token"].as_str().unwrap();
+            with_session(|s| {
+                if receipts {
+                    let change = s.ghost_ranges_atomic("abc", &[(0, 1)]).unwrap().unwrap();
+                    s.replay_ghost_change(&change, true).unwrap();
+                    assert!(s.doc.annotations.ghosts.is_empty());
+                } else {
+                    s.alt_create_span(SpanKind::Word, 0, 1, "alias", Source::Human)
+                        .unwrap();
+                }
+            });
+            let before = with_session(|s| s.clone());
+            assert_eq!(before.body(), "abc");
+            assert_eq!(
+                abort_history_transaction_json(token).unwrap_err().kind,
+                "session-conflict"
+            );
+            assert_eq!(with_session(|s| s.clone()), before);
+            recover_history_transaction_json(token, &before.save()).unwrap();
+        }
+    }
+
+    #[test]
+    fn identical_reopen_is_still_a_foreign_session() {
+        with_session(|s| {
+            s.open("abc");
+        });
+        let started = begin_history_replay_json("abc", "abc", "[]").unwrap();
+        let token = started["token"].as_str().unwrap();
+        with_session(|s| {
+            s.open("abc");
+        });
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            finish_history_transaction_json(token).unwrap_err().kind,
+            "session-conflict"
+        );
+        assert_eq!(
+            abort_history_transaction_json(token).unwrap_err().kind,
+            "session-conflict"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        recover_history_transaction_json(token, "abc").unwrap();
+    }
+
+    #[test]
+    fn all_legacy_kinds_use_model_semantics_and_check_replacement_envelopes() {
+        let mut s = DocumentSession::new();
+        s.open("a clip tail");
+        s.alt_create_span(SpanKind::Word, 2, 6, "eraser", Source::Human)
+            .unwrap();
+        let original = s.live_span("s1").unwrap().clone();
+        let ops = json!([
+            {"kind":"swap","body":"an eraser tail","start":1,"deletedText":" clip","insertedText":"n eraser","span":"s1","from":0,"to":1},
+            {"kind":"alt","body":"a clip tail","start":1,"deletedText":"n eraser","insertedText":" clip","span":"s1","target":original},
+            {"kind":"move","body":"taila clip ","start":0,"deletedText":"a clip tail","insertedText":"taila clip ","move":{"start":0,"end":7,"to":11}},
+            {"kind":"overflow","body":"a clip ","start":0,"deletedText":"tail","insertedText":"","before":"","after":"tail"}
+        ]);
+        s.replay_history_group_atomic(
+            "a clip tail",
+            "a clip ",
+            &parse_history_operations(&ops.to_string()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(s.overflow(), "tail");
+        assert_eq!(s.live_span("s1").unwrap().anchor.start, 2);
+        // Same metadata body but a contradictory replacement envelope refuses.
+        let before = s.clone();
+        let ops = json!([{"kind":"move","body":"a clip ","start":0,"deletedText":"","insertedText":"wrong","move":{"start":0,"end":2,"to":2}}]);
+        assert!(s
+            .replay_history_group_atomic(
+                "a clip ",
+                "a clip ",
+                &parse_history_operations(&ops.to_string()).unwrap()
+            )
+            .is_err());
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn overflow_unapplied_and_late_body_guards_leave_complete_session_unchanged() {
+        let mut s = DocumentSession::new();
+        s.open("abc");
+        s.set_overflow("edited").unwrap();
+        let ops = json!([edit("abcX", 3, "", "X"), {"kind":"overflow","body":"abc","start":3,"deletedText":"X","insertedText":"","before":"note\n\nchunk","after":"note"}]);
+        let before = s.clone();
+        assert!(s
+            .replay_history_group_atomic(
+                "abc",
+                "abc",
+                &parse_history_operations(&ops.to_string()).unwrap()
+            )
+            .is_err());
+        assert_eq!(s, before);
+        // Legacy API remains permissive; only the new atomic group refuses.
+        assert!(!s.replay_overflow("note\n\nchunk", "note").unwrap().applied);
+        for ops in [
+            json!([edit("wrong", 0, "a", "A")]),
+            json!([edit("Abc", 0, "z", "A")]),
+        ] {
+            assert!(s
+                .replay_history_group_atomic(
+                    "abc",
+                    "Abc",
+                    &parse_history_operations(&ops.to_string()).unwrap()
+                )
+                .is_err());
+            assert_eq!(s, before);
+        }
+        assert!(s
+            .replay_history_group_atomic("abc", "different", &[])
+            .is_err());
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn strict_parser_rejects_unknown_conflicting_float_and_bad_snapshots() {
+        for input in [
+            json!([{"kind":"unknown","body":"abc"}]),
+            json!([{"kind":"edit","body":"abc","start":0,"deletedText":"","insertedText":"","swap":{}}]),
+            json!([{"kind":"edit","body":"abc","start":1.0,"deletedText":"","insertedText":""}]),
+            json!([{"kind":"edit","body":"abc","start":-1,"deletedText":"","insertedText":""}]),
+            json!([{"kind":"edit","body":"abc","start":4294967296u64,"deletedText":"","insertedText":""}]),
+            json!([{"kind":"ghost","body":"abc","change":{},"undo":"true"}]),
+            json!([{"kind":"move","body":"abc","start":0,"deletedText":"","insertedText":"","move":{"start":0,"end":1,"to":2,"extra":true}}]),
+            json!([{"kind":"alt","body":"abc","start":0,"deletedText":"","insertedText":"","span":"s1","target":{}}]),
+        ] {
+            assert_eq!(
+                parse_history_operations(&input.to_string())
+                    .unwrap_err()
+                    .kind,
+                "invalid-payload"
+            );
+        }
+        let mut s = DocumentSession::new();
+        s.open("a😀b");
+        let mut fixture = Document::new("abc");
+        fixture.add_span(SpanKind::Word, 0, 1).unwrap();
+        let mut invalid = json!(fixture.annotations.spans[0]);
+        invalid["active"] = json!(99);
+        let invalid = json!([{"kind":"alt","body":"abc","start":0,"deletedText":"","insertedText":"","span":"s1","target":invalid}]);
+        assert_eq!(
+            parse_history_operations(&invalid.to_string())
+                .unwrap_err()
+                .kind,
+            "invalid-payload",
+            "typed but semantically invalid span must refuse before model use"
+        );
+        let before = s.clone();
+        for op in [edit("bad", 2, "", "X"), edit("bad", 99, "", "X")] {
+            assert_eq!(
+                s.replay_history_group_atomic(
+                    "a😀b",
+                    "bad",
+                    &parse_history_operations(&json!([op]).to_string()).unwrap()
+                )
+                .unwrap_err()
+                .kind,
+                "invalid-range"
+            );
+            assert_eq!(s, before);
+        }
+    }
+
+    #[test]
+    fn conflicted_checkpoint_preserves_interleaved_metadata_and_requires_explicit_reopen() {
+        with_session(|s| {
+            s.open("abcX");
+        });
+        let ops = json!([edit("abc", 3, "X", "")]).to_string();
+        let started = begin_history_replay_json("abcX", "abc", &ops).unwrap();
+        let token = started["token"].as_str().unwrap();
+        with_session(|s| {
+            s.set_overflow("interleaved").unwrap();
+        });
+        let interleaved = with_session(|s| s.clone());
+        assert_eq!(
+            finish_history_transaction_json(token).unwrap_err().kind,
+            "session-conflict"
+        );
+        assert_eq!(
+            abort_history_transaction_json(token).unwrap_err().kind,
+            "session-conflict"
+        );
+        assert_eq!(with_session(|s| s.clone()), interleaved);
+        assert_eq!(
+            begin_history_replay_json("abc", "abc", "[]")
+                .unwrap_err()
+                .kind,
+            "pending"
+        );
+        assert!(recover_history_transaction_json("wrong", "fresh").is_err());
+        assert_eq!(with_session(|s| s.clone()), interleaved);
+        let recovery = recover_history_transaction_json(token, &interleaved.save()).unwrap();
+        assert_eq!(recovery["rolledBack"], false);
+        assert_eq!(recovery["recovered"], true);
+        assert_eq!(with_session(|s| s.overflow().to_string()), "interleaved");
+        assert!(abort_history_transaction_json(token).is_err());
+        let next = begin_history_replay_json("abc", "abc", "[]").unwrap();
+        assert_ne!(next["token"], started["token"]);
+        abort_history_transaction_json(next["token"].as_str().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn interleaved_open_never_discards_checkpoint_or_reuses_token() {
+        with_session(|s| {
+            s.open("abc");
+        });
+        let started = begin_history_replay_json("abc", "abc", "[]").unwrap();
+        let token = started["token"].as_str().unwrap();
+        with_session(|s| {
+            s.open("new body");
+        });
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            abort_history_transaction_json(token).unwrap_err().kind,
+            "session-conflict"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        recover_history_transaction_json(token, "new body").unwrap();
+        let next = begin_history_replay_json("new body", "new body", "[]").unwrap();
+        assert_ne!(next["token"], started["token"]);
+        let token = next["token"].as_str().unwrap();
+        assert_eq!(
+            finish_history_transaction_json(token).unwrap(),
+            json!({"ok":true,"finalized":true,"token":token})
+        );
+        assert!(abort_history_transaction_json(token).is_err());
+    }
+
+    #[test]
+    fn private_token_exhaustion_and_failed_begin_are_safe() {
+        with_session(|s| {
+            s.open("abc");
+        });
+        let before = with_session(|s| s.clone());
+        HISTORY_BRIDGE.with(|b| b.borrow_mut().watermark = u64::MAX);
+        assert_eq!(
+            begin_history_replay_json("abc", "abc", "[]")
+                .unwrap_err()
+                .kind,
+            "token-exhausted"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        assert!(HISTORY_BRIDGE.with(|b| b.borrow().pending.is_none()));
+        HISTORY_BRIDGE.with(|b| b.borrow_mut().watermark = 0);
+        let bad = json!([edit("bad", 0, "z", "X")]).to_string();
+        assert!(begin_history_replay_json("abc", "bad", &bad).is_err());
+        assert_eq!(with_session(|s| s.clone()), before);
+        let started = begin_history_replay_json("abc", "abc", "[]").unwrap();
+        assert_eq!(started["token"], "history-1");
+        abort_history_transaction_json("history-1").unwrap();
+        let started = begin_history_replay_json("abc", "abc", "[]").unwrap();
+        assert_eq!(started["token"], "history-2");
+        abort_history_transaction_json("history-2").unwrap();
+    }
+
+    #[test]
+    fn byte_count_nesting_and_body_transport_limits_are_exact() {
+        let exact = format!("[]{}", " ".repeat(HISTORY_JSON_LIMIT - 2));
+        assert!(parse_history_operations(&exact).unwrap().is_empty());
+        assert_eq!(
+            parse_history_operations(&(exact + " ")).unwrap_err().kind,
+            "limit"
+        );
+        let operation = edit("abc", 0, "", "");
+        let exact = json!(vec![operation.clone(); HISTORY_OPERATION_LIMIT]).to_string();
+        assert_eq!(
+            parse_history_operations(&exact).unwrap().len(),
+            HISTORY_OPERATION_LIMIT
+        );
+        let mut tiny = DocumentSession::new();
+        tiny.open("abc");
+        let before_tiny = tiny.clone();
+        tiny.replay_history_group_atomic("abc", "abc", &parse_history_operations(&exact).unwrap())
+            .unwrap();
+        assert_eq!(tiny, before_tiny);
+        assert_eq!(
+            parse_history_operations(
+                &json!(vec![operation; HISTORY_OPERATION_LIMIT + 1]).to_string()
+            )
+            .unwrap_err()
+            .kind,
+            "limit"
+        );
+        assert_eq!(
+            parse_history_operations(&format!("{}0{}", "[".repeat(150), "]".repeat(150)))
+                .unwrap_err()
+                .kind,
+            "invalid-payload"
+        );
+        let body = "é".repeat(HISTORY_JSON_LIMIT / 2);
+        let mut s = DocumentSession::new();
+        s.open(&body);
+        s.replay_history_group_atomic(&body, &body, &[]).unwrap();
+        let before = s.clone();
+        assert_eq!(
+            s.replay_history_group_atomic(&(body.clone() + "x"), &body, &[])
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        assert_eq!(
+            s.replay_history_group_atomic(&body, &(body.clone() + "x"), &[])
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn kept_limits_and_failed_protection_preserve_pending_and_session() {
+        let ids = json!(vec![0u32; HISTORY_OPERATION_LIMIT]).to_string();
+        assert_eq!(
+            bounded_history_array(&ids)
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            HISTORY_OPERATION_LIMIT
+        );
+        with_session(|s| {
+            s.open("abc");
+        });
+        let started = begin_history_replay_json("abc", "abc", "[]").unwrap();
+        let before = with_session(|s| s.clone());
+        let ids = json!(vec![0u32; HISTORY_OPERATION_LIMIT + 1]).to_string();
+        let oversized = " ".repeat(HISTORY_JSON_LIMIT + 1);
+        assert_eq!(
+            begin_history_replay_json("abc", "abc", &oversized)
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        assert_eq!(
+            begin_history_replay_json("abc", &oversized, "[]")
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        assert_eq!(
+            begin_trim_ghost_transaction_json("abc", "sharper", &ids)
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        assert_eq!(
+            begin_trim_ghost_transaction_json("abc", "sharper", "[1.0]")
+                .unwrap_err()
+                .kind,
+            "invalid-payload"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        abort_history_transaction_json(started["token"].as_str().unwrap()).unwrap();
+        crate::kg::clear_thesaurus();
+        assert_eq!(
+            begin_trim_ghost_transaction_json("abc", "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "protection-refusal"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+    }
+
+    #[test]
+    fn protected_body_malformed_manual_overlap_and_noop_guards_precede_publication() {
+        const BODY: &str = "The editor is basically the only target here today.";
+        crate::kg::load_thesaurus(
+            r#"{"name":"public-test","data":{"unmentioned":{"id":1,"nterm":"unmentioned"}}}"#,
+        )
+        .unwrap();
+        let source = format!("{BODY}\n\n```terraphim-alternatives\n{{\n```\n");
+        with_session(|s| {
+            s.open(&source);
+        });
+        crate::lab::session_trim_plan_json().unwrap();
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            begin_trim_ghost_transaction_json("wrong", "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "body-conflict"
+        );
+        assert_eq!(
+            begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "model-refusal"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        assert_eq!(with_session(|s| s.save()), source);
+        with_session(|s| {
+            s.open(BODY);
+        });
+        crate::lab::session_trim_plan_json().unwrap();
+        assert_eq!(
+            begin_trim_ghost_transaction_json(BODY, "original", "[]").unwrap(),
+            None
+        );
+        let kept = json!(vec![0u32; HISTORY_OPERATION_LIMIT]).to_string();
+        assert_eq!(
+            begin_trim_ghost_transaction_json(BODY, "original", &kept).unwrap(),
+            None
+        );
+        let ranges = crate::lab::protected_trim_ranges("sharper", "[]").unwrap();
+        assert!(!ranges.is_empty());
+        with_session(|s| {
+            s.ghost(ranges[0].0, ranges[0].1).unwrap();
+        });
+        let before = with_session(|s| s.clone());
+        assert_eq!(
+            begin_trim_ghost_transaction_json(BODY, "sharper", "[]")
+                .unwrap_err()
+                .kind,
+            "model-refusal"
+        );
+        assert_eq!(with_session(|s| s.clone()), before);
+        assert!(HISTORY_BRIDGE.with(|b| b.borrow().pending.is_none()));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use terraphim_alternatives::{Source, SpanKind};
+
+    #[test]
+    fn independent_transaction_adjacent_receipt_replay_and_reservation() {
+        let mut s = DocumentSession::new();
+        s.open("abcdef");
+        s.ghost(4, 6).unwrap();
+        let manual = s.document().annotations.ghosts.clone();
+        let change = s
+            .ghost_ranges_atomic("abcdef", &[(0, 2), (2, 4)])
+            .unwrap()
+            .unwrap();
+        assert_eq!(s.document().annotations.ghosts.len(), 3);
+        assert_eq!(change.to_json()["body"], "abcdef");
+        let saved = s.save();
+        let mut reopened = DocumentSession::new();
+        reopened.open(&saved);
+        assert_eq!(reopened.export(), "");
+        s.replay_ghost_change(&change, true).unwrap();
+        assert_eq!(s.document().annotations.ghosts, manual);
+        s.replay_ghost_change(&change, false).unwrap();
+        s.replay_ghost_change(&change, true).unwrap();
+        assert_eq!(s.ghost(0, 1).unwrap(), "g4");
+        let before = s.clone();
+        assert!(s.replay_ghost_change(&change, false).is_err());
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn independent_transaction_refusals_restore_entire_session() {
+        let mut s = DocumentSession::new();
+        s.open("a😀bc");
+        for ranges in [
+            vec![(0, 1), (2, 3)],
+            vec![(0, 1), (4, 99)],
+            vec![(1, 1)],
+            vec![(0, 3), (1, 4)],
+        ] {
+            let before = s.clone();
+            assert!(s.ghost_ranges_atomic("a😀bc", &ranges).is_err());
+            assert_eq!(s, before);
+        }
+        let before = s.clone();
+        assert!(s.ghost_ranges_atomic("stale", &[(0, 1)]).is_err());
+        assert_eq!(s, before);
+        let source = "abc\n\n```terraphim-alternatives\n{\n```\n";
+        s.open(source);
+        let before = s.clone();
+        assert!(s.ghost_ranges_atomic("abc", &[(0, 1)]).is_err());
+        assert_eq!(s, before);
+        assert_eq!(s.save(), source);
+    }
+
+    #[test]
+    fn independent_transaction_preserves_spans_overflow_and_set_aside() {
+        let mut s = DocumentSession::new();
+        s.open("abcdef xyz");
+        s.alt_create_span(SpanKind::Word, 0, 6, "alias", Source::Human)
+            .unwrap();
+        s.set_overflow("notes").unwrap();
+        s.ghost(7, 10).unwrap();
+        s.apply_edit(7, 3, "").unwrap();
+        let before = s.clone();
+        let body = s.body().to_string();
+        let change = s
+            .ghost_ranges_atomic(&body, &[(0, 3), (3, 6)])
+            .unwrap()
+            .unwrap();
+        assert_eq!(change.after.live[0].id, "g2");
+        assert_eq!(s.doc.annotations.spans, before.doc.annotations.spans);
+        assert_eq!(s.set_aside, before.set_aside);
+        assert_eq!(s.overflow(), "notes");
+        s.alt_add("s1", "other", Source::Human).unwrap();
+        s.set_overflow("later notes").unwrap();
+        s.replay_ghost_change(&change, true).unwrap();
+        assert_eq!(s.doc.annotations.spans[0].alts.len(), 3);
+        assert_eq!(s.overflow(), "later notes");
+        s.replay_ghost_change(&change, false).unwrap();
+        assert_eq!(s.set_aside, before.set_aside);
+        assert_eq!(s.body(), body);
+        let receipt = GhostChange::from_json(&change.to_json()).unwrap();
+        assert_eq!(receipt, change);
+        let mut forged = receipt.clone();
+        forged.before.live.clear();
+        forged.after.live[0].anchor.text = "forged".into();
+        let snapshot = s.clone();
+        assert!(s.replay_ghost_change(&forged, true).is_err());
+        assert_eq!(s, snapshot);
+        s.sync_body("different");
+        let snapshot = s.clone();
+        assert!(s.replay_ghost_change(&receipt, true).is_err());
+        assert_eq!(s, snapshot);
+    }
+
+    #[test]
+    fn independent_transaction_manual_overlap_and_empty_are_no_mutation() {
+        let mut s = DocumentSession::new();
+        s.open("abcdef");
+        s.ghost(0, 2).unwrap();
+        let before = s.clone();
+        assert!(s.ghost_ranges_atomic("abcdef", &[(1, 3)]).is_err());
+        assert_eq!(s.ghost_ranges_atomic("abcdef", &[]).unwrap(), None);
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn independent_transaction_group_preflight_refuses_late_conflict_atomically() {
+        let mut s = DocumentSession::new();
+        s.open("abcdef");
+        let a = s.ghost_ranges_atomic("abcdef", &[(0, 1)]).unwrap().unwrap();
+        let b = s.ghost_ranges_atomic("abcdef", &[(2, 3)]).unwrap().unwrap();
+        let before = s.clone();
+        let invalid = vec![(b.clone(), true), (a.clone(), false)];
+        assert!(s.preflight_ghost_changes(&invalid).is_err());
+        assert!(s.replay_ghost_changes(&invalid).is_err());
+        assert_eq!(s, before);
+        let undo = vec![(b.clone(), true), (a.clone(), true)];
+        s.preflight_ghost_changes(&undo).unwrap();
+        assert_eq!(s, before, "preflight is read-only");
+        s.replay_ghost_changes(&undo).unwrap();
+        assert!(s.doc.annotations.ghosts.is_empty());
+        s.replay_ghost_changes(&[(a, false), (b, false)]).unwrap();
+        assert_eq!(s, before);
+    }
+
+    #[test]
+    fn independent_transaction_exhaustion_live_set_aside_and_partial_batch() {
+        let mut s = DocumentSession::new();
+        s.open("abcdef");
+        // Private native fixture: no unsafe public allocator setter.
+        s.reserved_ids.insert(format!("g{}", u64::MAX - 1));
+        let before = s.clone();
+        assert!(s.ghost_ranges_atomic("abcdef", &[(0, 1), (1, 2)]).is_err());
+        assert_eq!(
+            s, before,
+            "second allocation failure restores first allocation too"
+        );
+        let change = s.ghost_ranges_atomic("abcdef", &[(0, 4)]).unwrap().unwrap();
+        let before = s.clone();
+        assert_eq!(s.revive(1, 2), Err(EditError::IdAllocation));
+        assert_eq!(s.ghost(5, 6), Err(EditError::IdAllocation));
+        assert_eq!(s, before);
+        s.replay_ghost_change(&change, true).unwrap();
+        let before = s.clone();
+        assert_eq!(s.ghost(5, 6), Err(EditError::IdAllocation));
+        assert_eq!(
+            s, before,
+            "undo does not release exhausted history identity"
+        );
+        s.replay_ghost_change(&change, false).unwrap();
+        s.apply_edit(0, 4, "").unwrap();
+        let before = s.clone();
+        assert_eq!(s.ghost(0, 1), Err(EditError::IdAllocation));
+        assert_eq!(s, before, "set-aside IDs are reserved");
+        s.apply_edit(0, 0, "abcd").unwrap();
+        assert_eq!(s.doc.annotations.ghosts[0].id, format!("g{}", u64::MAX));
+    }
+
+    #[test]
+    fn session_allocator_reserves_shared_namespace_and_removed_split_ids() {
+        let mut doc = Document::new("abcdef xyz");
+        doc.add_span(SpanKind::Word, 7, 10).unwrap();
+        doc.annotations.spans[0].id = "g8".into();
+        let mut s = DocumentSession::new();
+        s.open(&write(&doc));
+        assert_eq!(s.ghost(0, 6).unwrap(), "g9");
+        s.revive(2, 4).unwrap();
+        assert_eq!(s.doc.annotations.ghosts[1].id, "g10");
+        s.revive(0, 6).unwrap();
+        s.apply_edit(8, 0, "X").unwrap();
+        assert_eq!(s.set_aside.spans[0].id, "g8");
+        assert_eq!(s.ghost(0, 1).unwrap(), "g11");
+        assert_eq!(
+            s.ghost(1, 2).unwrap(),
+            "g11",
+            "merge keeps earliest identity"
+        );
+    }
 
     // ----- in-place cycling (issue #9) --------------------------------------
 
@@ -2800,7 +4822,7 @@ mod tests {
         session.ghost(0, 18).unwrap();
         assert_eq!(
             ghosts(&session),
-            vec![ghost("g1", 0, 18, "Pass me an eraser.")]
+            vec![ghost("g2", 0, 18, "Pass me an eraser.")]
         );
         // ...and a ghost cutting the span in half are both allowed.
         session.revive(0, 18).unwrap();
@@ -3085,6 +5107,77 @@ mod tests {
         assert_eq!(session, snapshot);
         assert!(parse_span_kind("clause").is_err());
         assert!(parse_alt_source("original").is_err());
+    }
+
+    #[test]
+    fn new_span_reserves_set_aside_and_undone_identities() {
+        let mut session = DocumentSession::new();
+        session.open("One two three.");
+        let old = session
+            .alt_create_span(SpanKind::Word, 4, 7, "pair", Source::Human)
+            .unwrap();
+        session.sync_body("Red green blue.");
+        assert_eq!(session.set_aside.spans[0].id, old.span);
+        let new = session
+            .alt_create_span(SpanKind::Word, 10, 14, "pair", Source::Human)
+            .unwrap();
+        assert_ne!(old.span, new.span);
+        let before = session.clone();
+        let add = session
+            .alt_add(&new.span, "quill", Source::Human)
+            .unwrap()
+            .unwrap();
+        round_trip(&mut session, &add, &before);
+        undo_alt(&mut session, &add);
+        assert_eq!(session.live_span(&new.span).unwrap().alts.len(), 2);
+        assert_eq!(session.set_aside.spans[0].id, old.span);
+        session.validate_history_annotations().unwrap();
+        undo_alt(&mut session, &new);
+        let replacement = session
+            .alt_create_span(SpanKind::Word, 10, 14, "pen", Source::Human)
+            .unwrap();
+        assert_ne!(replacement.span, new.span);
+    }
+
+    #[test]
+    fn kg_span_reserves_detached_identity_and_preserves_provenance() {
+        let mut session = DocumentSession::new();
+        session.open("One two three.");
+        let old = session
+            .alt_create_span(SpanKind::Word, 4, 7, "pair", Source::Human)
+            .unwrap();
+        session.sync_body("Red green blue.");
+        let before = session.clone();
+        let new = session
+            .append_alternatives(
+                SpanKind::Word,
+                10,
+                14,
+                &["quill".into()],
+                Source::Ai,
+                Some("local-kg"),
+            )
+            .unwrap()
+            .unwrap();
+        assert_ne!(new.span, old.span);
+        let span = session.live_span(&new.span).unwrap();
+        assert_eq!(span.alts[1].source, Source::Ai);
+        assert_eq!(span.alts[1].model.as_deref(), Some("local-kg"));
+        round_trip(&mut session, &new, &before);
+        assert_eq!(session.set_aside.spans[0].id, old.span);
+        session.validate_history_annotations().unwrap();
+    }
+
+    #[test]
+    fn exhausted_span_identity_refuses_atomically() {
+        let mut session = DocumentSession::new();
+        session.open("word");
+        session.reserved_ids.insert(format!("s{}", u64::MAX));
+        let before = session.clone();
+        assert!(session
+            .alt_create_span(SpanKind::Word, 0, 4, "alias", Source::Human)
+            .is_err());
+        assert_eq!(session, before);
     }
 
     #[test]

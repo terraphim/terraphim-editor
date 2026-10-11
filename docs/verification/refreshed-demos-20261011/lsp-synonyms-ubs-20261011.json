@@ -1,0 +1,25 @@
+{
+  "project": "/private/tmp/terraphim-ai-output-fixes-20261011",
+  "timestamp": "2026-10-11 14:04:36",
+  "status": "ok",
+  "failed_modules": [],
+  "scanners": [
+    {
+      "project": "/private/tmp/terraphim-ai-output-fixes-20261011",
+      "files": 4,
+      "critical": 5,
+      "warning": 281,
+      "info": 128,
+      "timestamp": "2026-10-11T13:04:36Z",
+      "format": "json",
+      "status": "ok",
+      "language": "rust"
+    }
+  ],
+  "totals": {
+    "critical": 5,
+    "warning": 281,
+    "info": 128,
+    "files": 4
+  }
+}

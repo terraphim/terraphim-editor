@@ -27,6 +27,9 @@ markdown = "1.0.0-alpha.21"
 rinja = { version = "0.3.5" }
 js-sys = "0.3.66"
 serde_json = "1"
+sha2 = "0.10.9"
+unicode-normalization = "0.1.25"
+unicode-segmentation = "1.12"
 thiserror = "2"
 terraphim_alternatives = { path = "crates/terraphim_alternatives" }
 terraphim_lab = { path = "crates/terraphim_lab" }
@@ -35,6 +38,7 @@ terraphim_lab = { path = "crates/terraphim_lab" }
 terraphim_lsp_core = { version = "=1.23.0", registry = "terraphim" }
 
 [dev-dependencies]
+terraphim_rolegraph_browser = { path = "crates/terraphim_rolegraph_browser" }
 wasm-bindgen-test = "0.3.39"
 wasm-bindgen-futures = "0.4"
 
@@ -55,7 +59,7 @@ name = "kg_bench"
 harness = false
 
 [workspace]
-members = [".", "crates/terraphim_alternatives", "crates/terraphim_lab"]
+members = [".", "crates/terraphim_alternatives", "crates/terraphim_lab", "crates/terraphim_rolegraph_browser"]
 resolver = "2"
 # terraphim_lsp_core depends on terraphim_alternatives 0.1 and terraphim_lab
 # 0.1 from the registry. Point those dependencies at the workspace members

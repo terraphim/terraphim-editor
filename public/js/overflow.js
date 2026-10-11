@@ -104,6 +104,7 @@ class TeOverflowPanel {
     this.returnFocus = null;
     this.pageDrag = null;
     this.panelDrag = null;
+    this.pointerDrag = null;
     this.readOnly = false;
     this.unregisterItem = () => {};
 
@@ -249,6 +250,13 @@ class TeOverflowPanel {
       on(this.surface.root, 'dragend', () => { this.pageDrag = null; });
       // Captured before EditorSurface's own drop handling, which inserts
       // the dropped text as it is.
+      // A custom pull-back target must accept its owned text drag before
+      // the browser dispatches drop (plaintext-only editing does not do so).
+      on(this.surface.root, 'dragover', (e) => {
+        if (!this.panelDrag || !e.dataTransfer || !Array.from(e.dataTransfer.types).includes('text/plain')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      });
       on(this.surface.root, 'drop', (e) => this.onPageDrop(e), { capture: true });
     }
     on(this.root, 'dragover', (e) => {
@@ -257,6 +265,55 @@ class TeOverflowPanel {
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     });
     on(this.root, 'drop', (e) => this.onPanelDrop(e));
+    // Some text selections turn into selection gestures rather than HTML
+    // drags. Only a cross-panel release may complete this fallback.
+    if (this.surface) {
+      on(document, 'pointerdown', () => { this.pointerDrag = null; }, { capture: true });
+      on(this.surface.root, 'pointerdown', (e) => this.beginPointerStash(e));
+      on(document, 'pointermove', (e) => {
+        const drag = this.pointerDrag;
+        if (!drag || e.pointerId !== drag.id) return;
+        if (!(e.buttons & 1)) { this.pointerDrag = null; return; }
+        if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) >= 5) drag.moved = true;
+      });
+      on(document, 'pointerup', (e) => this.finishPointerStash(e));
+      on(document, 'pointercancel', () => { this.pointerDrag = null; });
+      on(document, 'dragstart', () => { this.pointerDrag = null; }, { capture: true });
+      on(document, 'keydown', (e) => { if (e.key === 'Escape') this.pointerDrag = null; }, { capture: true });
+      on(window, 'blur', () => { this.pointerDrag = null; });
+    }
+  }
+
+  /** Snapshot an existing selection only when pressed inside its actual range. */
+  beginPointerStash(e) {
+    this.pointerDrag = null;
+    if (e.button !== 0 || !e.isPrimary || e.pointerType !== 'mouse' ||
+        !this.isOpen() || !this.canStash()) return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    if (!this.surface.root.contains(range.startContainer) ||
+        !this.surface.root.contains(range.endContainer)) return;
+    const inside = Array.from(range.getClientRects()).some((r) =>
+      e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+    if (!inside) return;
+    const { start, end } = this.surface.getSelectionOffsets();
+    if (start === end) return;
+    this.pointerDrag = {
+      id: e.pointerId, x: e.clientX, y: e.clientY, moved: false,
+      start, end, source: this.surface.getText(),
+    };
+  }
+
+  /** Complete one selected-text move; stale or unrelated gestures do nothing. */
+  finishPointerStash(e) {
+    const drag = this.pointerDrag;
+    if (!drag || drag.id !== e.pointerId) return;
+    this.pointerDrag = null;
+    if (!drag.moved || e.button !== 0 || !this.isOpen() || !this.canStash() ||
+        !this.root.contains(e.target) || this.surface.getText() !== drag.source) return;
+    e.preventDefault();
+    this.stash(drag.start, drag.end);
   }
 
   // ---------------------------------------------------------------------
@@ -354,6 +411,7 @@ class TeOverflowPanel {
   /** Re-read the model into the panel (dropping waiting input). */
   refresh() {
     if (this.destroyed) return;
+    this.pointerDrag = null;
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -371,6 +429,7 @@ class TeOverflowPanel {
 
   onSurfaceChange(change) {
     if (this.destroyed || !change) return;
+    this.pointerDrag = null;
     // A different document was opened, or a stash was done, undone or
     // redone: the model holds the overflow to show.
     if (change.source === 'open' || (change.edit && change.edit.overflow)) {
@@ -418,6 +477,7 @@ class TeOverflowPanel {
 
   /** Hide the panel; focus inside it returns to where it came from. */
   close({ restoreFocus = true } = {}) {
+    this.pointerDrag = null;
     if (this.destroyed || this.root.hidden) return;
     this.flush();
     const hadFocus = this.root.contains(document.activeElement);

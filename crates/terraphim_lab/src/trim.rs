@@ -337,6 +337,17 @@ struct Candidate {
 /// thesaurus and rolegraph, and [`crate::LabOptions::min_sentence_words`] for
 /// the short-sentence rule).
 pub fn trim_plan(body: &str, config: &LabConfig) -> TrimPlan {
+    trim_plan_excluding(body, config, &[])
+}
+
+/// Plan with original-byte protected ranges excluded before level fitting.
+/// Callers must supply valid ranges into this exact body. Whole candidates
+/// are rejected; protection never splits a term or sentence to meet a target.
+pub fn trim_plan_excluding(
+    body: &str,
+    config: &LabConfig,
+    protected: &[terraphim_alternatives::text::ByteRange],
+) -> TrimPlan {
     let analysis = Analysis::new(body, config);
     let doc = &analysis.doc;
     let role = config.role.as_ref().map(|r| (r, analysis.concept_hits(r)));
@@ -376,6 +387,7 @@ pub fn trim_plan(body: &str, config: &LabConfig) -> TrimPlan {
     let mut seen = std::collections::BTreeSet::new();
     candidates.retain(|c| seen.insert((c.start, c.end)));
 
+    candidates.retain(|c| !protected.iter().any(|p| p.start < c.end && c.start < p.end));
     let levels = fit(doc, &candidates);
 
     let mut picked: Vec<(Candidate, TrimLevel)> = candidates

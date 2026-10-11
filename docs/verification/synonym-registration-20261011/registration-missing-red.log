@@ -1,0 +1,74 @@
+   Compiling serde_json v1.0.133
+   Compiling num-traits v0.2.19
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling thiserror v2.0.21
+   Compiling plotters v0.3.7
+   Compiling serde v1.0.229
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling chrono v0.4.45
+   Compiling ulid v1.2.1
+   Compiling ahash v0.8.12
+   Compiling bincode v1.3.3
+   Compiling ciborium v0.2.2
+   Compiling toml_edit v0.22.27
+   Compiling schemars v0.8.22
+   Compiling tinytemplate v1.2.1
+   Compiling criterion v0.5.1
+   Compiling toml v0.8.23
+   Compiling terraphim_types v1.22.3 (registry `terraphim`)
+   Compiling terraphim-markdown-parser v1.20.5 (registry `terraphim`)
+   Compiling terraphim_automata v2.1.0 (registry `terraphim`)
+   Compiling terraphim_alternatives v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_alternatives)
+error[E0599]: no method named `synonym_groups` found for reference `&terraphim_alternatives::Document` in the current scope
+ --> crates/terraphim_alternatives/tests/synonym_registration.rs:5:22
+  |
+5 |     let groups = doc.synonym_groups();
+  |                      ^^^^^^^^^^^^^^ method not found in `&terraphim_alternatives::Document`
+
+error[E0599]: no method named `synonym_groups` found for struct `terraphim_alternatives::Document` in the current scope
+  --> crates/terraphim_alternatives/tests/synonym_registration.rs:15:22
+   |
+15 |     let groups = doc.synonym_groups();
+   |                      ^^^^^^^^^^^^^^ method not found in `terraphim_alternatives::Document`
+
+error[E0599]: no method named `edit_alternative` found for struct `terraphim_alternatives::Document` in the current scope
+   --> crates/terraphim_alternatives/tests/synonym_registration.rs:35:9
+    |
+ 35 |     doc.edit_alternative(&id, 1, "Option").unwrap();
+    |         ^^^^^^^^^^^^^^^^
+    |
+help: there is a method `add_alternative` with a similar name, but with different arguments
+   --> crates/terraphim_alternatives/src/document.rs:228:5
+    |
+228 | /     pub fn add_alternative(
+229 | |         &mut self,
+230 | |         id: &str,
+231 | |         text: impl Into<String>,
+232 | |         source: Source,
+233 | |         model: Option<String>,
+234 | |     ) -> Result<usize, EditError> {
+    | |_________________________________^
+
+error[E0599]: no method named `synonym_groups` found for struct `terraphim_alternatives::Document` in the current scope
+  --> crates/terraphim_alternatives/tests/synonym_registration.rs:39:17
+   |
+39 |     assert!(doc.synonym_groups().is_empty());
+   |                 ^^^^^^^^^^^^^^ method not found in `terraphim_alternatives::Document`
+
+error[E0599]: no method named `synonym_groups` found for struct `terraphim_alternatives::Document` in the current scope
+  --> crates/terraphim_alternatives/tests/synonym_registration.rs:60:22
+   |
+60 |     let groups = doc.synonym_groups();
+   |                      ^^^^^^^^^^^^^^ method not found in `terraphim_alternatives::Document`
+
+error[E0599]: no method named `synonym_groups` found for struct `terraphim_alternatives::Document` in the current scope
+  --> crates/terraphim_alternatives/tests/synonym_registration.rs:71:45
+   |
+71 |     assert_eq!(parse(&write(&doc)).unwrap().synonym_groups(), groups);
+   |                                             ^^^^^^^^^^^^^^ method not found in `terraphim_alternatives::Document`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `terraphim_alternatives` (test "synonym_registration") due to 6 previous errors

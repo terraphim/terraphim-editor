@@ -124,7 +124,8 @@
     color-scheme: dark;
 }
 
-.te-files-markdown {
+.te-files-markdown,
+.te-files-graph {
     width: min(48rem, calc(100vw - 2rem));
 }
 
@@ -196,4 +197,25 @@
         align-items: stretch;
         bottom: 3.5rem;
     }
+}
+
+/* Readable concept relationships from the current document's actual graph. */
+.te-files-concepts {
+    list-style: none;
+    padding: 0;
+    margin: 1.25rem 0;
+}
+.te-files-concepts li {
+    padding: 0.8rem 1rem;
+    margin: 0.5rem 0;
+    border: 1px solid var(--te-color-panel-border);
+    border-radius: 0.5rem;
+    font-size: 1.3rem;
+    overflow-wrap: anywhere;
+}
+.te-files-synonym-definitions {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: 0.75rem;
+    font-size: 0.9rem;
 }

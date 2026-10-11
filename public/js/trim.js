@@ -29,7 +29,8 @@
  * Preview items carry no attributes (as with ghosts), so the indicators'
  * `aria-describedby` on shared text is never overwritten; the card and the
  * walk-through line announce what would go. Previewing, keeping, walking,
- * Done and Original never touch the undo history.
+ * and Original never touch the undo history; Done commits one undoable ghost
+ * operation, preserving the body text.
  *
  * Keep (R-8.5)
  * ------------
@@ -65,12 +66,12 @@
  *
  * Done (decision)
  * ---------------
- * "Done dismisses the card and leaves the ghosting as is": the card closes
- * and the faded preview stays exactly as it is, with the level still
- * selected in the popover. Done does NOT write ghosts into the document:
- * the preview is transient, as the spec's trim spans are a preview of the
- * cuts, not user ghosts. Picking the selected level again reopens the card.
- * Clicks on faded text only keep while the card is shown.
+ * Done preserves the body and promotes the exact outermost active preview
+ * fragments to independent persistent ghosts in one undoable transaction.
+ * Successful promotion retires the transient preview, closes the card and
+ * resets the selected level to Original. The saved ghosts survive reopen
+ * and retain their faded presentation. A refused promotion keeps the valid
+ * preview available for review. Clicks keep cuts only while previewing.
  *
  * Edits while trimming (decision)
  * -------------------------------
@@ -126,6 +127,7 @@ class TeLabTrim {
     }
 
     this.build();
+    this.updateProtectionAvailability();
 
     this.surface.root.addEventListener('click', (e) => this.onSurfaceClick(e), { signal });
     this.offChange = this.surface.onChange((change) => this.onSurfaceChange(change));
@@ -139,6 +141,31 @@ class TeLabTrim {
     const api = typeof this.editor.documentApi === 'function' ? this.editor.documentApi() : null;
     return api && typeof api.trim_plan_json === 'function' && typeof api.trim_status === 'function' &&
       typeof api.trim_make_cuts === 'function' ? api : null;
+  }
+
+  roleSnapshot() {
+    const api = this.api();
+    if (!api || typeof api.kg_role_snapshot_json !== 'function') return null;
+    try { return JSON.parse(api.kg_role_snapshot_json()); } catch (_) { return null; }
+  }
+
+  updateProtectionAvailability() {
+    const role = this.roleSnapshot();
+    const ready = role && role.loaded === true && role.protectionReady === true && !this.protectionFailure;
+    for (const b of this.levelButtons) b.disabled = b.dataset.level !== 'original' && !ready;
+    this.protectionNote.textContent = ready ? 'Every local-role occurrence is protected; the target may be unreachable.' :
+      (this.protectionFailure || (role && role.protectionError) || 'Load a local role/thesaurus to trim with KG protection.');
+    return !!ready;
+  }
+
+  onRoleChange() {
+    if (this.destroyed) return;
+    this.plan = null;
+    this.planText = null;
+    this.protectionFailure = null;
+    this.reset();
+    this.updateProtectionAvailability();
+    this.announce('Trim cleared: the local role changed.');
   }
 
   /** True while a level other than Original is previewed. */
@@ -187,7 +214,12 @@ class TeLabTrim {
       return b;
     });
     group.addEventListener('keydown', (e) => this.onLevelKey(e), { signal });
-    this.slot.replaceChildren(label, group);
+    const protectionNote = el('p', 'te-trim-protection');
+    protectionNote.id = id('protection');
+    protectionNote.setAttribute('role', 'status');
+    group.setAttribute('aria-describedby', protectionNote.id);
+    this.protectionNote = protectionNote;
+    this.slot.replaceChildren(label, group, protectionNote);
     this.slot.hidden = false;
 
     // The floating status card (R-8.4), bottom-centre.
@@ -210,6 +242,7 @@ class TeLabTrim {
     const meterKeep = el('span', 'te-trim-meter-keep');
     meter.append(meterKeep);
     const hint = el('p', 'te-trim-card-hint', TE_TRIM_HINT);
+    this.protectionCardNote = el('p', 'te-trim-card-protection');
 
     const walk = el('div', 'te-trim-walk');
     walk.hidden = true;
@@ -242,7 +275,7 @@ class TeLabTrim {
     this.doneButton = button('te-trim-done', '', 'Done', () => this.done());
     actions.append(this.cutButton, this.walkButton, this.doneButton);
 
-    card.append(head, meter, hint, walk, actions);
+    card.append(head, meter, hint, this.protectionCardNote, walk, actions);
     card.addEventListener('keydown', (e) => this.onCardKey(e), { signal });
     this.card = card;
     this.levelName = levelName;
@@ -272,6 +305,7 @@ class TeLabTrim {
     else if (e.key === 'End') next = n - 1;
     if (next === null) return;
     e.preventDefault();
+    if (this.levelButtons[next].disabled) next = 0;
     this.levelButtons.forEach((b, i) => { b.tabIndex = i === next ? 0 : -1; });
     this.levelButtons[next].focus();
   }
@@ -306,7 +340,10 @@ class TeLabTrim {
       return null;
     }
     const api = this.api();
-    if (!api) return null;
+    if (!api || !this.updateProtectionAvailability()) {
+      this.announce(this.protectionNote.textContent);
+      return null;
+    }
     this.cancelPendingReset();
     this.stale = false;
     this.level = level;
@@ -322,8 +359,14 @@ class TeLabTrim {
   /** The plan for the current text, recomputed when the text changed. */
   ensurePlan(api) {
     const text = this.surface.getText();
-    if (this.plan && this.planText === text) return this.plan;
+    const role = this.roleSnapshot();
+    if (!role || role.loaded !== true || role.protectionReady !== true) throw new Error('Load a local role/thesaurus to trim with KG protection.');
+    if (this.plan && this.planText === text && this.plan.roleGeneration === role.generation) return this.plan;
     this.plan = api.trim_plan_json();
+    if (!this.plan || this.plan.kgProtected !== true || this.plan.roleGeneration !== role.generation) {
+      this.plan = null;
+      throw new Error('The WASM trim API does not provide current KG protection.');
+    }
     this.planText = text;
     this.kept.clear();
     return this.plan;
@@ -345,10 +388,13 @@ class TeLabTrim {
         this.ensurePlan(api);
         status = api.trim_status(this.level, JSON.stringify([]));
       } catch (err2) {
-        console.error('trim failed', err2);
-        this.announce(`Trim is unavailable: ${err2 && err2.message ? err2.message : err2}`);
+        this.refuse(err2);
         return null;
       }
+    }
+    if (!status || status.kgProtected !== true || status.roleGeneration !== this.plan.roleGeneration) {
+      this.refuse(new Error('The WASM trim API does not provide current KG protection.'));
+      return null;
     }
     this.status = status;
     this.active = Array.from(status.active || []);
@@ -386,6 +432,7 @@ class TeLabTrim {
   /** Show or hide the card (hidden while the popover is open) and mark levels. */
   sync() {
     if (this.destroyed) return;
+    this.updateProtectionAvailability();
     for (const b of this.levelButtons) {
       const on = b.dataset.level === this.level;
       b.setAttribute('aria-checked', on ? 'true' : 'false');
@@ -401,6 +448,8 @@ class TeLabTrim {
     if (!status) return;
     this.levelName.textContent = status.label;
     this.count.textContent = status.cardText;
+    this.protectionCardNote.textContent =
+      `Every local-role occurrence is protected (${status.protectionCount}); retention outranks the target.`;
     const before = status.words_before || 0;
     const share = before ? (100 * status.words_after) / before : 100;
     this.meterKeep.style.width = `${share}%`;
@@ -536,10 +585,7 @@ class TeLabTrim {
       this.editor.alignDocumentModel(api);
       made = api.trim_make_cuts(this.level, JSON.stringify(Array.from(this.kept)));
     } catch (err) {
-      // Refused: the body changed since the plan. Recompute, cut nothing.
-      this.plan = null;
-      this.refresh();
-      this.announce('The text changed, so the trim was recomputed. Nothing was cut.');
+      this.refuse(err);
       return null;
     }
     const edits = Array.from(made.edits || []);
@@ -561,15 +607,25 @@ class TeLabTrim {
     return applied;
   }
 
-  /** Close the card, leaving the faded preview as it is (see header). */
+  /** Protected Done records independent persistent ghosts before retiring UI. */
   done() {
     if (!this.cardOpen) return;
+    let committed;
+    try {
+      committed = this.editor.commitTrimGhosts(this.level, Array.from(this.kept));
+    } catch (error) {
+      // Unlike B's protection refusal, record/history refusal must not retire
+      // a valid plan, kept choices, walk or fades. Role-event clearing remains
+      // independently authoritative and is never restored by this handler.
+      this.announce(`Done refused: ${error.error || error.message || error}`);
+      return false;
+    }
     this.stopWalk(false);
-    const hadFocus = this.card.contains(document.activeElement);
-    this.cardOpen = false;
-    this.sync();
-    const pill = this.lab.pill();
-    if (hadFocus && pill) pill.focus();
+    this.plan = null;
+    this.planText = null;
+    this.reset();
+    this.announce(committed ? 'Done: cuts saved as ghosts. Undo restores them.' : 'Done: no cuts to save.');
+    return true;
   }
 
   /** Back to Original: no preview, no kept set, no card. */
@@ -593,6 +649,10 @@ class TeLabTrim {
   }
 
   onSurfaceChange(change) {
+    if (this.protectionFailure) {
+      this.protectionFailure = null;
+      this.updateProtectionAvailability();
+    }
     if (this.destroyed || this.applying || !this.trimming) return;
     if (change && change.source === 'trim') return;
     // The plan no longer matches the text: stop at once, clear next tick.
@@ -618,6 +678,17 @@ class TeLabTrim {
 
   announce(text) {
     this.live.textContent = text;
+  }
+
+  /** Refusal retires all transient effects, never edits model/history. */
+  refuse(error) {
+    const message = `Trim is unavailable: ${error && error.message ? error.message : error}`;
+    this.plan = null;
+    this.planText = null;
+    this.protectionFailure = message;
+    this.reset();
+    this.updateProtectionAvailability();
+    this.announce(message);
   }
 
   emit(type, detail) {

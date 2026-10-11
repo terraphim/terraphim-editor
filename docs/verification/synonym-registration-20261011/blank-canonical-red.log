@@ -1,0 +1,24 @@
+   Compiling terraphim_alternatives v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_alternatives)
+    Finished `test` profile [optimized] target(s) in 1.60s
+     Running tests/synonym_registration.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/synonym_registration-29bfc754304ee5bc)
+
+running 1 test
+test whitespace_original_does_not_create_a_blank_concept_or_synonym ... FAILED
+
+failures:
+
+---- whitespace_original_does_not_create_a_blank_concept_or_synonym stdout ----
+
+thread 'whitespace_original_does_not_create_a_blank_concept_or_synonym' (37257259) panicked at crates/terraphim_alternatives/tests/synonym_registration.rs:122:5:
+assertion `left == right` failed
+  left: ["", "choice"]
+ right: ["choice"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    whitespace_original_does_not_create_a_blank_concept_or_synonym
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p terraphim_alternatives --test synonym_registration`

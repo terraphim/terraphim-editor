@@ -1,0 +1,91 @@
+{
+  "name": "terraphim-editor-default",
+  "data": {
+    "alternative": {
+      "id": 100,
+      "nterm": "alternatives"
+    },
+    "alternatives": {
+      "id": 100,
+      "nterm": "alternatives"
+    },
+    "caf\u00e9": {
+      "id": 4,
+      "nterm": "caf\u00e9"
+    },
+    "choice": {
+      "id": 1,
+      "nterm": "decision"
+    },
+    "coffee shop": {
+      "id": 4,
+      "nterm": "caf\u00e9"
+    },
+    "coffeehouse": {
+      "id": 4,
+      "nterm": "caf\u00e9"
+    },
+    "decision": {
+      "id": 1,
+      "nterm": "decision"
+    },
+    "employ": {
+      "id": 8,
+      "nterm": "use"
+    },
+    "eraser": {
+      "id": 2,
+      "nterm": "eraser"
+    },
+    "honour": {
+      "id": 5,
+      "nterm": "honour"
+    },
+    "judgment": {
+      "id": 1,
+      "nterm": "decision"
+    },
+    "large language model": {
+      "id": 3,
+      "nterm": "llm",
+      "display_value": "LLM"
+    },
+    "llm": {
+      "id": 3,
+      "nterm": "llm",
+      "display_value": "LLM"
+    },
+    "option": {
+      "id": 1,
+      "nterm": "decision"
+    },
+    "options set": {
+      "id": 100,
+      "nterm": "alternatives"
+    },
+    "paperclip": {
+      "id": 7,
+      "nterm": "paperclip"
+    },
+    "privilege": {
+      "id": 5,
+      "nterm": "honour"
+    },
+    "rubber": {
+      "id": 2,
+      "nterm": "eraser"
+    },
+    "use": {
+      "id": 8,
+      "nterm": "use"
+    },
+    "utilise": {
+      "id": 8,
+      "nterm": "use"
+    },
+    "variants": {
+      "id": 100,
+      "nterm": "alternatives"
+    }
+  }
+}

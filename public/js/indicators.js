@@ -81,7 +81,8 @@
  * TeHeadingLayer
  * --------------
  * R-3.5 for every ATX heading, with or without alternatives (issue #84), in
- * Write_On mode only. The `headings` registry layer holds two items per
+ * Write_On and ordinary plain mode (not the raw tools view). The `headings`
+ * registry layer holds two items per
  * heading line outside fenced code: `h<n>` over the whole line (class
  * `te-heading`: bold, same face and colour, 1.15em) and `m<n>` over its
  * marker, the leading `#`s and the spaces after them (`te-heading-marker`).
@@ -842,12 +843,19 @@ class TeHeadingLayer {
     // Every render rebuilds the marker spans; put the shown class back.
     this.offApply = this.registry.onApply(() => this.applyShown(true));
     document.addEventListener('selectionchange', () => this.scheduleSelection(), { signal });
-    document.addEventListener('te:mode-change', (e) => {
+    const refreshMode = (e) => {
       if (!e.detail || !e.detail.editor || e.detail.editor === this.editor) {
-        this.setActive(e.detail && e.detail.mode === 'write-on');
+        this.setActive(this.shouldStyle());
       }
+    };
+    document.addEventListener('te:mode-change', refreshMode, { signal });
+    document.addEventListener('te:tools-change', refreshMode, { signal });
+    // Changing decorations replaces Text nodes: wait until the surface has
+    // committed composition before applying a pending mode/tools change.
+    this.surface.root.addEventListener('compositionend', () => {
+      this.setActive(this.shouldStyle());
     }, { signal });
-    this.setActive(this.isWriteOn());
+    this.setActive(this.shouldStyle());
   }
 
   static get LAYER() {
@@ -880,12 +888,21 @@ class TeHeadingLayer {
 
   isWriteOn() {
     const chrome = this.editor.chrome;
-    if (chrome && typeof chrome.isWriteOn === 'function') return chrome.isWriteOn();
-    return document.body.dataset.mode === 'write-on';
+    const root = this.editor.root || this.surface.root.closest('.te-app');
+    return chrome && typeof chrome.isWriteOn === 'function'
+      ? chrome.isWriteOn() : !!root && root.dataset.mode === 'write-on';
+  }
+
+  shouldStyle() {
+    const chrome = this.editor.chrome;
+    const root = this.editor.root || this.surface.root.closest('.te-app');
+    const tools = chrome && typeof chrome.toolsVisible === 'function'
+      ? chrome.toolsVisible() : !!root && root.dataset.tools === 'on';
+    return this.isWriteOn() || !tools;
   }
 
   setActive(on) {
-    if (this.destroyed) return;
+    if (this.destroyed || this.surface.composing) return;
     on = !!on;
     if (on === this.active) {
       if (on) this.flush();
@@ -939,7 +956,7 @@ class TeHeadingLayer {
   }
 
   refresh() {
-    if (!this.active || this.destroyed) return;
+    if (!this.active || this.destroyed || this.surface.composing) return;
     this.headings = TeHeadingLayer.scan(this.surface.getText());
     const items = [];
     this.headings.forEach((h, i) => {

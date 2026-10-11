@@ -363,6 +363,7 @@ class TePersistence {
     button('open', 'fa-regular fa-folder-open', 'Open document', 'Open (Ctrl+O)', () => this.open());
     this.toolbarSave = button('save', 'fa-solid fa-floppy-disk', 'Save document', 'Save (Ctrl+S)', () => this.save());
     button('markdown', 'fa-brands fa-markdown', 'Markdown export', 'Markdown export', () => this.showMarkdown());
+    button('knowledge-graph', 'fa-solid fa-share-nodes', 'Knowledge graph', 'Share your alternatives as a knowledge graph', () => this.showKnowledgeGraph());
     const divider = document.createElement('sl-divider');
     divider.setAttribute('vertical', '');
     divider.className = 'te-files-toolbar-divider';
@@ -1024,8 +1025,8 @@ class TePersistence {
   }
 
   /** Download `text` as `name` through a Blob and an <a download>. */
-  download(text, name) {
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  download(text, name, type = 'text/markdown;charset=utf-8') {
+    const blob = new Blob([text], { type });
     const url = URL.createObjectURL(blob);
     this.objectUrls.add(url);
     const a = document.createElement('a');
@@ -1167,6 +1168,7 @@ class TePersistence {
     this.dialogs = this.dialogs.filter((n) => n !== dialog);
     if (this.replaceDialog === dialog) this.replaceDialog = null;
     if (this.markdownDialog === dialog) this.markdownDialog = null;
+    if (this.knowledgeGraphDialog === dialog) this.knowledgeGraphDialog = null;
   }
 
   // ---------------------------------------------------------------------
@@ -1237,10 +1239,87 @@ class TePersistence {
         });
       },
     });
+    this.dialogButton(footer, 'Knowledge graph', {
+      name: 'knowledge-graph', onClick: () => { dialog.dataset.teReplaced = 'true'; dialog.close(); this.showKnowledgeGraph(); },
+    });
     dialog.append(note, area, footer);
     this.on(dialog, 'close', () => this.removeDialog(dialog), { once: true });
     this.markdownDialog = dialog;
     this.openDialog(dialog, area);
+    return dialog;
+  }
+
+  /** Explain and explicitly share the real document-derived synonym graph. */
+  showKnowledgeGraph() {
+    if (this.destroyed) return null;
+    if (this.knowledgeGraphDialog) {
+      const old = this.knowledgeGraphDialog;
+      old.dataset.teReplaced = 'true';
+      old.close();
+      this.removeDialog(old);
+    }
+    const { dialog, header } = this.makeDialog('te-files-graph', 'Knowledge graph');
+    const close = this.dialogButton(header, '×', {
+      name: 'close', className: 'te-files-close', ariaLabel: 'Close knowledge graph',
+      onClick: () => dialog.close(),
+    });
+    close.querySelector('span').setAttribute('aria-hidden', 'true');
+    const note = document.createElement('p');
+    note.className = 'te-files-dialog-text';
+    note.textContent = 'Your alternatives connect different words to the same idea. Share these connections so search understands either word.';
+    const list = document.createElement('ul');
+    list.className = 'te-files-concepts';
+    list.setAttribute('aria-label', 'Connected alternatives');
+    const footer = document.createElement('div');
+    footer.className = 'te-files-dialog-footer';
+    const status = document.createElement('span');
+    status.className = 'te-files-status';
+    status.setAttribute('role', 'status');
+    footer.appendChild(status);
+    dialog.append(note, list);
+    try {
+      const graph = this.editor.exportKnowledgeGraph();
+      const groups = (this.editor.annotations().synonymGroups || []).filter((g) => g.attached && g.synonyms.length);
+      if (!Object.keys(JSON.parse(graph).data).length) {
+        status.textContent = 'Add an alternative to a word, then return here to share its connection.';
+      } else {
+        for (const group of groups) {
+          const row = document.createElement('li');
+          row.textContent = [...new Set(group.alternatives.map((a) => a.text).filter((t) => t.trim()))].join(' ↔ ');
+          list.appendChild(row);
+        }
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'View synonym definitions';
+        const definitions = document.createElement('pre');
+        definitions.className = 'te-files-synonym-definitions';
+        definitions.textContent = groups.map((g) => g.markdown + (g.typedSynonyms.length ? 'Exact typed alternatives: ' + JSON.stringify(g.typedSynonyms) + '\n' : '')).join('\n');
+        details.append(summary, definitions);
+        dialog.appendChild(details);
+        const clean = this.exportText();
+        const name = teExportFileName(this.suggestedName());
+        this.dialogButton(footer, 'Download graph', {
+          name: 'download-graph', className: 'te-files-primary', onClick: () => {
+            const result = this.download(graph + '\n', 'knowledge-graph.json', 'application/json;charset=utf-8');
+            status.textContent = 'Graph downloaded. Use it with terraphim-grep --thesaurus knowledge-graph.json.';
+            this.emit('te:graph-exported', { ...result, text: graph });
+          },
+        });
+        this.dialogButton(footer, 'Download text', {
+          name: 'download-graph-text', onClick: () => {
+            const result = this.download(clean, name);
+            status.textContent = `Downloaded ${result.name}. Search this text using your graph.`;
+            this.emit('te:written', { ...result, text: clean, export: true });
+          },
+        });
+      }
+    } catch (error) {
+      status.textContent = String(error.message || error);
+    }
+    dialog.appendChild(footer);
+    this.on(dialog, 'close', () => this.removeDialog(dialog), { once: true });
+    this.knowledgeGraphDialog = dialog;
+    this.openDialog(dialog, close);
     return dialog;
   }
 

@@ -1,5 +1,8 @@
 [build]
 target = "index.html"
+# Resolve generated CSS/module/WASM URLs beside index.html, including nested
+# deployments. Trunk 0.21.14: equivalent CLI override is --public-url ./.
+public_url = "./"
 # Development output. The committed release copy in ./dist is regenerated only
 # by scripts/release-dist.sh (trunk build --release --dist dist).
 dist = "target/trunk-dist"

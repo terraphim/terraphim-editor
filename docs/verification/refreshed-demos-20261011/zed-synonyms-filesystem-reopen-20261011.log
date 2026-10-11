@@ -1,0 +1,11 @@
+   Compiling terraphim_lsp v1.22.0 (/private/tmp/terraphim-ai-output-fixes-20261011/crates/terraphim_lsp)
+error[E0433]: cannot find module or crate `tempfile` in this scope
+   --> crates/terraphim_lsp/tests/hover_provenance_tests.rs:603:21
+    |
+603 |     let directory = tempfile::tempdir().unwrap();
+    |                     ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+    |
+    = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `terraphim_lsp` (test "hover_provenance_tests") due to 1 previous error

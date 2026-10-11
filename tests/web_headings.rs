@@ -254,26 +254,54 @@ async fn test_typing_keeps_headings_styled_without_extra_renders() {
 }
 
 #[wasm_bindgen_test]
-fn test_headings_are_not_styled_in_plain_mode() {
+async fn test_plain_headings_are_styled_and_tools_show_raw_markdown() {
     setup_doc(false);
+    // The plain writing view follows the same heading presentation as
+    // Write_On; the explicit tools view is the raw Markdown editor.
+    js_eval(
+        "teHead.s.focus(); teHead.s.setSelectionOffsets(teHead.s.getText().indexOf('paragraph'));",
+    );
+    frames().await;
     let result = js_string(
         r##"(() => {
           const { ed, s } = teHead;
           const out = [];
-          const check = (label) => {
+          const styled = (label) => {
+            const title = teHead.line(0).find((el) => el.textContent === 'Plain heading');
+            if (!title) { out.push(label + ': heading missing'); return; }
+            const style = getComputedStyle(title), body = getComputedStyle(s.root);
+            if (Number(style.fontWeight) < 700) out.push(label + ': not bold');
+            if (Math.abs(parseFloat(style.fontSize) / parseFloat(body.fontSize) - 1.15) > 0.01) out.push(label + ': size');
+            const markers = teHead.marker(0);
+            if (markers.map((el) => el.textContent).join('') !== '# ') out.push(label + ': marker text');
+            if (teHead.width(markers) !== 0) out.push(label + ': marker visible away from caret');
+          };
+          const raw = (label) => {
             if (s.getDecorations().some((d) => d.id.startsWith('headings:'))) out.push(label + ': decorations set');
             if (s.root.querySelector('.te-heading, .te-heading-marker')) out.push(label + ': styled spans');
+            if (!(s.rangeForOffsets(0, 1).getBoundingClientRect().width > 0)) out.push(label + ': marker hidden');
           };
-          check('plain');
-          const renders = s.renderCount;
-          s.focus();
-          s.setSelectionOffsets(5);
-          document.execCommand('insertText', false, 'x');
-          if (s.renderCount !== renders) out.push('plain typing re-rendered');
+          styled('plain');
           ed.chrome.setMode('write-on');
-          if (teHead.line(0).length === 0) out.push('write-on headings missing');
+          styled('write-on');
           ed.chrome.setMode('plain');
-          check('toggled back');
+          styled('plain again');
+          ed.chrome.setTools(true);
+          raw('tools');
+          const renders = s.renderCount;
+          const at = s.getText().indexOf('body text');
+          s.focus();
+          s.setSelectionOffsets(at);
+          document.execCommand('insertText', false, 'x');
+          if (s.renderCount !== renders) out.push('raw typing re-rendered');
+          ed.chrome.setMode('write-on');
+          styled('write-on over tools');
+          ed.chrome.setMode('plain');
+          raw('tools restored');
+          ed.chrome.setTools(false);
+          styled('plain restored');
+          if (!s.getText().startsWith('# Plain heading\n') || !s.getText().includes('xbody text')) out.push('canonical text changed');
+          if (ed.exportDocument() !== s.getText()) out.push('export dropped markup');
           ed.destroy();
           if (!ed.headings.destroyed) out.push('layer not destroyed');
           return out.join('; ');

@@ -125,7 +125,7 @@
     "5": {
       "doc_hash": {
         "lsp-spans": 5,
-        "shared-schema": 3
+        "shared-schema": 2
       },
       "id": 5,
       "rank": 1
@@ -133,7 +133,7 @@
     "7": {
       "doc_hash": {
         "lsp-spans": 4,
-        "shared-schema": 4
+        "shared-schema": 3
       },
       "id": 7,
       "rank": 1
@@ -141,7 +141,7 @@
     "8": {
       "doc_hash": {
         "lsp-spans": 3,
-        "shared-schema": 6
+        "shared-schema": 5
       },
       "id": 8,
       "rank": 1

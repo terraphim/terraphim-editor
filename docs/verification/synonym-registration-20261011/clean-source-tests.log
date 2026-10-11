@@ -1,0 +1,1088 @@
+   Compiling terraphim_alternatives v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011/crates/terraphim_alternatives)
+   Compiling terraphim_rolegraph_browser v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011/crates/terraphim_rolegraph_browser)
+   Compiling terraphim_lab v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011/crates/terraphim_lab)
+   Compiling terraphim_lsp_core v1.23.0 (registry `terraphim`)
+   Compiling terraphim-editor v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011)
+    Finished `test` profile [optimized] target(s) in 14.40s
+     Running unittests src/lib.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/terraphim_editor-8eead2adeb69d035)
+
+running 109 tests
+test document::history_checkpoint_tests::identical_reopen_is_still_a_foreign_session ... ok
+test document::history_checkpoint_tests::checkpoint_exact_abort_wrong_tokens_and_consumed_tokens ... ok
+test document::history_checkpoint_tests::interleaved_open_never_discards_checkpoint_or_reuses_token ... ok
+test document::history_checkpoint_tests::conflicted_checkpoint_preserves_interleaved_metadata_and_requires_explicit_reopen ... ok
+test document::history_checkpoint_tests::checkpoint_schema_refusal_preserves_watermark_pending_and_raw_block ... ok
+test document::history_checkpoint_tests::mixed_history_intermediate_body_and_late_failure_are_atomic ... ok
+test document::history_checkpoint_tests::full_schema_validation_preserves_legitimate_overlapping_set_aside_hints ... ok
+test document::history_checkpoint_tests::all_legacy_kinds_use_model_semantics_and_check_replacement_envelopes ... ok
+test document::history_checkpoint_tests::full_namespace_validation_rejects_unresolved_collision_without_save_renaming ... ok
+test document::history_checkpoint_tests::private_token_exhaustion_and_failed_begin_are_safe ... ok
+test document::history_checkpoint_tests::overflow_unapplied_and_late_body_guards_leave_complete_session_unchanged ... ok
+test document::history_checkpoint_tests::strict_parser_rejects_unknown_conflicting_float_and_bad_snapshots ... ok
+test document::tests::a_preserved_malformed_block_refuses_overflow_changes ... ok
+test document::tests::a_refused_move_changes_nothing ... ok
+test document::tests::a_restored_ghost_merges_with_touching_ghosts ... ok
+test document::tests::a_refused_swap_changes_nothing ... ok
+test document::history_checkpoint_tests::same_body_alternatives_and_receipt_reservations_are_full_session_conflicts ... ok
+test document::tests::append_overflow_separates_entries_with_a_blank_line ... ok
+test document::tests::body_edit_is_minimal_and_char_safe ... ok
+test document::tests::block_is_hidden_from_body_and_round_trips ... ok
+test document::tests::counts_include_ghosted_text ... ok
+test document::tests::deleting_ghosted_text_sets_the_ghost_aside_and_undo_restores_it ... ok
+test document::tests::create_adds_span_and_first_alternative_as_one_operation ... ok
+test document::tests::add_edit_move_and_remove_round_trip_through_restore ... ok
+test document::tests::edit_inside_a_span_detaches_it ... ok
+test document::tests::detached_spans_are_saved_and_survive_reopen ... ok
+test document::tests::exhausted_span_identity_refuses_atomically ... ok
+test document::tests::ghost_range_returns_id_and_annotations ... ok
+test document::tests::edits_move_anchors_and_survive_save_and_reopen ... ok
+test document::tests::ghost_may_cover_and_partly_overlap_spans ... ok
+test document::tests::ghosts_follow_edits_and_survive_save_and_reopen ... ok
+test document::tests::independent_transaction_adjacent_receipt_replay_and_reservation ... ok
+test document::tests::independent_transaction_exhaustion_live_set_aside_and_partial_batch ... ok
+test document::tests::independent_transaction_manual_overlap_and_empty_are_no_mutation ... ok
+test document::tests::independent_transaction_refusals_restore_entire_session ... ok
+test document::tests::independent_transaction_preserves_spans_overflow_and_set_aside ... ok
+test document::tests::independent_transaction_group_preflight_refuses_late_conflict_atomically ... ok
+test document::tests::malformed_block_warns_once_and_is_saved_verbatim ... ok
+test document::tests::kg_span_reserves_detached_identity_and_preserves_provenance ... ok
+test document::tests::invalid_ranges_return_an_error_object_and_change_nothing ... ok
+test document::history_checkpoint_tests::kept_limits_and_failed_protection_preserve_pending_and_session ... ok
+test document::tests::move_carries_annotations_and_survives_save_and_reopen ... ok
+test document::tests::out_of_range_edit_is_refused_without_change ... ok
+test document::tests::overflow_json_helpers_report_the_new_text ... ok
+test document::tests::open_kind_and_notices_follow_the_set_aside_count ... ok
+test document::history_checkpoint_tests::protected_checkpoint_role_invalidation_aborts_document_only ... ok
+test document::tests::new_span_reserves_set_aside_and_undone_identities ... ok
+test document::tests::overflow_round_trips_through_save_and_is_omitted_from_export ... ok
+test document::tests::overlapping_and_touching_ghosts_merge ... ok
+test document::tests::partial_deletion_trims_and_a_wider_replacement_sets_the_ghost_aside ... ok
+test document::tests::plain_markdown_opens_and_saves_unchanged ... ok
+test document::tests::partial_revive_trims_or_splits ... ok
+test document::tests::pull_back_at_a_line_start_makes_its_own_paragraph ... ok
+test document::tests::pull_back_between_paragraphs_keeps_one_blank_line_each_side ... ok
+test document::tests::pull_back_at_a_line_end_makes_its_own_paragraph ... ok
+test document::tests::pull_back_follows_crlf_line_endings_and_never_splits_a_pair ... ok
+test document::tests::pull_back_into_an_empty_body_is_the_paragraph ... ok
+test document::tests::pull_back_mid_line_inserts_inline ... ok
+test document::tests::pull_back_of_a_multi_line_paragraph_keeps_its_lines ... ok
+test document::history_checkpoint_tests::protected_unsafe_role_and_joint_document_conflict_do_not_lose_checkpoint ... ok
+test document::tests::pull_back_offsets_are_utf16 ... ok
+test document::tests::pull_back_refusals_change_nothing ... ok
+test document::tests::pull_back_shifts_later_spans_past_the_separators ... ok
+test document::history_checkpoint_tests::protected_body_malformed_manual_overlap_and_noop_guards_precede_publication ... ok
+test document::tests::redo_fallback_appends_a_separate_entry ... ok
+test document::tests::pull_back_takes_the_selection_or_the_current_line ... ok
+test document::tests::replaying_a_stash_keeps_text_typed_in_the_panel ... ok
+test document::tests::session_allocator_reserves_shared_namespace_and_removed_split_ids ... ok
+test document::tests::restore_moves_other_anchors_and_refuses_what_does_not_fit ... ok
+test document::tests::set_aside_hints_follow_a_move_and_reattach ... ok
+test document::tests::removing_the_last_alternative_removes_the_span_and_undo_brings_it_back ... ok
+test document::tests::stash_offsets_are_utf16_and_never_split_a_character ... ok
+test document::tests::stash_moves_the_text_into_overflow_atomically ... ok
+test document::tests::set_aside_hints_follow_edits_before_them ... ok
+test document::tests::stash_sets_annotations_aside_and_undo_brings_them_back ... ok
+test document::tests::swap_offsets_are_utf16_and_set_aside_hints_follow ... ok
+test document::tests::swap_returns_the_exact_edit_and_fixes_the_article ... ok
+test document::tests::set_aside_items_that_would_overlap_or_clash_are_moved_and_renamed ... ok
+test document::tests::sync_body_reanchors_after_drift ... ok
+test document::tests::undoing_the_detaching_edit_reattaches_the_span ... ok
+test document::tests::stale_anchors_are_reanchored_or_reported ... ok
+test document::tests::unplaceable_ghosts_are_saved_too ... ok
+test kg::protection_tests::unsupported_and_empty_roles_remain_ordinary_kg_but_not_trim_capable ... ok
+test kg::protection_tests::generation_exhaustion_refuses_all_publication_paths_without_mutation ... ok
+test document::tests::swap_refreshes_context_and_moves_the_ghost ... ok
+test lab::tests::ids_round_trip_and_unknown_ids_are_rejected ... ok
+test lab::tests::actions_are_listed_in_popover_order_with_spec_labels ... ok
+test lab::tests::fixture_exercises_every_action_outside_protected_text ... ok
+test lab::tests::marks_match_the_engine_and_use_utf16_offsets ... ok
+test lab::tests::lab_fixture_has_trim_cuts_at_every_level_and_a_nested_cut ... ok
+test lab::promotion_tests::nine_occurrences_and_unicode_remain_protected ... ok
+test lab::tests::trim_levels_round_trip_and_bad_input_is_an_error ... ok
+test lab::tests::session_trim_refuses_a_stale_plan_and_recomputes ... ok
+test lab::tests::session_marks_read_the_open_document ... ok
+test lab::tests::marks_never_change_the_body_and_protected_text_is_skipped ... ok
+test lab::tests::trim_plan_json_lists_levels_and_engine_cuts ... ok
+test lab::tests::protection_role_and_body_guards_are_atomic ... ok
+test tests::test_preview_api_without_editor_is_inert ... ok
+test tests::test_markdown_conversion ... ok
+test lab::tests::trim_status_and_make_cuts_equal_the_engine ... ok
+test lab::tests::unknown_action_is_an_error_not_a_panic ... ok
+test tests::test_template_rendering ... ok
+test tests::test_template_renders_contenteditable_surface ... ok
+test tests::test_render_markdown_matches_crate_output ... ok
+test lab::promotion_tests::cached_body_role_finish_guards_and_manual_overlap_preserve_state ... ok
+test lab::promotion_tests::containment_duplicates_adjacency_crossing_and_scalar_boundaries ... ok
+test lab::promotion_tests::exact_cached_fixture_begin_abort_finish_manual_and_kept_oracles ... ok
+test lab::promotion_tests::all_levels_all_keeps_preserve_preview_make_cuts_and_split_coverage ... ok
+test document::history_checkpoint_tests::byte_count_nesting_and_body_transport_limits_are_exact ... ok
+
+test result: ok. 109 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/authored_synonyms.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/authored_synonyms-bf5d8f51f251de1d)
+
+running 4 tests
+test detached_groups_are_preserved_but_not_used_as_live_matches ... ok
+test rejection_external_edits_and_other_documents_cannot_leak_synonyms ... ok
+test host_ack_save_reopen_undo_redo_and_removal_track_exact_membership ... ok
+test newly_created_human_and_ai_alternatives_query_actual_rolegraph_and_checkpoint ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/host_sessions.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/host_sessions-9680cf10e9373fc0)
+
+running 14 tests
+test crlf_full_replacement_refuses_malformed_mixed_eol_instead_of_changing_raw_block ... ok
+test presentation_refuses_annotation_boundary_splitting_crlf ... ok
+test staged_ghost_is_not_committed_until_exact_host_output_arrives ... ok
+test external_edit_invalidates_proposal_and_utf16_offsets_are_preserved ... ok
+test malformed_source_is_preserved_and_invalid_operation_is_atomic ... ok
+test crlf_conversion_preserves_one_multiline_ghost ... ok
+test stale_duplicate_wrong_resource_and_wrong_session_requests_are_refused ... ok
+test crlf_conversion_includes_whole_newline_at_ghost_start ... ok
+test wasm_facade_serializes_real_domain_output_and_refuses_lossy_ids ... ok
+test presentation_roundtrip_preserves_full_multiline_annotations_and_raw_malformed_suffix ... ok
+test crlf_conversion_keeps_multiline_alternatives_live ... ok
+test unresolved_multiline_annotations_keep_valid_lengths_in_both_eol_directions ... ok
+test lf_ui_source_keeps_host_crlf_and_rebases_annotation_offsets ... ok
+test sessions_and_external_host_history_remain_isolated ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/indicators_fixture.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/indicators_fixture-147538cdd3c166c9)
+
+running 1 test
+test indicators_fixture_matches_its_golden_file ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/kg.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/kg-debdaa5597f5bf8b)
+
+running 8 tests
+test a_kg_word_inside_a_larger_block_span_is_not_offered ... ok
+test block_spans_win_and_the_block_is_never_analysed ... ok
+test choosing_the_active_form_or_a_bad_target_changes_nothing ... ok
+test a_swap_that_would_change_a_block_span_is_refused ... ok
+test swaps_apply_the_cores_capitalisation_and_article_as_one_edit ... ok
+test kg_spans_list_every_synonym_in_concept_order_with_the_text_active ... ok
+test loading_reports_the_thesaurus_and_a_bad_one_keeps_the_previous ... ok
+test ai_alternatives_for_selection_append_after_the_writers_own ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/persistence.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/persistence-adb543f147be7af8)
+
+running 4 tests
+test counts_of_the_full_fixture_include_ghosted_text ... ok
+test only_the_malformed_fixture_warns ... ok
+test every_fixture_saves_back_byte_for_byte ... ok
+test preview_and_export_match_golden_files ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/providers.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/providers-f683db30f0bfe92c)
+
+running 11 tests
+test the_thesaurus_is_the_default_and_only_provider ... ok
+test registering_an_id_again_replaces_in_place_and_unregister_removes ... ok
+test bad_supplied_json_is_refused ... ok
+test a_host_only_provider_works_without_a_thesaurus ... ok
+test a_different_span_in_the_way_wins_over_every_provider ... ok
+test providers_are_deduplicated_and_the_first_keeps_its_provenance ... ok
+test a_second_provider_is_asked_after_the_thesaurus_in_order ... ok
+test default_behaviour_is_unchanged ... ok
+test the_thesaurus_id_is_reserved ... ok
+test a_provider_can_offer_alternatives_for_a_selection_that_is_no_kg_term ... ok
+test supplied_host_answers_take_their_place_in_the_order ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tokens.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/tokens-4da7e49427438b77)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web-8cbadc412c20bc14)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel-3217bf38112cfc15)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_focus.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_focus-ae9397ad39c4d5a5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_keys.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_keys-ebb9bef8c8164cf9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_live.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_live-10c976d4ed45e386)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_live_capacity.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_live_capacity-7958a701e540b425)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_live_limit.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_live_limit-a97f4c81680ad241)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_live_refused.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_live_refused-252ba59bedf569c9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_live_undo.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_live_undo-d5eb42f356925750)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_tabs.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_tabs-d94e922efa2e20ca)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_alt_panel_width.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_alt_panel_width-0838b331b8ca7ba9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_bench.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_bench-c44bd0bbcd7c702e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_bench_logged.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_bench_logged-78e786ce432854a5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_blocks.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_blocks-a929524f95a54235)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_blocks_edit.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_blocks_edit-eca23b89a2c15b20)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_blocks_move.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_blocks_move-646955127d5d4df8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_chrome.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_chrome-da11a3637b56e017)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_commands.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_commands-d85e91484bf28152)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_cycling.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_cycling-9cd150334fe7c1d4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_edit_location.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_edit_location-6544b65419b6f6d8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_embed.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_embed-3a28650d2e6a672e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files-8bbc37146daaa218)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_drafts.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_drafts-d827da7bb66f5c6f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_handles.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_handles-c830be460c97cf3c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_identity.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_identity-9537069b070676ad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_markdown.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_markdown-3eba663c31ca1de3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_open.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_open-96aa01ec778b84a4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_race.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_race-c700e681517593be)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_replace.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_replace-ea47fed7c3cde3c5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_restore.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_restore-fdb37fcd50f3ece0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_files_saveas.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_files_saveas-6be81dc270a75cf6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_ghosts.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_ghosts-0bcdb43106408ca8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_headings.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_headings-1af3ccbc83873743)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_indicators.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_indicators-d4ccdf4cad3d258c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_indicators_registry.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_indicators_registry-d97db647fb458620)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_kg.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_kg-52d0d20aa8ee6a66)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_kg_case.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_kg_case-28eedd3ae88a285f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_kg_menu.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_kg_menu-c75395abb7e7e76f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_lab.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_lab-5dc45fc8d9dd0fe9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_move.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_move-db52eaf523d5ba63)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_overflow.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_overflow-63bae97526916ecd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_overflow_layout.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_overflow_layout-b689e3143ad4ca0c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_persistence.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_persistence-f26e5daf721e6156)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_persistence_chrome.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_persistence_chrome-b319e606034ba66d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_persistence_edits.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_persistence_edits-78f28560827d1aac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_persistence_reattach.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_persistence_reattach-1c0f4166c17174c0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_providers.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_providers-0b2afc5be745f485)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_shortcuts.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_shortcuts-93686a5fcedceba2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_surface.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_surface-6f32a677c4e13224)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_trim.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_trim-328473c52dbcaa83)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_trim_cuts.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_trim_cuts-947fb0931db76ab2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/web_trim_done.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/web_trim_done-b989f69391dc3332)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/word_count.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/word_count-f7c9f0dac1e924ec)
+
+running 3 tests
+test edge_cases_agree ... ok
+test lab_fixture_counts_160_words_in_both ... ok
+test counter_and_trim_card_agree_on_every_fixture ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running benches/document_bench.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/document_bench-1ebe8a2481b65670)
+Gnuplot not found, using plotters backend
+Testing document_open_5k_words
+Success
+
+Testing document_save_5k_words
+Success
+
+Testing document_export_5k_words
+Success
+
+Testing document_keystroke_at_start_5k_words
+Success
+
+Testing document_keystroke_with_set_aside_5k_words
+Success
+
+Testing document_save_with_set_aside_5k_words
+Success
+
+     Running benches/kg_bench.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/kg_bench-119c4693da401e47)
+Gnuplot not found, using plotters backend
+Testing kg_spans_5k_words_fresh
+Success
+
+Testing kg_spans_5k_words_cached
+Success
+
+Testing kg_swap_5k_words
+Success
+
+     Running benches/markdown_bench.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/markdown_bench-8e13a32dc09fcdf2)
+Gnuplot not found, using plotters backend
+Testing markdown_conversion
+Success
+
+     Running unittests src/lib.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/terraphim_alternatives-76c5f0b2b5d81a2e)
+
+running 73 tests
+test article::tests::respell_preserves_case ... ok
+test article::tests::non_letters_leave_the_article_alone ... ok
+test article::tests::finds_only_an_immediately_preceding_article ... ok
+test article::tests::vowel_letters_take_an ... ok
+test article::tests::exceptions_follow_sound_not_spelling ... ok
+test block::tests::block_without_ghosts_field_reads_as_no_ghosts ... ok
+test block::tests::body_containing_an_opening_fence_line_still_round_trips ... ok
+test block::tests::empty_example_not_at_the_end_is_body ... ok
+test block::tests::a_ghost_sharing_a_span_id_is_a_duplicate ... ok
+test block::tests::guard_constant_matches_the_writer ... ok
+test block::tests::backticks_in_overflow_cannot_break_the_fence ... ok
+test block::tests::ghosts_are_written_after_spans_and_round_trip ... ok
+test block::tests::guard_followed_by_text_is_not_trailing ... ok
+test block::tests::guard_survives_whole_file_crlf_conversion ... ok
+test block::tests::guard_follows_a_body_ending_in_a_non_empty_block_and_is_stripped ... ok
+test block::tests::legacy_guard_without_ghosts_is_still_stripped ... ok
+test block::tests::lenient_reader_accepts_single_newline_and_crlf ... ok
+test block::tests::missing_version_is_reported ... ok
+test block::tests::opening_fence_on_last_line_without_newline_is_truncated ... ok
+test block::tests::plain_markdown_has_no_block ... ok
+test block::tests::text_after_the_block_is_not_trailing ... ok
+test block::tests::touching_ghosts_are_accepted_and_invalid_ghosts_rejected ... ok
+test block::tests::trailing_empty_example_with_crlf_is_body ... ok
+test block::tests::separator_round_trips_for_awkward_bodies ... ok
+test block::tests::trailing_empty_example_without_earlier_fence_is_body ... ok
+test block::tests::two_canonical_examples_round_trip_once_saved ... ok
+test block::tests::two_empty_examples_are_both_body ... ok
+test block::tests::unknown_fields_are_rejected_not_dropped ... ok
+test block::tests::writer_adds_no_guard_when_the_body_reads_back_intact ... ok
+test block::tests::writer_layout_is_exact ... ok
+test context::tests::a_missing_side_never_agrees ... ok
+test context::tests::a_shared_leading_byte_is_not_a_matching_character ... ok
+test context::tests::astral_characters_are_never_split ... ok
+test context::tests::carriage_returns_are_ignored_on_either_side ... ok
+test context::tests::long_context_is_cut_to_whole_words ... ok
+test context::tests::refresh_skips_stale_anchors_and_updates_located_ones ... ok
+test context::tests::scoring_follows_the_documented_threshold ... ok
+test context::tests::short_documents_keep_everything_up_to_the_edges ... ok
+test context::tests::short_edge_context_needs_the_same_edge ... ok
+test context::tests::text_without_spaces_keeps_the_full_window ... ok
+test context::tests::window_on_a_word_boundary_is_not_trimmed ... ok
+test document::tests::insertions_at_boundaries_are_outside ... ok
+test document::tests::partial_overlaps_trim_to_the_surviving_text ... ok
+test document::tests::replacements_before_after_and_inside ... ok
+test model::tests::active_out_of_range_is_rejected ... ok
+test model::tests::anchor_must_match_active_text_and_length ... ok
+test model::tests::first_alternative_must_be_original ... ok
+test model::tests::ghost_validation_checks_id_text_and_length ... ok
+test model::tests::inert_means_only_the_original ... ok
+test model::tests::kinds_and_sources_serialise_lowercase ... ok
+test model::tests::second_original_is_rejected ... ok
+test model::tests::valid_span_passes ... ok
+test offset::tests::ascii_offsets_are_identical ... ok
+test offset::tests::conversion_from_a_known_point_agrees_with_single_conversion ... ok
+test offset::tests::multi_byte_and_astral_characters_convert_both_ways ... ok
+test offset::tests::offsets_inside_a_character_are_rejected ... ok
+test offset::tests::offsets_past_the_end_are_rejected ... ok
+test offset::tests::sorted_conversion_agrees_with_single_conversion ... ok
+test reanchor::tests::no_texts_and_empty_text_find_nothing ... ok
+test reanchor::tests::mixed_texts_in_one_pass_report_every_occurrence ... ok
+test reanchor::tests::one_pass_serves_every_distinct_text ... ok
+test reanchor::tests::is_case_sensitive ... ok
+test reanchor::tests::blank_texts_go_through_the_matcher ... ok
+test reanchor::tests::refused_empty_text_does_not_shift_other_slots ... ok
+test reanchor::tests::search_failure_returns_every_item_unresolved ... ok
+test reanchor::tests::reports_utf16_offsets_and_overlaps ... ok
+test words::tests::joiners_join_only_between_word_characters ... ok
+test words::tests::markdown_syntax_and_punctuation_are_not_words ... ok
+test reanchor::tests::single_character_and_cjk_texts ... ok
+test words::tests::spans_are_byte_offsets_on_char_boundaries ... ok
+test words::tests::symbols_and_emoji_are_not_words ... ok
+test words::tests::unicode_letters_and_digits_are_words ... ok
+test words::tests::whitespace_and_line_endings_separate_words ... ok
+
+test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/article_swap.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/article_swap-a5ef6e0e9d1468e7)
+
+running 9 tests
+test no_article_means_no_change_elsewhere ... ok
+test capitalised_article_keeps_its_case ... ok
+test article_not_immediately_preceding_is_untouched ... ok
+test cycling_wraps_in_both_directions ... ok
+test later_spans_shift_when_the_article_grows ... ok
+test article_inside_another_span_is_left_alone ... ok
+test only_the_preceding_article_changes ... ok
+test paperclip_eraser_thumbtack_and_back ... ok
+test stale_anchor_is_refused ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/block_round_trip.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/block_round_trip-bc50b3ffba61f317)
+
+running 21 tests
+test ghost_reusing_a_span_id_is_rejected ... ok
+test duplicate_span_ids_are_rejected ... ok
+test fenced_examples_of_the_format_stay_in_the_body ... ok
+test context_of_the_wrong_type_is_recoverable ... ok
+test full_fixture_has_the_expected_content ... ok
+test hand_edited_body_is_not_a_parse_error ... ok
+test invalid_json_is_recoverable_with_position ... ok
+test full_fixture_exports_without_ghosted_text ... ok
+test annotating_a_document_with_a_trailing_example_keeps_the_example ... ok
+test fixtures_are_byte_stable ... ok
+test fixtures_with_context_store_it_on_every_anchor ... ok
+test overlapping_ghosts_are_reported_not_accepted ... ok
+test overlapping_spans_are_reported_not_accepted ... ok
+test plain_markdown_parses_to_empty_annotations ... ok
+test legacy_files_load_without_context_and_gain_it_on_save ... ok
+test structurally_invalid_span_is_reported_with_its_id ... ok
+test programmatic_documents_round_trip ... ok
+test truncated_block_is_recoverable ... ok
+test unknown_version_is_reported_before_schema_checks ... ok
+test parse_of_write_is_identity_for_fixture_documents ... ok
+test legacy_file_reanchors_as_before_after_a_hand_edit ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/context_reanchor.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/context_reanchor-76127d54ddf1c46d)
+
+running 16 tests
+test equally_good_candidates_are_ambiguous ... ok
+test context_and_legacy_items_share_one_pass ... ok
+test a_change_on_both_sides_of_a_moved_anchor_is_reported ... ok
+test detached_and_stale_anchors_keep_their_context ... ok
+test context_is_captured_at_document_start_and_end ... ok
+test edit_inside_a_ghost_is_reported_not_attached_to_identical_text ... ok
+test edit_inside_a_span_is_reported_not_attached_to_identical_text ... ok
+test context_is_captured_in_utf16_units_for_multi_byte_and_astral_text ... ok
+test a_change_right_next_to_the_anchor_on_one_side_still_matches ... ok
+test converting_line_endings_keeps_context_agreeing ... ok
+test hand_built_ghost_without_context_gains_it_on_write ... ok
+test ghost_merges_and_splits_capture_current_context ... ok
+test context_follows_live_edits_swaps_and_the_article_fix_up ... ok
+test the_hint_wins_even_when_context_disagrees ... ok
+test spans_survive_edits_made_before_them_in_another_editor ... ok
+test two_items_wanting_the_same_occurrence_are_both_ambiguous ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ghost_allocation.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/ghost_allocation-55212c5e4230186a)
+
+running 5 tests
+test adjacent_independent_ghost_export_excludes_whitespace_prefixed_suffix ... ok
+test numeric_exhaustion_refuses_before_model_mutation ... ok
+test independent_overlap_is_refused_but_export_projection_unions_legacy_model_state ... ok
+test allocator_preflights_merge_split_and_independent_paths ... ok
+test export_union_preserves_visible_islands_unicode_and_storage_order ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ghosts.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/ghosts-905d7749c4370509)
+
+running 24 tests
+test counts_include_ghosted_text ... ok
+test ghost_at_finds_the_covering_ghost ... ok
+test ghost_ids_are_unique_across_spans_and_ghosts ... ok
+test deleting_all_of_a_ghosts_text_removes_it ... ok
+test insertions_at_ghost_boundaries_are_outside ... ok
+test ghosting_exactly_one_span_follows_its_swaps ... ok
+test insertion_between_touching_ghosts_is_not_ghosted ... ok
+test edits_inside_resize_and_edits_before_shift ... ok
+test invalid_ranges_are_refused ... ok
+test multi_byte_and_astral_text_in_ghosts ... ok
+test overlapping_and_touching_ghosts_merge_keeping_the_first_id ... ok
+test partial_edits_trim_the_ghost ... ok
+test article_fix_up_at_ghost_boundaries ... ok
+test ghosts_sharing_text_do_not_claim_the_same_occurrence ... ok
+test partial_overlap_with_a_span_exports_only_the_ghosted_part ... ok
+test programmatic_document_with_ghosts_is_byte_stable ... ok
+test reanchor_moves_ghosts_and_overlapping_spans_independently ... ok
+test revive_splits_trims_and_removes ... ok
+test spans_inside_a_ghost_keep_their_alternatives_after_revive ... ok
+test stale_ghost_on_an_article_that_needs_no_change_does_not_block ... ok
+test sentence_containing_a_word_span_can_be_ghosted_and_swaps_resize_it ... ok
+test reanchor_reports_missing_and_ambiguous_ghosts ... ok
+test stale_ghost_on_the_article_fails_the_swap_atomically ... ok
+test stale_ghosts_block_edits_that_would_resize_them ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lifecycle.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/lifecycle-dc60243f525c35ca)
+
+running 14 tests
+test add_alternative_validates_and_deduplicates ... ok
+test ids_are_sequential_and_skip_used_numbers ... ok
+test ghost_and_revive_keep_alternatives ... ok
+test export_skips_stale_ghosts_rather_than_cutting_the_wrong_text ... ok
+test add_span_rejects_bad_ranges_and_overlaps ... ok
+test export_tidies_spaces_at_line_starts_and_before_punctuation ... ok
+test clear_keeps_the_visible_text_as_plain_text ... ok
+test apply_edit_shifts_before_keeps_after_and_detaches_inside ... ok
+test ghost_is_independent_of_the_span_lifecycle ... ok
+test counts_include_ghosted_text_and_exclude_the_block ... ok
+test removing_all_non_original_alternatives_removes_the_span ... ok
+test export_drops_ghosted_text_and_omits_overflow_and_block ... ok
+test removing_an_earlier_alternative_keeps_the_active_one ... ok
+test removing_the_active_alternative_reverts_to_the_original ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/moves.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/moves-ac5ef82564a8af32)
+
+running 12 tests
+test moves_that_would_split_an_item_are_refused_by_name ... ok
+test invalid_ranges_and_destinations_are_refused ... ok
+test multi_byte_and_astral_text_moves_with_exact_offsets ... ok
+test moving_back_restores_the_document_exactly ... ok
+test adjacent_ghosts_are_carried_together_and_touching_ghosts_are_not_merged ... ok
+test moving_a_block_forward_carries_its_span_and_ghost ... ok
+test a_ghost_holding_both_the_range_and_the_destination_keeps_its_extent ... ok
+test export_after_a_move_drops_ghosts_at_their_new_place ... ok
+test moving_a_block_backward_carries_its_span_and_ghost ... ok
+test context_is_refreshed_for_moved_and_neighbouring_items ... ok
+test stale_items_the_move_would_touch_are_refused ... ok
+test every_move_on_a_small_document_is_refused_cleanly_or_reversible ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests/reanchor_matcher.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/reanchor_matcher-285dca4884426dfe)
+
+running 14 tests
+test document_without_spans_or_ghosts_is_clean ... ok
+test astral_and_cjk_offsets_are_utf16 ... ok
+test overlapping_occurrence_at_the_hint_is_claimed ... ok
+test blank_ghost_and_span_still_reanchor ... ok
+test astral_anchor_text_reanchors ... ok
+test anchor_inside_another_anchors_occurrence_is_found_and_skipped_once_claimed ... ok
+test matching_is_case_sensitive ... ok
+test case_variants_are_separate_texts_for_contention ... ok
+test blank_anchor_with_several_occurrences_is_ambiguous ... ok
+test occurrence_inside_a_longer_word_counts_as_a_candidate ... ok
+test overlapping_occurrences_of_one_anchor_are_all_candidates ... ok
+test single_character_anchors_reanchor ... ok
+test spans_and_ghosts_sharing_text_place_independently ... ok
+test many_spans_sharing_text_are_never_guessed ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/reanchoring.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/reanchoring-f6e4d6bcba79f551)
+
+running 14 tests
+test deleted_anchor_reports_missing ... ok
+test insert_inside_reports_missing ... ok
+test reanchored_document_supports_further_edits ... ok
+test delete_inside_reports_missing ... ok
+test delete_before_shifts_back ... ok
+test insert_before_shifts_by_utf16_length ... ok
+test duplicate_text_away_from_the_hint_is_settled_by_context ... ok
+test hint_claim_leaves_the_other_span_missing ... ok
+test insert_and_delete_after_leave_the_span_alone ... ok
+test duplicate_text_away_from_the_hint_is_ambiguous_not_guessed ... ok
+test duplicate_text_at_the_hint_is_resolved_by_the_hint ... ok
+test spans_with_different_text_reanchor_independently ... ok
+test two_spans_sharing_text_do_not_collapse_onto_one_survivor ... ok
+test unchanged_body_is_clean_and_nothing_moves ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/synonym_registration.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/synonym_registration-bfa97a2784c6ec7b)
+
+running 6 tests
+test entirely_blank_group_keeps_provenance_without_fake_searchable_terms ... ok
+test whitespace_original_does_not_create_a_blank_concept_or_synonym ... ok
+test authored_alternatives_register_with_real_types_and_directive_parser ... ok
+test save_reopen_edit_remove_and_ghost_preserve_exact_current_membership ... ok
+test commas_newlines_unicode_and_directive_text_are_lossless_typed_synonyms ... ok
+test identical_terms_in_different_spans_do_not_merge_concepts ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/text_boundaries.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/text_boundaries-991a02abeb2aec7b)
+
+running 9 tests
+test paragraphs_handle_crlf_and_whitespace_blank_lines ... ok
+test combining_sequences_belong_to_the_word_not_a_standalone_mark ... ok
+test word_caret_at_end_targets_preceding_word_and_invalid_bytes_refuse ... ok
+test markdown_openers_split_lowercase_code_emphasis_and_links ... ok
+test repeated_sentences_have_distinct_original_ranges ... ok
+test protected_inline_code_does_not_gain_opener_boundaries_inside_it ... ok
+test joiners_and_cjk_keep_existing_counter_semantics ... ok
+test sentence_policy_retains_hardwraps_abbreviations_and_markdown_closers ... ok
+test shared_markdown_policy_preserves_exact_zed_fixture_positions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/alternatives_bench.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/alternatives_bench-9e62eb921526786f)
+Gnuplot not found, using plotters backend
+Testing write_220_spans
+Success
+
+Testing parse_220_spans
+Success
+
+Testing reanchor_after_prefix_insert
+Success
+
+Testing reanchor_distinct_220_spans_74_ghosts
+Success
+
+Testing set_active_first_span
+Success
+
+Testing apply_edit_keystroke_near_span
+Success
+
+Testing move_range_block_to_end
+Success
+
+Testing move_range_sentence_down
+Success
+
+Testing export_with_ghosts
+Success
+
+Testing counts_3000_words
+Success
+
+     Running unittests src/lib.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/terraphim_lab-458a3113b639055e)
+
+running 30 tests
+test rolegraph::tests::edge_id_matches_upstream_magic_pair ... ok
+test offset::tests::multibyte_and_surrogate_pairs ... ok
+test offset::tests::utf16_back_to_bytes ... ok
+test rolegraph::tests::connectivity_checks_both_orders ... ok
+test rolegraph::tests::serialisable_rolegraph_extra_fields_are_ignored ... ok
+test lists::tests::whole_role_thesaurus_keeps_only_lab_concepts ... ok
+test text::tests::full_stops_that_end_sentences ... ok
+test text::tests::hard_wrapped_paragraphs_keep_original_offsets ... ok
+test text::tests::autolinks_and_reference_links ... ok
+test text::tests::block_quote_with_lazy_continuation_is_protected ... ok
+test text::tests::html_comment_spanning_lines_is_protected ... ok
+test text::tests::indented_code_is_protected ... ok
+test text::tests::front_matter_is_protected ... ok
+test text::tests::footnote_definitions_are_protected ... ok
+test lists::tests::connectives_compile_and_match_whole_phrases ... ok
+test text::tests::mdast_offsets_are_bytes_on_multibyte_text ... ok
+test text::tests::multi_line_html_block_is_protected_on_every_line ... ok
+test text::tests::nested_list_with_fenced_code_is_protected ... ok
+test text::tests::setext_heading_paragraph_is_protected ... ok
+test text::tests::setext_heading_is_protected_whole ... ok
+test text::tests::pipe_less_gfm_table_is_protected ... ok
+test text::tests::shared_unicode_policy_keeps_markdown_openers_and_protected_code ... ok
+test text::tests::unprotected_segments_skip_code ... ok
+test text::tests::structure_is_protected ... ok
+test text::tests::word_definition_matches_the_status_card ... ok
+test weak::tests::stopwords_are_sorted_for_binary_search ... ok
+test text::tests::urls_and_link_destinations_are_protected ... ok
+test text::tests::table_with_alignment_row_is_protected ... ok
+test weak::tests::tie_break_never_outweighs_primary ... ok
+test lists::tests::embedded_json_matches_the_kg_markdown ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/actions.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/actions-1f78f8d77c1865d9)
+
+running 17 tests
+test hedges_and_filler_are_marked ... ok
+test long_sentence_limit_is_configurable ... ok
+test convoluted_sentences_are_marked_but_enumerations_are_not ... ok
+test paragraph_openers_are_never_marked_weakest ... ok
+test punctuation_rules_propose_fixes ... ok
+test off_tone_words_come_from_the_tone_list ... ok
+test long_sentences_at_the_limit_are_marked ... ok
+test concept_rank_orders_otherwise_equal_sentences ... ok
+test custom_style_terms ... ok
+test only_openers_means_no_weakest_marks ... ok
+test tone_list_comes_from_the_role_kg ... ok
+test typos_are_marked_with_case_matched_proposals ... ok
+test typo_list_from_kg_markdown_and_custom_thesaurus ... ok
+test multi_word_terms_match_across_hard_wraps_on_original_offsets ... ok
+test without_a_role_weakness_falls_back_to_hedges_and_text ... ok
+test weakest_sentences_use_the_role_rolegraph ... ok
+test weakest_is_fifteen_percent_of_sentences_on_fixtures ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/invariants.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/invariants-9b420eaac6ea25d5)
+
+running 10 tests
+test sentence_marks_split_around_inline_code ... ok
+test empty_and_whitespace_bodies_yield_no_marks ... ok
+test offsets_are_utf16_into_the_original_body ... ok
+test labels_and_kinds_cover_all_six_actions ... ok
+test markdown_structures_are_never_marked ... ok
+test protected_text_is_never_marked ... ok
+test every_mark_is_in_bounds_and_on_char_boundaries ... ok
+test marks_are_deterministic ... ok
+test no_action_mutates_the_input ... ok
+test mark_all_is_the_union_of_single_actions ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/rolegraph_conformance.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/rolegraph_conformance-370f75b8f9c4d57c)
+
+running 3 tests
+test edge_id_is_upstream_magic_pair ... ok
+test committed_fixture_matches_upstream_rolegraph ... ok
+test shared_contributions_ranking_and_removal_match_corpus_occurrences ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/trim.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/trim-11fef974b5c6c754)
+
+running 27 tests
+test an_emptied_list_item_loses_its_bullet ... ok
+test abbreviations_ellipses_and_decimals_do_not_start_a_sentence ... ok
+test a_relative_clause_takes_its_closing_comma ... ok
+test invalid_cuts_are_ignored ... ok
+test cuts_at_document_start_and_end ... ok
+test cut_list_items_leave_no_empty_bullets ... ok
+test every_fixture_level_within_three_points ... ok
+test status_card_text ... ok
+test keeping_two_nested_items ... ok
+test kept_spans_reduce_the_cut_and_the_status ... ok
+test openers_and_short_sentences_only_go_at_half ... ok
+test tidy_collapses_a_doubled_comma ... ok
+test tidy_capitalises_a_new_sentence_start ... ok
+test tidy_leaves_clean_joins_alone ... ok
+test tidy_drops_a_comma_left_after_a_conjunction ... ok
+test tidy_on_crlf_and_multibyte_text ... ok
+test tidy_removes_space_before_punctuation_and_leading_space ... ok
+test levels_are_nested ... ok
+test word_cuts_are_whole_words_outside_emphasis ... ok
+test protected_structure_is_never_faded ... ok
+test walk_through_order_is_document_order_and_ids_index_the_plan ... ok
+test code_dense_document_reports_the_achieved_percentage_honestly ... ok
+test keeping_a_word_inside_a_faded_sentence_keeps_the_word ... ok
+test trim_is_deterministic ... ok
+test make_cuts_deletes_exactly_the_faded_spans_plus_documented_fix_ups ... ok
+test keeping_a_clause_inside_a_faded_sentence_keeps_the_clause ... ok
+test invariants_hold_with_random_keeps ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running benches/lab_bench.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/lab_bench-cfc7a3a89d19f0cd)
+Gnuplot not found, using plotters backend
+lab_bench document: 5371 words, 30014 bytes
+Testing lab_5000_words/TyposAndPunctuation
+Success
+Testing lab_5000_words/WeakestSentences
+Success
+Testing lab_5000_words/LongSentences
+Success
+Testing lab_5000_words/ConvolutedSentences
+Success
+Testing lab_5000_words/OffTone
+Success
+Testing lab_5000_words/HedgesAndFiller
+Success
+Testing lab_5000_words/mark_all
+Success
+
+Testing trim_5000_words/trim_plan
+Success
+trim_5000_words: 220 cuts in the plan, 220 at Half (5371 → 2685 words · −50%)
+Testing trim_5000_words/make_cuts_half
+Success
+Testing trim_5000_words/status_half
+Success
+
+Testing config_with_role
+Success
+
+     Running unittests src/lib.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/terraphim_rolegraph_browser-1fd790a6bc0acb2f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native_goldens.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/native_goldens-2456f45835e39119)
+
+running 1 test
+test native_shared_browser_scenario ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/review_regressions.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/review_regressions-0950e04bbe12c508)
+
+running 7 tests
+test empty_tags_are_bounded_before_typed_allocation ... ok
+test platform_independent_offset_boundaries ... ok
+test learning_edge_metadata_is_preserved_without_graph_contributions ... ok
+test cumulative_tag_budget_and_dictionary_names_roundtrip ... ok
+test all_collections_paginate_beyond_one_hundred ... ok
+test combined_corpus_trigger_and_learning_sizes_remain_checkpointable ... ok
+test escaped_corpus_refuses_atomically_and_near_limit_roundtrips ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s
+
+     Running tests/review_shared.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/review_shared-353b47c47393571f)
+
+running 2 tests
+test five_million_empty_tags_do_not_allocate_a_typed_vector ... ok
+test native_review_browser_scenario ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/session.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/session-b03d62063aa2bed5)
+
+running 10 tests
+test unicode_empty_single_and_self_edges_survive_roundtrip ... ok
+test lifecycle_and_atomic_guards ... ok
+test stale_preparations_and_bad_roles_keep_active_graph ... ok
+test corrupt_snapshot_references_membership_and_edge_rank_are_refused ... ok
+test snapshot_roundtrip_exact_large_edges_and_corruption ... ok
+test learning_replacement_overflow_and_source_unavailability ... ok
+test all_read_query_trigger_and_learning_operations ... ok
+test malformed_limits_and_unknown_ops_refuse_without_mutation ... ok
+test edge_growth_limit_is_atomic_even_for_a_valid_sized_document ... ok
+test learning_metadata_has_a_cumulative_limit ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/wire.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/wire-c4233d390057fc9d)
+
+running 3 tests
+test schema_lists_the_complete_operation_allowlist ... ok
+test protocol_and_decimal_identity_are_strict ... ok
+test unsafe_concept_pairing_and_conflicting_aliases_refuse ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

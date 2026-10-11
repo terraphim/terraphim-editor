@@ -116,6 +116,10 @@ class TeLabPopover {
 
     this.build();
 
+    this.editor.root.addEventListener('te:role-change', (e) => {
+      if (e.detail && e.detail.editor === this.editor && this.trim) this.trim.onRoleChange();
+    }, { signal });
+
     document.addEventListener('te:lab', (e) => {
       if (!e.detail || !e.detail.editor || e.detail.editor === this.editor) this.toggle();
     }, { signal });

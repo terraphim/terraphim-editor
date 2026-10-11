@@ -1,0 +1,20 @@
+[INFO]: 🎯  Checking for the Wasm target...
+    Finished `dev` profile [optimized] target(s) in 0.14s
+    Finished `test` profile [optimized] target(s) in 0.07s
+     Running tests/web_overflow.rs (/private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_overflow-a60e05f8acabcc9e.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:61178/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 6 tests
+test test_xyz_toggles_the_panel_with_aria_escape_and_mode_gating ... ok
+test test_stash_is_a_move_and_one_undo_step ... ok
+test test_panel_width_matches_the_video ... ok
+test test_panel_text_persists_is_not_exported_and_destroy_cleans_up ... ok
+test test_panel_drag_accepts_only_its_owned_plain_text_dragover ... ok
+test test_ctrl_enter_and_drop_insert_at_the_caret ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 filtered out; finished in 19.03s
+
+[WARN]: ⚠️   There's a newer version of wasm-pack available, the new version is: 0.15.0, you are using: 0.13.1. To update, navigate to: https://rustwasm.github.io/wasm-pack/installer/

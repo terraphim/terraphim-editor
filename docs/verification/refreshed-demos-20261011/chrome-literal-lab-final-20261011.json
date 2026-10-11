@@ -1,0 +1,238 @@
+{
+  "browser": "chrome",
+  "scope": "finite literal Lab examples; no general semantic-quality claim",
+  "manifestSha256": "b4287a48bae6211fce7c7fe350c96b6722b694f18f3f548d3329029f87dcce42",
+  "runnerSha256": "53b24e641a6d58ce03ba1a14fe9d7f919e8dd8789d82b0062f31ccf1083d6fba",
+  "checks": [
+    {
+      "action": "typos_and_punctuation",
+      "input": "I recieve teh letter. Tehran is correct.",
+      "expected": [
+        {
+          "start": 2,
+          "end": 9,
+          "text": "recieve"
+        },
+        {
+          "start": 10,
+          "end": 13,
+          "text": "teh"
+        }
+      ],
+      "actual": [
+        {
+          "start": 2,
+          "end": 9,
+          "text": "recieve"
+        },
+        {
+          "start": 10,
+          "end": 13,
+          "text": "teh"
+        }
+      ],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "typos_and_punctuation",
+      "input": "I receive the letter. Tehran is correct.",
+      "expected": [],
+      "actual": [],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "long_sentences",
+      "input": "Word word word word word word word word word word word word word word word word word word word word word word word word word word word word word end. Word word word word word word word word word word word word word word word word word word word word word word word word word word word word end.",
+      "expected": [
+        {
+          "start": 0,
+          "end": 149,
+          "text": "Word word word word word word word word word word word word word word word word word word word word word word word word word word word word word end."
+        }
+      ],
+      "actual": [
+        {
+          "start": 0,
+          "end": 149,
+          "text": "Word word word word word word word word word word word word word word word word word word word word word word word word word word word word word end."
+        }
+      ],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "long_sentences",
+      "input": "Word word word word word word word word word word word word word word word word word word word word word word word word word word word word end.",
+      "expected": [],
+      "actual": [],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "convoluted_sentences",
+      "input": "We bought apples, pears, plums, figs, dates and limes. The plan, which we drafted in May (after the review, which ran late), failed; although nobody said so, it was clear.",
+      "expected": [
+        {
+          "start": 55,
+          "end": 171,
+          "text": "The plan, which we drafted in May (after the review, which ran late), failed; although nobody said so, it was clear."
+        }
+      ],
+      "actual": [
+        {
+          "start": 55,
+          "end": 171,
+          "text": "The plan, which we drafted in May (after the review, which ran late), failed; although nobody said so, it was clear."
+        }
+      ],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "convoluted_sentences",
+      "input": "We bought apples, pears, plums, figs, dates and limes.",
+      "expected": [],
+      "actual": [],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "off_tone",
+      "input": "The results are awesome and we have lots of stuff to ship.",
+      "expected": [
+        {
+          "start": 16,
+          "end": 23,
+          "text": "awesome"
+        },
+        {
+          "start": 36,
+          "end": 43,
+          "text": "lots of"
+        },
+        {
+          "start": 44,
+          "end": 49,
+          "text": "stuff"
+        }
+      ],
+      "actual": [
+        {
+          "start": 16,
+          "end": 23,
+          "text": "awesome"
+        },
+        {
+          "start": 36,
+          "end": 43,
+          "text": "lots of"
+        },
+        {
+          "start": 44,
+          "end": 49,
+          "text": "stuff"
+        }
+      ],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "off_tone",
+      "input": "The results are ready and we have work to ship.",
+      "expected": [],
+      "actual": [],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "hedges_and_filler",
+      "input": "This is basically fine and perhaps this seems to work, sort of.",
+      "expected": [
+        {
+          "start": 8,
+          "end": 17,
+          "text": "basically"
+        },
+        {
+          "start": 27,
+          "end": 34,
+          "text": "perhaps"
+        },
+        {
+          "start": 40,
+          "end": 48,
+          "text": "seems to"
+        },
+        {
+          "start": 55,
+          "end": 62,
+          "text": "sort of"
+        }
+      ],
+      "actual": [
+        {
+          "start": 8,
+          "end": 17,
+          "text": "basically"
+        },
+        {
+          "start": 27,
+          "end": 34,
+          "text": "perhaps"
+        },
+        {
+          "start": 40,
+          "end": 48,
+          "text": "seems to"
+        },
+        {
+          "start": 55,
+          "end": 62,
+          "text": "sort of"
+        }
+      ],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "hedges_and_filler",
+      "input": "The engine writes the file.",
+      "expected": [],
+      "actual": [],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "weakest_sentences",
+      "input": "Opening line of the note here. Perhaps it is basically fine, really. The engine ranks each sentence by its concepts.",
+      "expected": [
+        {
+          "start": 31,
+          "end": 68,
+          "text": "Perhaps it is basically fine, really."
+        }
+      ],
+      "actual": [
+        {
+          "start": 31,
+          "end": 68,
+          "text": "Perhaps it is basically fine, really."
+        }
+      ],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    },
+    {
+      "action": "weakest_sentences",
+      "input": "Perhaps it is basically fine, really.\n\nMaybe it is sort of quite okay, I think.",
+      "expected": [],
+      "actual": [],
+      "bodyUnchanged": true,
+      "status": "PASS"
+    }
+  ],
+  "browserVersion": "155.0.8059.40",
+  "status": "PASS"
+}

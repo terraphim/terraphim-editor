@@ -2,7 +2,8 @@
 
 # Writes the embeddable bundle (issue #77): terraphim-editor.min.js,
 # terraphim-editor.min.css, the WebAssembly module under fixed names
-# (terraphim_editor.js, terraphim_editor_bg.wasm) and example.html.
+# (terraphim_editor.js, terraphim_editor_bg.wasm), the default role
+# (roles/default.json, issue #123) and example.html.
 #
 # Output directory, in order of precedence:
 #   1. first argument:       scripts/build-dist.sh some/dir
@@ -23,6 +24,20 @@ cd "$(dirname "$0")/.."
 OUT="${1:-${TRUNK_STAGING_DIR:-target/trunk-dist}}"
 mkdir -p "$OUT"
 
+# Source-controlled pinned bytes only: no fetching during build or release.
+python3 scripts/ci/runtime-assets-check.py --check public/vendor
+mkdir -p "$OUT/vendor"
+cp -R public/vendor/. "$OUT/vendor/"
+python3 scripts/ci/runtime-assets-check.py --check "$OUT/vendor"
+
+# The default role (issues #123, #127, #128). The editor embeds the same file
+# at compile time with include_str!, so the bundle has knowledge-graph
+# synonyms with no host call. Copying it keeps the reader outside the WASM
+# module on the identical bytes: terraphim-grep and other tools take it with
+# --thesaurus, and a host can read it without opening the module.
+mkdir -p "$OUT/roles"
+cp public/roles/default.json "$OUT/roles/default.json"
+
 # Copy and minify JS files
 # Order matters: config, then the Write_On chrome, the decoration
 # registry/inline indicators, the ghost layer and selection menu, the trim
@@ -30,7 +45,12 @@ mkdir -p "$OUT"
 # alternatives panel and the Overflow panel, save/open and the Markdown
 # export view, then the editor that
 # instantiates them, then the embeddable wrapper.
-terser public/js/config.js public/js/chrome.js public/js/indicators.js public/js/selection-menu.js public/js/trim.js public/js/lab.js public/js/blocks.js public/js/alternatives-panel.js public/js/overflow.js public/js/persistence.js public/js/editor.js public/js/terraphim-editor.js -o "$OUT/terraphim-editor.min.js"
+terser public/js/runtime-assets.js public/js/config.js public/js/chrome.js public/js/indicators.js public/js/selection-menu.js public/js/trim.js public/js/lab.js public/js/blocks.js public/js/alternatives-panel.js public/js/overflow.js public/js/persistence.js public/js/rolegraph-storage.js public/js/rolegraph-client.js public/js/editor.js public/js/terraphim-editor.js -o "$OUT/terraphim-editor.min.js"
+
+# Worker module remains separate; complete graph assets are required by default.
+mkdir -p "$OUT/js"
+cp public/js/rolegraph-worker.js "$OUT/js/rolegraph-worker.js"
+bash scripts/build-rolegraph.sh "$OUT/rolegraph"
 
 # Copy and minify CSS
 # The embed base styles (scoped to the editor), then design tokens before
@@ -64,8 +84,7 @@ cat > "$OUT/example.html" << 'EOL'
 <head>
   <meta charset="UTF-8">
   <title>Terraphim Editor embed example</title>
-  <!-- The editor's chrome uses FontAwesome icons; the host page loads them. -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <!-- create() awaits the pinned local component/icon styles. -->
   <link rel="stylesheet" href="terraphim-editor.min.css">
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; }
@@ -91,3 +110,4 @@ cat > "$OUT/example.html" << 'EOL'
 </body>
 </html>
 EOL
+python3 scripts/ci/rolegraph-production-check.py assets "$OUT"

@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "release": {
+    "schema": 1,
+    "sourceHead": "949b5252e89814ed294c1a238cef726663873a76",
+    "manifestSha256": "3e0510de27b93c5aed5018058b55bd82798ad7ed535fd1c25812aef5a0aadc03",
+    "assets": 132,
+    "fullParityAccepted": false,
+    "qualification": "HASH-ADMITTED CANDIDATE; browser/deployment acceptance required"
+  },
+  "protectionCount": 7,
+  "input": "🧠 Café café STRAẞE Α Я ΟΣ·Α are basically quite useful. The editor is basically the only target here today.",
+  "actualTrimOutputs": {
+    "slight": "🧠 Café café STRAẞE Α Я ΟΣ·Α are useful. The editor is basically the only target here today.",
+    "tighten": "🧠 Café café STRAẞE Α Я ΟΣ·Α are useful. The editor is the only target here today.",
+    "sharper": "🧠 Café café STRAẞE Α Я ΟΣ·Α are useful. The editor is the only target here today.",
+    "half": "🧠 Café café STRAẞE Α Я ΟΣ·Α are useful."
+  },
+  "actualSavedAnnotated": "🧠 Café café STRAẞE Α Я ΟΣ·Α are basically quite useful. The editor is basically the only target here today.\n\n```terraphim-alternatives\n{\n  \"version\": 1,\n  \"spans\": [],\n  \"ghosts\": [\n    {\n      \"id\": \"g1\",\n      \"anchor\": {\n        \"start\": 33,\n        \"end\": 43,\n        \"text\": \" basically\",\n        \"before\": \" Café café STRAẞE Α Я ΟΣ·Α are\",\n        \"after\": \" quite useful. The editor is \"\n      }\n    },\n    {\n      \"id\": \"g2\",\n      \"anchor\": {\n        \"start\": 43,\n        \"end\": 49,\n        \"text\": \" quite\",\n        \"before\": \" STRAẞE Α Я ΟΣ·Α are basically\",\n        \"after\": \" useful. The editor is basically\"\n      }\n    },\n    {\n      \"id\": \"g3\",\n      \"anchor\": {\n        \"start\": 71,\n        \"end\": 81,\n        \"text\": \" basically\",\n        \"before\": \" quite useful. The editor is\",\n        \"after\": \" the only target here today.\"\n      }\n    }\n  ]\n}\n```\n",
+  "undoRestoredExactBefore": true,
+  "redoRestoredExactAfter": true,
+  "reopenExact": true,
+  "scope": "Automated real deployed browser/WASM output; no native download or full41 claim"
+}

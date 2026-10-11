@@ -1,0 +1,193 @@
+[INFO]: 🎯  Checking for the Wasm target...
+   Compiling once_cell v1.20.2
+   Compiling serde_core v1.0.229
+   Compiling serde v1.0.229
+   Compiling stable_deref_trait v1.2.1
+   Compiling syn v3.0.6
+   Compiling syn v2.0.90
+   Compiling num-traits v0.2.19
+   Compiling serde_json v1.0.133
+   Compiling writeable v0.6.4
+   Compiling litemap v0.8.3
+   Compiling utf8_iter v1.0.4
+   Compiling icu_normalizer_data v2.3.0
+   Compiling ahash v0.7.8
+   Compiling icu_properties_data v2.3.0
+   Compiling fnv v1.0.7
+   Compiling strsim v0.11.1
+   Compiling ident_case v1.0.1
+   Compiling hashbrown v0.12.3
+   Compiling smallvec v1.16.2
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.1.5
+   Compiling lru v0.7.8
+   Compiling form_urlencoded v1.2.2
+   Compiling hashbrown v0.15.5
+   Compiling memoize v0.6.0
+   Compiling cached_proc_macro_types v0.1.1
+   Compiling either v1.13.0
+   Compiling itertools v0.14.0
+   Compiling tokio v1.53.2
+   Compiling oorandom v11.1.5
+   Compiling nu-ansi-term v0.50.3
+   Compiling wasm-bindgen-test-shared v0.2.129
+   Compiling cast v0.3.0
+   Compiling serde_derive_internals v0.29.1
+   Compiling darling_core v0.20.11
+   Compiling thiserror-impl v1.0.69
+   Compiling wasm-bindgen-macro-support v0.2.129
+   Compiling synstructure v0.14.0
+   Compiling schemars_derive v0.8.22
+   Compiling serde_derive v1.0.229
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling thiserror-impl v2.0.21
+   Compiling thiserror v1.0.69
+   Compiling wasm-bindgen-test-macro v0.3.79
+   Compiling async-trait v0.1.92
+   Compiling zerofrom v0.1.8
+   Compiling darling_macro v0.20.11
+   Compiling thiserror v2.0.21
+   Compiling darling v0.20.11
+   Compiling yoke v0.8.3
+   Compiling cached_proc_macro v0.25.0
+   Compiling zerovec v0.11.8
+   Compiling zerotrie v0.2.5
+   Compiling wasm-bindgen-macro v0.2.129
+   Compiling rinja_parser v0.3.5
+   Compiling basic-toml v0.1.9
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling bincode v1.3.3
+   Compiling wasm-bindgen v0.2.129
+   Compiling toml_edit v0.22.27
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling icu_collections v2.3.0
+   Compiling icu_locale_core v2.3.0
+   Compiling schemars v0.8.22
+   Compiling icu_provider v2.3.1
+   Compiling js-sys v0.3.106
+   Compiling getrandom v0.3.4
+   Compiling uuid v1.27.0
+   Compiling console_error_panic_hook v0.1.7
+   Compiling rinja_derive v0.3.5
+   Compiling rand_core v0.9.5
+   Compiling ahash v0.8.12
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.5
+   Compiling toml v0.8.23
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling rinja v0.3.5
+   Compiling web-time v1.1.0
+   Compiling chrono v0.4.45
+   Compiling web-sys v0.3.106
+   Compiling wasm-bindgen-futures v0.4.79
+   Compiling wasm-bindgen-test v0.3.79
+   Compiling ulid v1.2.1
+   Compiling cached v0.56.0
+   Compiling terraphim_types v1.22.3 (registry `terraphim`)
+   Compiling terraphim-markdown-parser v1.20.5 (registry `terraphim`)
+   Compiling terraphim_rolegraph_core v0.1.1 (registry `terraphim`)
+   Compiling terraphim_automata v2.1.0 (registry `terraphim`)
+   Compiling terraphim_alternatives v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_alternatives)
+   Compiling terraphim_rolegraph v2.0.1 (registry `terraphim`)
+   Compiling terraphim_lab v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_lab)
+   Compiling terraphim_rolegraph_browser v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_rolegraph_browser)
+   Compiling terraphim_lsp_core v1.23.0 (registry `terraphim`)
+   Compiling terraphim-editor v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor)
+    Finished `dev` profile [optimized] target(s) in 41.10s
+[INFO]: Getting chromedriver...
+    Finished `test` profile [optimized] target(s) in 0.21s
+     Running tests/web_chrome_occlusion.rs (/Users/alex/.cargo/build/40/444727d03eb195/wasm32-unknown-unknown/debug/deps/web_chrome_occlusion-2230984ab972bfa3.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:63469/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 1 test
+test save_and_open_remain_pointer_targets_above_the_alternatives_panel ... FAIL
+
+failures:
+
+---- save_and_open_remain_pointer_targets_above_the_alternatives_panel output ----
+    error output:
+        panicked at tests/web_chrome_occlusion.rs:28:5:
+        assertion `left == right` failed
+          left: "save covered by te-alt-panel; open covered by te-alt-panel"
+         right: ""
+        
+        Stack:
+        
+        Error
+            at http://127.0.0.1:63468/wasm-bindgen-test:1713:25
+            at logError (http://127.0.0.1:63468/wasm-bindgen-test:2541:18)
+            at __wbg_new_227d7c05414eb861 (http://127.0.0.1:63468/wasm-bindgen-test:1712:57)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4356]:0x214cb7)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[1002]:0x157b8b)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4848]:0x216902)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[2386]:0x1df55b)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3118]:0x2012dd)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4810]:0x2167a8)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3945]:0x211a77)
+        
+        
+    
+    JS exception that was thrown:
+        RuntimeError: unreachable
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.__rustc[9d087a5ab36ea756]::__rust_abort (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4945]:0x216bc4)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.__rustc[9d087a5ab36ea756]::__rust_start_panic (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4901]:0x216ab0)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.__rustc[9d087a5ab36ea756]::rust_panic (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4543]:0x215a04)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[2386]:0x1df5b3)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3118]:0x2012dd)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4810]:0x2167a8)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3945]:0x211a77)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.core[608f92abc48d28da]::panicking::panic_fmt (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3665]:0x20ddb8)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.core[608f92abc48d28da]::panicking::assert_failed_inner (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[2222]:0x1d4c56)
+            at web_chrome_occlusion-2230984ab972bfa3.wasm.core[608f92abc48d28da]::panicking::assert_failed::<alloc[cb2b8d99256f33df]::string::String, &str> (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3719]:0x20eae2)
+
+failures:
+
+    save_and_open_remain_pointer_targets_above_the_alternatives_panel
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 filtered out; finished in 1.64s
+
+console output:
+    using deprecated parameters for the initialization function; pass a single object instead
+    Invoking test: save_and_open_remain_pointer_targets_above_the_alternatives_panel
+    panicked at tests/web_chrome_occlusion.rs:28:5:
+    assertion `left == right` failed
+      left: "save covered by te-alt-panel; open covered by te-alt-panel"
+     right: ""
+    
+    Stack:
+    
+    Error
+        at http://127.0.0.1:63468/wasm-bindgen-test:1713:25
+        at logError (http://127.0.0.1:63468/wasm-bindgen-test:2541:18)
+        at __wbg_new_227d7c05414eb861 (http://127.0.0.1:63468/wasm-bindgen-test:1712:57)
+        at web_chrome_occlusion-2230984ab972bfa3.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4356]:0x214cb7)
+        at web_chrome_occlusion-2230984ab972bfa3.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[1002]:0x157b8b)
+        at web_chrome_occlusion-2230984ab972bfa3.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4848]:0x216902)
+        at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[2386]:0x1df55b)
+        at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3118]:0x2012dd)
+        at web_chrome_occlusion-2230984ab972bfa3.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[4810]:0x2167a8)
+        at web_chrome_occlusion-2230984ab972bfa3.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:63468/wasm-bindgen-test_bg.wasm:wasm-function[3945]:0x211a77)
+    
+    
+Error: some tests failed
+error: test failed, to rerun pass `--test web_chrome_occlusion`
+
+Caused by:
+  process didn't exit successfully: `/Users/alex/.cargo/bin/wasm-bindgen-test-runner /Users/alex/.cargo/build/40/444727d03eb195/wasm32-unknown-unknown/debug/deps/web_chrome_occlusion-2230984ab972bfa3.wasm` (exit status: 1)
+note: test exited abnormally; to see the full output pass --no-capture to the harness.
+Error: Running Wasm tests with wasm-bindgen-test failed
+Caused by: Running Wasm tests with wasm-bindgen-test failed
+Caused by: failed to execute `cargo test`: exited with exit status: 1
+  full command: cd "/Users/alex/projects/terraphim/terraphim-editor" && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="/Users/alex/.cargo/bin/wasm-bindgen-test-runner" CHROMEDRIVER="/Users/alex/Library/Caches/.wasm-pack/chromedriver-bd0f73ace8fc0e68/chromedriver" WASM_BINDGEN_TEST_ONLY_WEB="1" "cargo" "test" "--target" "wasm32-unknown-unknown" "--test" "web_chrome_occlusion"

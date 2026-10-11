@@ -1,0 +1,6 @@
+    Checking bitflags v2.13.1
+    Checking terraphim_lsp_core v1.23.0 (/private/tmp/terraphim-ai-output-fixes-20261011/crates/terraphim_lsp_core)
+    Checking rustix v1.1.4
+    Checking tempfile v3.27.0
+    Checking terraphim_lsp v1.22.0 (/private/tmp/terraphim-ai-output-fixes-20261011/crates/terraphim_lsp)
+    Finished `dev` profile [optimized] target(s) in 3.68s
