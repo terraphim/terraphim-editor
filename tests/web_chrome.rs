@@ -324,33 +324,34 @@ fn test_write_on_mode_persists_per_document() {
     let result = js_string(
         r##"(() => {
           const out = [];
-          const reinit = (config) => {
+          const reinit = (config, source) => {
             window.__teEditor.destroy();
+            // Stage a host's replacement after teardown. Teardown may render
+            // the old canonical surface while removing its decoration layers.
+            if (source !== undefined) document.querySelector('.markdown-input').textContent = source;
             const ed = new MarkdownEditor(config || window.EditorConfig);
             ed.initialize();
             window.__teEditor = ed;
             return ed;
           };
-          const input = () => document.querySelector('.markdown-input');
           const counter = () => document.querySelector('.te-chrome-counter');
           const docA = 'Document A\n\nsome words';
           const docB = 'Document B\n\nother words';
-          input().textContent = docA;
-          let ed = reinit();
+          let ed = reinit(undefined, docA);
+          if (ed.surface.getText() !== docA) out.push('A source not mounted');
           if (ed.chrome.isWriteOn()) out.push('A started in write-on');
           const keyA = ed.chrome.storageKey();
           if (!keyA.startsWith(window.WRITE_ON_STORAGE_PREFIX + 'h:')) out.push('hash key ' + keyA);
           counter().click();
           if (localStorage.getItem(keyA) !== '1') out.push('not stored ' + localStorage.getItem(keyA));
           // Same document after a re-init: Write_On is restored.
-          input().textContent = docA;
-          ed = reinit();
+          ed = reinit(undefined, docA);
           if (!ed.chrome.isWriteOn()) out.push('A not restored after re-init');
           if (document.body.dataset.mode !== 'write-on') out.push('body mode not restored');
           if (ed.chrome.storageKey() !== keyA) out.push('A key changed');
           // Another document is not affected.
-          input().textContent = docB;
-          ed = reinit();
+          ed = reinit(undefined, docB);
+          if (ed.surface.getText() !== docB) out.push('B source not mounted');
           if (ed.chrome.isWriteOn()) out.push('B inherited write-on');
           if (document.body.dataset.mode !== undefined) out.push('B body mode ' + document.body.dataset.mode);
           if (ed.chrome.storageKey() === keyA) out.push('B shares the A key');
@@ -361,8 +362,7 @@ fn test_write_on_mode_persists_per_document() {
           // Toggling A back to plain is stored too.
           counter().click();
           if (localStorage.getItem(keyA) !== '0') out.push('plain not stored');
-          input().textContent = docA;
-          ed = reinit();
+          ed = reinit(undefined, docA);
           if (ed.chrome.isWriteOn()) out.push('A plain not restored');
           // A save key or file name takes precedence over the content hash.
           const named = Object.assign({}, window.EditorConfig, { documentKey: 'notes.md' });

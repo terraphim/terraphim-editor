@@ -29,7 +29,8 @@
  * Preview items carry no attributes (as with ghosts), so the indicators'
  * `aria-describedby` on shared text is never overwritten; the card and the
  * walk-through line announce what would go. Previewing, keeping, walking,
- * Done and Original never touch the undo history.
+ * and Original never touch the undo history; Done commits one undoable ghost
+ * operation, preserving the body text.
  *
  * Keep (R-8.5)
  * ------------
@@ -65,12 +66,12 @@
  *
  * Done (decision)
  * ---------------
- * "Done dismisses the card and leaves the ghosting as is": the card closes
- * and the faded preview stays exactly as it is, with the level still
- * selected in the popover. Done does NOT write ghosts into the document:
- * the preview is transient, as the spec's trim spans are a preview of the
- * cuts, not user ghosts. Picking the selected level again reopens the card.
- * Clicks on faded text only keep while the card is shown.
+ * Done preserves the body and promotes the exact outermost active preview
+ * fragments to independent persistent ghosts in one undoable transaction.
+ * Successful promotion retires the transient preview, closes the card and
+ * resets the selected level to Original. The saved ghosts survive reopen
+ * and retain their faded presentation. A refused promotion keeps the valid
+ * preview available for review. Clicks keep cuts only while previewing.
  *
  * Edits while trimming (decision)
  * -------------------------------

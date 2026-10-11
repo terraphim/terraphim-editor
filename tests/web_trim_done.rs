@@ -1,5 +1,5 @@
 //! Browser tests for leaving a trim (issue #15, spec R-8.3 to R-8.5): Done
-//! leaves the preview, and edits invalidate the trim. The levels are in
+//! persists exact faded coverage as ghosts, and edits invalidate the trim. The levels are in
 //! `tests/web_trim.rs`, making the cuts in `tests/web_trim_cuts.rs` and the
 //! shared helpers in `tests/support/trim.rs`. Run with `wasm-pack test
 //! --headless --chrome --test web_trim_done`. Real scripts, real stylesheets, the real
@@ -19,27 +19,61 @@ use support::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
-async fn test_done_leaves_the_preview_and_edits_invalidate_the_trim() {
+async fn test_done_persists_exact_ghosts_with_save_reopen_and_one_history_step() {
+    setup();
+    let cuts = plan().active(TrimLevel::Slight, &[]);
+    let mut expected: Vec<_> = cuts
+        .iter()
+        .filter(|cut| {
+            !cuts.iter().any(|outer| {
+                outer.start <= cut.start
+                    && cut.end <= outer.end
+                    && (outer.start < cut.start || cut.end < outer.end)
+            })
+        })
+        .map(|cut| (cut.start, cut.end))
+        .collect();
+    expected.sort_unstable();
+    expected.dedup();
+    assert!(!expected.is_empty(), "fixture must propose actual cuts");
+    let result = run_steps(&[
+        &format!(r##"T.expected = {expected};
+        T.before = ed.saveDocument();
+        T.history = s.historyIndex;
+        teTrim.pick('slight');
+        teTrim.card().querySelector('.te-trim-done').click();
+        if (!teTrim.card().hidden || teTrim.layer().length || s.root.querySelector('.te-trim-faded')) out.push('Done left transient preview');
+        if (teTrim.trim().level !== 'original' || teTrim.button('original').getAttribute('aria-checked') !== 'true') out.push('Done did not reset preview controls');
+        const ghosts = ed.annotations().ghosts;
+        if (JSON.stringify(ghosts.map((g) => [g.anchor.start,g.anchor.end])) !== JSON.stringify(T.expected)) out.push('ghosts differ from exact outermost engine cuts');
+        for (const g of ghosts) {{
+          if (s.getText().slice(g.anchor.start,g.anchor.end) !== g.anchor.text) out.push('ghost anchor text');
+        }}
+        if (!s.root.querySelector('.te-ghost')) out.push('persistent fades not rendered');
+        if (s.getText() !== teTrim.fixture) out.push('Done rewrote the body');
+        if (s.historyIndex !== T.history + 1) out.push('Done is not one history step');
+        T.after = ed.saveDocument();
+        if (T.after === T.before) out.push('Done did not persist annotations');
+        // Clicking a persistent ghost cannot retain a now-retired preview cut.
+        teTrim.click(s.root.querySelector('.te-ghost'));
+        if (teTrim.trim().kept.size || ed.saveDocument() !== T.after) out.push('click after Done changed annotations');"##,
+            expected = serde_json::to_string(&expected).unwrap()),
+        r##"if (!s.undo() || ed.saveDocument() !== T.before || s.historyIndex !== T.history) out.push('actual Undo did not restore exact saved source');
+        if (!s.redo() || ed.saveDocument() !== T.after || s.historyIndex !== T.history + 1) out.push('actual Redo did not restore exact saved ghosts');
+        ed.openDocument(T.after, 'trim-done-reopened');
+        if (ed.saveDocument() !== T.after || s.getText() !== teTrim.fixture) out.push('save/reopen changed source');
+        if (JSON.stringify(ed.annotations().ghosts.map((g) => [g.anchor.start,g.anchor.end])) !== JSON.stringify(T.expected)) out.push('reopen lost exact ghost ranges');
+        if (!s.root.querySelector('.te-ghost')) out.push('reopened ghosts not rendered');"##,
+    ]).await;
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_edits_invalidate_trim_and_leaving_write_on_clears_preview() {
     setup();
     let result = run_steps(&[
-        r##"T.history = s.history.length + ':' + s.historyIndex;
-        const trim = teTrim.pick('slight');
-        T.pieces = JSON.stringify(teTrim.pieces());
-        teTrim.card().querySelector('.te-trim-done').click();
-        if (!teTrim.card().hidden) out.push('Done left the card');
-        if (JSON.stringify(teTrim.pieces()) !== T.pieces) out.push('Done changed the preview');
-        if (!s.root.querySelector('.te-trim-faded')) out.push('Done removed the faded text');
-        if (teTrim.ghosts() !== '[]') out.push('Done wrote ghosts ' + teTrim.ghosts());
-        if (teTrim.button('slight').getAttribute('aria-checked') !== 'true') out.push('level not kept');
-        if (s.history.length + ':' + s.historyIndex !== T.history) out.push('Done touched the undo history');
-        // Clicks no longer keep once the card is dismissed.
-        teTrim.click(s.root.querySelector('.te-trim-faded'));
-        if (trim.kept.size) out.push('click kept after Done');
-        // Picking the level again reopens the card.
-        teTrim.pick('slight');
-        if (teTrim.card().hidden) out.push('card not reopened');"##,
         r##"// An edit ends the trim: stale at once, cleared on the next tick.
-        const trim = teTrim.trim();
+        const trim = teTrim.pick('slight');
         s.replaceRange(0, 0, 'X', { source: 'typing' });
         if (!trim.stale || !teTrim.card().hidden) out.push('edit did not invalidate');
         if (trim.makeCuts() !== null) out.push('cut with a stale plan');
