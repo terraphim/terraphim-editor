@@ -19,10 +19,28 @@ spec.loader.exec_module(safari)
 
 
 class RecordingTests(unittest.TestCase):
+    def test_discrete_drag_stays_in_viewport_and_reaches_exact_target(self):
+        for start, end in [([900, 600], [100, 200]), ([10, 20], [1139, 719])]:
+            actions = safari.safari_drag_actions(start, end)
+            points = [a for a in actions if a['type'] == 'pointerMove']
+            self.assertEqual((points[-1]['x'], points[-1]['y']), tuple(end))
+            for point in points:
+                self.assertEqual(point['duration'], 0)
+                self.assertTrue(0 <= point['x'] < 1140 and 0 <= point['y'] < 720)
+            self.assertEqual(actions[-1], {'type': 'pointerUp', 'button': 0})
+
     def test_native_drag_geometry_rejects_invalid_coordinates(self):
         safari.native_drag_geometry([10.5, 20], [100, 200])
         for point in [[-1, 0], [1140, 0], [0, 720], [True, 1], [float('nan'), 1], [float('inf'), 1], [1], 'xy']:
             with self.assertRaises(ValueError): safari.native_drag_geometry(point, [1, 1])
+
+    def test_discrete_drag_rejects_rounding_outside_viewport(self):
+        for point in ([1139.9, 20], [10, 719.9]):
+            safari.native_drag_geometry(point, [1, 1])
+            with self.assertRaises(ValueError):
+                safari.safari_drag_actions(point, [1, 1])
+            with self.assertRaises(ValueError):
+                safari.safari_drag_actions([1, 1], point)
 
     def test_native_drag_ack_is_exact_bounded_regular_file(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -119,6 +137,7 @@ class RecordingTests(unittest.TestCase):
                 driver.samples = [{'name': 'unit-a', 'completed': 0}, {'name': 'unit-b', 'completed': .25}]
                 driver.context_menu_inputs = []
                 driver.native_drag_inputs = []
+                driver.drag_diagnostics = []
                 events = []
                 def guard(delegate, metadata):
                     self.assertIs(delegate, driver)

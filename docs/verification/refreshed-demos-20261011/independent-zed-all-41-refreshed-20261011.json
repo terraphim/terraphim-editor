@@ -1,0 +1,334 @@
+{
+  "scope": "Finite native outputs; all41 unaccepted; no fork work",
+  "videoSha256": "a42a44ba5bb12ae8e08bd1cb51886be8de79498586299ab74d1db618d6dc5dd9",
+  "requirements": [
+    {
+      "id": "R-2.1",
+      "requirement": "Plain mode by default.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Plain mode by default. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-2.2",
+      "requirement": "Span-anchored alternatives.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Word span with three manually authored alternatives; actual hover460s. Input authoring does not prove entry UI.",
+      "remainingCriteria": "Span-anchored alternatives. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-2.3",
+      "requirement": "Three granularities.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Three granularities. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-2.4",
+      "requirement": "In-place cycling.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Native code action activates eraser; no Up/Down cycling demonstrated.",
+      "remainingCriteria": "In-place cycling. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-2.5",
+      "requirement": "Persistence.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Saved active1 and all3 alternatives; reopened actual hover595s.",
+      "remainingCriteria": "Persistence. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-2.6",
+      "requirement": "Grammar fix-ups on swap.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Pass me a paperclip becomes Pass me an eraser,553s.",
+      "remainingCriteria": "Grammar fix-ups on swap. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-2.7",
+      "requirement": "Emptying removes the indicator.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Emptying removes the indicator. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-3.1",
+      "requirement": "Underline.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Underline. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-3.2",
+      "requirement": "Dot row (word/sentence/headline).",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Dot row (word/sentence/headline). \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-3.3",
+      "requirement": "Active-dot highlight.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Active-dot highlight. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-3.4",
+      "requirement": "Paragraph indicator.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Paragraph indicator. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-3.5",
+      "requirement": "Headline rendering.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Headline rendering. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-3.6",
+      "requirement": "Hover target.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Hover target. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-4.1",
+      "requirement": "Placement and toggle.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Placement and toggle. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-4.2",
+      "requirement": "Tabs.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Tabs. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-4.3",
+      "requirement": "Alternative list.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Native hover lists all3 alternatives,460/595s; custom panel absent.",
+      "remainingCriteria": "Alternative list. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-4.4",
+      "requirement": "Provenance marker.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Native hover original/human labels; generated robot output not shown.",
+      "remainingCriteria": "Provenance marker. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-4.5",
+      "requirement": "Keyboard navigation.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Keyboard navigation. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-4.6",
+      "requirement": "Undo.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Ghost undo/redo exact journal hash; authored input requires two transactions; not bot-line Undo proof.",
+      "remainingCriteria": "Undo. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-5.1",
+      "requirement": "Ghost.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Actual ghost styling and valid saved anchor; exact10%opacity unproved.",
+      "remainingCriteria": "Ghost. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-5.2",
+      "requirement": "Revive.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Revive. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-5.3",
+      "requirement": "Ghosting is an independent layer, persisted with the document",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Ghost persists alongside alternatives/Overflow, all journal anchors valid.",
+      "remainingCriteria": "Ghosting is an independent layer, persisted with the document \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-6.1",
+      "requirement": "Placement and toggle.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Placement and toggle. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-6.2",
+      "requirement": "Content.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Saved Overflow text; custom editable side panel absent.",
+      "remainingCriteria": "Content. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-6.3",
+      "requirement": "Stash.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Native Stash removes body paragraph, saved Overflow journal.",
+      "remainingCriteria": "Stash. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-6.4",
+      "requirement": "Pull back.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Native Pull copies paragraph back, retains Overflow; native drag not shown.",
+      "remainingCriteria": "Pull back. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-6.5",
+      "requirement": "Persistence.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Overflow persists with valid rebased ghosts and alternatives.",
+      "remainingCriteria": "Persistence. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-7.1",
+      "requirement": "Layout.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Layout. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-7.2",
+      "requirement": "Corner controls (Write_On mode on)",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Corner controls (Write_On mode on) \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-7.3",
+      "requirement": "Context menu on selection",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Context menu on selection \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-7.4",
+      "requirement": "Existing shortcuts",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Existing shortcuts \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-8.1",
+      "requirement": "Lab popover.",
+      "accepted": false,
+      "status": "UNSUPPORTED: exact custom visual UI in current stock extension",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Lab popover. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-8.2",
+      "requirement": "Mark actions",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Mark actions \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-8.3",
+      "requirement": "Trim levels.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Trim levels. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-8.4",
+      "requirement": "Trim behaviour.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Trim30 Done retains body and stores19 valid ghosts; visible after reopening668/674s.",
+      "remainingCriteria": "Trim behaviour. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-8.5",
+      "requirement": "Review.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Done saved19ghosts; Walk/Keep/Make/Next/Previous not qualified.",
+      "remainingCriteria": "Review. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-8.6",
+      "requirement": "AI alternatives.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "AI alternatives. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-8.7",
+      "requirement": "Provider abstraction.",
+      "accepted": false,
+      "status": "NOT DEMONSTRATED in refreshed native capture",
+      "evidence": "No refreshed operation evidence for the full clause; browser results do not transfer.",
+      "remainingCriteria": "Provider abstraction. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-9.1",
+      "requirement": "Document = Markdown + annotations.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "Actual Markdown plus saved annotations in native buffer.",
+      "remainingCriteria": "Document = Markdown + annotations. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-9.2",
+      "requirement": "Annotation schema (proposal).",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "All journal and19trim UTF16 anchor slices independently valid; full malformed/stale/ambiguity cases absent.",
+      "remainingCriteria": "Annotation schema (proposal). \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    },
+    {
+      "id": "R-9.3",
+      "requirement": "Export.",
+      "accepted": false,
+      "status": "PARTIAL: native finite output",
+      "evidence": "First clean export and later repeat receipt exact body/hash; later receipt time explicitly disclosed.",
+      "remainingCriteria": "Export. \u2014 full source-video clause remains unaccepted; separate Zed fork excluded."
+    }
+  ]
+}

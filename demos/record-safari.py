@@ -108,6 +108,24 @@ def selection_context_point(rects, viewport=VIEWPORT):
     raise ValueError('No visible selected text for context menu')
 
 
+def safari_drag_actions(start, end):
+    """Use discrete viewport moves so interpolation cannot drift off target."""
+    native_drag_geometry(start, end)
+    start = [round(value) for value in start]
+    end = [round(value) for value in end]
+    native_drag_geometry(start, end)
+    moves = [{'type': 'pointerMove', 'duration': 0, 'origin': 'viewport',
+              'x': round(start[0]), 'y': round(start[1])},
+             {'type': 'pointerDown', 'button': 0}, {'type': 'pause', 'duration': 500}]
+    for fraction in (.05, .15, .35, .65, .85, 1):
+        moves.extend([{'type': 'pointerMove', 'duration': 0, 'origin': 'viewport',
+                       'x': round(start[0] + (end[0] - start[0]) * fraction),
+                       'y': round(start[1] + (end[1] - start[1]) * fraction)},
+                      {'type': 'pause', 'duration': 100}])
+    moves.extend([{'type': 'pause', 'duration': 250}, {'type': 'pointerUp', 'button': 0}])
+    return moves
+
+
 def native_drag_geometry(start, end):
     for point in (start, end):
         if not isinstance(point, (list, tuple)) or len(point) != 2:
@@ -145,6 +163,7 @@ class Driver:
         self.context_menu_inputs = []
         self.native_drag_handoff = None
         self.native_drag_inputs = []
+        self.drag_diagnostics = []
         self.started = time.monotonic()
     def call(self, method, route, payload=None, *, timeout=20):
         return webdriver(self.base, method, self.route + route, payload, timeout=timeout)
@@ -215,17 +234,22 @@ class Driver:
                 raise RuntimeError('Owned Safari window changed or native drag handoff expired')
             request['coordinationStatus'] = 'acknowledged; output checks remain independent'
             return
-        moves=[{'type':'pointerMove','duration':0,'origin':'viewport','x':round(start[0]),'y':round(start[1])},
-               {'type':'pointerDown','button':0},{'type':'pause','duration':500},
-               {'type':'pointerMove','duration':200,'origin':'viewport','x':round(start[0]+12),'y':round(start[1])},
-               {'type':'pointerMove','duration':700,'origin':'viewport','x':round(end[0]),'y':round(end[1])},
-               {'type':'pause','duration':250},
-               {'type':'pointerMove','duration':100,'origin':'viewport','x':round(end[0]+1),'y':round(end[1])},
-               {'type':'pause','duration':100},{'type':'pointerUp','button':0}]
+        moves = safari_drag_actions(start, end)
+        self.evaluate('''window.__safariDragTrace=[];window.__safariDragTraceAbort?.abort();
+          window.__safariDragTraceAbort=new AbortController();
+          for(const type of ['mousedown','mousemove','mouseup','dragstart','dragenter','dragover','dragleave','dragend','drop'])
+            document.addEventListener(type,e=>{if(window.__safariDragTrace.length>=200)return;
+              const t=e.target.nodeType===3?e.target.parentElement:e.target;
+              window.__safariDragTrace.push({type,trusted:e.isTrusted,x:e.clientX,y:e.clientY,
+                target:t.closest('.te-overflow')?'overflow':t.closest('[contenteditable]')?'surface':'other',
+                types:e.dataTransfer?Array.from(e.dataTransfer.types):[],prevented:e.defaultPrevented});
+            },{signal:window.__safariDragTraceAbort.signal});return true;''')
         try:
             self.call('POST','/actions',{'actions':[{'type':'pointer','id':'public-drag','parameters':{'pointerType':'mouse'},'actions':moves}]})
         finally:
             self.call('DELETE','/actions')
+            self.drag_diagnostics.append({'start': start, 'end': end,
+                'events': self.evaluate('window.__safariDragTraceAbort?.abort();return window.__safariDragTrace;')})
     def text(self, text):
         actions = []
         for c in text:
@@ -331,6 +355,7 @@ def main():
                     metadata['rawSamples'] = driver.samples
                     metadata['contextMenuInputs'] = driver.context_menu_inputs
                     metadata['nativeDragInputs'] = driver.native_drag_inputs
+                    metadata['dragDiagnostics'] = driver.drag_diagnostics
                 try:
                     if session:
                         webdriver(base, 'DELETE', '/session/' + session)
