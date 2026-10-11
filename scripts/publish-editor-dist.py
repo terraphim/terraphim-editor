@@ -17,7 +17,11 @@ import tempfile
 
 HASH_ASSET = re.compile(
     r"(?:terraphim-editor-[0-9a-f]+(?:\.js|_bg\.wasm)|"
-    r"(?:tokens|write-on|selection-menu|lab|blocks|alternatives-panel|overflow|persistence|trim)-[0-9a-f]{16,}\.css)")
+    r"(?:tokens|write-on|selection-menu|lab|blocks|alternatives-panel|overflow|persistence|trim)-[0-9a-f]{1,16}\.css)")
+# wasm-bindgen emits these declarations with the worker bundle. They are
+# optional metadata, admitted by exact name rather than a broad suffix rule.
+DECLARATIONS = {"rolegraph/terraphim_rolegraph_browser.d.ts",
+                "rolegraph/terraphim_rolegraph_browser_bg.wasm.d.ts"}
 FIXED = {"index.html", "example.html", "terraphim-editor.min.js", "terraphim-editor.min.css",
          "terraphim_editor.js", "terraphim_editor_bg.wasm", "js/rolegraph-worker.js",
          "rolegraph/rolegraph-worker.js", "rolegraph/terraphim_rolegraph_browser.js",
@@ -88,7 +92,7 @@ def inventory(stage):
             continue
         if not path.is_file():
             raise ValueError(f"nonregular stage entry: {name}")
-        if name not in allowed and not HASH_ASSET.fullmatch(name):
+        if name not in allowed | DECLARATIONS and not HASH_ASSET.fullmatch(name):
             raise ValueError(f"unexpected non-production stage file: {name}")
         files[name] = digest(path.read_bytes())
     missing = allowed - files.keys()
