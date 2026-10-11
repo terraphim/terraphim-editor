@@ -1,0 +1,20 @@
+[INFO]: 🎯  Checking for the Wasm target...
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling terraphim-editor v0.1.0 (/private/tmp/terraphim-editor-publication-source-20261011)
+    Finished `dev` profile [optimized] target(s) in 1.39s
+    Blocking waiting for file lock on package cache
+    Finished `test` profile [optimized] target(s) in 0.10s
+     Running tests/web_overflow_pointer.rs (/private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_overflow_pointer-e34aee2a7f17936f.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:61131/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 1 test
+test test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 filtered out; finished in 5.24s
+
+[WARN]: ⚠️   There's a newer version of wasm-pack available, the new version is: 0.15.0, you are using: 0.13.1. To update, navigate to: https://rustwasm.github.io/wasm-pack/installer/

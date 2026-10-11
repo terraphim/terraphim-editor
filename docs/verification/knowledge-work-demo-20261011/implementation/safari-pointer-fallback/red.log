@@ -1,0 +1,97 @@
+[INFO]: 🎯  Checking for the Wasm target...
+    Finished `dev` profile [optimized] target(s) in 0.27s
+    Finished `test` profile [optimized] target(s) in 0.18s
+     Running tests/web_overflow.rs (/private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_overflow-a60e05f8acabcc9e.wasm)
+Running headless tests in Chrome on `http://127.0.0.1:60806/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 7 tests
+test test_xyz_toggles_the_panel_with_aria_escape_and_mode_gating ... ok
+test test_stash_is_a_move_and_one_undo_step ... ok
+test test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures ... FAIL
+test test_panel_width_matches_the_video ... ok
+test test_panel_text_persists_is_not_exported_and_destroy_cleans_up ... ok
+test test_panel_drag_accepts_only_its_owned_plain_text_dragover ... ok
+test test_ctrl_enter_and_drop_insert_at_the_caret ... ok
+
+failures:
+
+---- test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures output ----
+    error output:
+        panicked at tests/web_overflow.rs:463:5:
+        step 1: pointer stash body "Alpha beta gamma.\n"; pointer stash overflow; pointer stash not one step; replayed pointer stash; pointer redo; pointer save/reopen
+        
+        Stack:
+        
+        Error
+            at http://127.0.0.1:60805/wasm-bindgen-test:1730:25
+            at logError (http://127.0.0.1:60805/wasm-bindgen-test:2541:18)
+            at __wbg_new_227d7c05414eb861 (http://127.0.0.1:60805/wasm-bindgen-test:1729:57)
+            at web_overflow-a60e05f8acabcc9e.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4410]:0x21bb55)
+            at web_overflow-a60e05f8acabcc9e.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[1019]:0x15ba05)
+            at web_overflow-a60e05f8acabcc9e.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4914]:0x21d831)
+            at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[2426]:0x1e5d74)
+            at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[3167]:0x208023)
+            at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4868]:0x21d694)
+            at web_overflow-a60e05f8acabcc9e.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[3999]:0x2188f1)
+        
+        
+    
+    JS exception that was thrown:
+        RuntimeError: unreachable
+            at web_overflow-a60e05f8acabcc9e.wasm.__rustc[9d087a5ab36ea756]::__rust_abort (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[5014]:0x21db0b)
+            at web_overflow-a60e05f8acabcc9e.wasm.__rustc[9d087a5ab36ea756]::__rust_start_panic (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4970]:0x21d9f7)
+            at web_overflow-a60e05f8acabcc9e.wasm.__rustc[9d087a5ab36ea756]::rust_panic (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4601]:0x21c8eb)
+            at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[2426]:0x1e5dcc)
+            at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[3167]:0x208023)
+            at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4868]:0x21d694)
+            at web_overflow-a60e05f8acabcc9e.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[3999]:0x2188f1)
+            at web_overflow-a60e05f8acabcc9e.wasm.core[608f92abc48d28da]::panicking::panic_fmt (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[3719]:0x214c48)
+            at web_overflow-a60e05f8acabcc9e.wasm.<wasm_bindgen_test[affa0474abde787d]::__rt::TestFuture<<wasm_bindgen_test[affa0474abde787d]::__rt::Context>::execute_async<web_overflow[7fc35db9d34272c3]::test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures::{closure#0}, web_overflow[7fc35db9d34272c3]::test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures>::{closure#0}> as core[608f92abc48d28da]::future::future::Future>::poll::{closure#1}::{closure#0} (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[1144]:0x16e3da)
+            at web_overflow-a60e05f8acabcc9e.wasm.wasm_bindgen[4f6da56b0543e30c]::convert::closures::_::invoke::<(), true>[1] (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4136]:0x219e07)
+
+failures:
+
+    test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 filtered out; finished in 24.19s
+
+console output:
+    using deprecated parameters for the initialization function; pass a single object instead
+    Invoking test: test_xyz_toggles_the_panel_with_aria_escape_and_mode_gating
+    Invoking test: test_stash_is_a_move_and_one_undo_step
+    Invoking test: test_selected_page_pointer_drag_stashes_once_and_refuses_stale_gestures
+    panicked at tests/web_overflow.rs:463:5:
+    step 1: pointer stash body "Alpha beta gamma.\n"; pointer stash overflow; pointer stash not one step; replayed pointer stash; pointer redo; pointer save/reopen
+    
+    Stack:
+    
+    Error
+        at http://127.0.0.1:60805/wasm-bindgen-test:1730:25
+        at logError (http://127.0.0.1:60805/wasm-bindgen-test:2541:18)
+        at __wbg_new_227d7c05414eb861 (http://127.0.0.1:60805/wasm-bindgen-test:1729:57)
+        at web_overflow-a60e05f8acabcc9e.wasm.<console_error_panic_hook[62afd2b13fd4b233]::Error>::new::__wbg_new_227d7c05414eb861 externref shim (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4410]:0x21bb55)
+        at web_overflow-a60e05f8acabcc9e.wasm.console_error_panic_hook[62afd2b13fd4b233]::hook (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[1019]:0x15ba05)
+        at web_overflow-a60e05f8acabcc9e.wasm.<console_error_panic_hook[62afd2b13fd4b233]::hook as core[608f92abc48d28da]::ops::function::Fn<(&std[359a46decee746ed]::panic::PanicHookInfo,)>>::call (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4914]:0x21d831)
+        at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::panicking::panic_with_hook (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[2426]:0x1e5d74)
+        at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::panicking::panic_handler::{closure#0} (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[3167]:0x208023)
+        at web_overflow-a60e05f8acabcc9e.wasm.std[359a46decee746ed]::sys::backtrace::__rust_end_short_backtrace::<std[359a46decee746ed]::panicking::panic_handler::{closure#0}, !> (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[4868]:0x21d694)
+        at web_overflow-a60e05f8acabcc9e.wasm.__rustc[9d087a5ab36ea756]::rust_begin_unwind (http://127.0.0.1:60805/wasm-bindgen-test_bg.wasm:wasm-function[3999]:0x2188f1)
+    
+    
+    Invoking test: test_panel_width_matches_the_video
+    Invoking test: test_panel_text_persists_is_not_exported_and_destroy_cleans_up
+    Invoking test: test_panel_drag_accepts_only_its_owned_plain_text_dragover
+    Invoking test: test_ctrl_enter_and_drop_insert_at_the_caret
+Error: some tests failed
+error: test failed, to rerun pass `--test web_overflow`
+
+Caused by:
+  process didn't exit successfully: `/Users/alex/.cargo/bin/wasm-bindgen-test-runner /private/tmp/terraphim-editor-publication-build/wasm32-unknown-unknown/debug/deps/web_overflow-a60e05f8acabcc9e.wasm` (exit status: 1)
+note: test exited abnormally; to see the full output pass --no-capture to the harness.
+Error: Running Wasm tests with wasm-bindgen-test failed
+Caused by: Running Wasm tests with wasm-bindgen-test failed
+Caused by: failed to execute `cargo test`: exited with exit status: 1
+  full command: cd "/private/tmp/terraphim-editor-publication-source-20261011" && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="/Users/alex/.cargo/bin/wasm-bindgen-test-runner" CHROMEDRIVER="/Users/alex/Library/Caches/.wasm-pack/chromedriver-bd0f73ace8fc0e68/chromedriver" WASM_BINDGEN_TEST_ONLY_WEB="1" "cargo" "test" "--target" "wasm32-unknown-unknown" "--test" "web_overflow"
