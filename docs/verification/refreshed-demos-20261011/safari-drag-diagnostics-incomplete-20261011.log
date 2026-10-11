@@ -1,0 +1,18 @@
+Safari automation window ready: foreground the dedicated automation window now; waiting up to 10 seconds for visible, focused content. Do not foreground personal Safari tabs; no terminal acknowledgement required.
+Traceback (most recent call last):
+  File "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/record-safari.py", line 372, in <module>
+    main()
+  File "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/record-safari.py", line 335, in main
+    full_storyboard(driver, fixture, args.duration, driver.pause, metadata)
+  File "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/full_demo.py", line 273, in full_storyboard
+    setup(drag_body);caption('B06 — Native drag of the last paragraph into Overflow; verify move, append, undo and redo.')
+    ^^^^^^^^^^^^^^^^
+  File "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/full_demo.py", line 118, in setup
+    caption('SETUP — open public fixture; preloaded state is not an operation result.')
+  File "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/full_demo.py", line 104, in caption
+    pause(1)
+  File "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/record-safari.py", line 272, in pause
+    self.capture()
+  File "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/record-safari.py", line 263, in capture
+    raise RuntimeError('Actual viewport PNG must be exactly 1140x720')
+RuntimeError: Actual viewport PNG must be exactly 1140x720
