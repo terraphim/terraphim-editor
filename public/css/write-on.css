@@ -153,7 +153,8 @@
 
 .te-chrome-group {
     position: fixed;
-    z-index: 20;
+    /* Keep corner controls above the full-height side panels (z-index 20). */
+    z-index: 21;
     display: flex;
     align-items: center;
     gap: 1.25rem;
