@@ -201,6 +201,17 @@ fn with_kg<R>(f: impl FnOnce(&mut Kg) -> R) -> R {
     KG.with(|cell| f(&mut cell.borrow_mut()))
 }
 
+/// Load the bundled standalone-page role using the existing Terraphim KG engine.
+///
+/// The same JSON bytes are shipped as `roles/default.json` for local CLI search.
+/// Embedding hosts choose their own role and do not call this initializer.
+///
+/// # Errors
+/// Returns an error if the bundled role cannot be parsed or published.
+pub fn load_default_thesaurus() -> Result<Value, KgError> {
+    load_thesaurus(include_str!("../public/roles/default.json"))
+}
+
 /// Loads a thesaurus (the JSON written by terraphim's thesaurus builders),
 /// replacing the current one. On error the previous thesaurus stays.
 /// Returns `{ name, concepts, skipped }`.
@@ -824,6 +835,33 @@ pub fn alt_kg_append(start: u32, end: u32) -> Result<JsValue, JsValue> {
 mod protection_tests {
     use super::*;
     const ROLE: &str = r#"{"name":"public","data":{"x":{"id":1,"nterm":"x"}}}"#;
+
+    #[test]
+    fn bundled_default_role_registers_real_synonyms_and_uses_shipped_bytes() {
+        clear_thesaurus();
+        let summary = load_default_thesaurus().unwrap();
+        assert_eq!(summary["name"], "terraphim-editor-default");
+        assert_eq!(
+            thesaurus_name().as_deref(),
+            Some("terraphim-editor-default")
+        );
+        let mut session = DocumentSession::new();
+        session.open("Decision: launch the pilot.");
+        let spans = kg_spans(&session);
+        let decision = spans
+            .iter()
+            .find(|span| span.term.text == "Decision")
+            .unwrap();
+        assert!(decision.alts.iter().any(|term| term == "Judgment"));
+        assert!(decision.alts.iter().any(|term| term == "Choice"));
+        with_kg(|kg| {
+            assert_eq!(
+                kg.thesaurus_json.as_deref(),
+                Some(include_str!("../public/roles/default.json"))
+            )
+        });
+        clear_thesaurus();
+    }
 
     #[test]
     fn generation_exhaustion_refuses_all_publication_paths_without_mutation() {

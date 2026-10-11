@@ -40,8 +40,8 @@ pub use kg::{
     kg_append, kg_clear_thesaurus, kg_commit_prepared_role, kg_discard_prepared_role,
     kg_document_spans, kg_load_thesaurus, kg_lookup, kg_lookup_selection, kg_prepare_role,
     kg_role_snapshot_json, kg_set_role_change_listener, kg_spans, kg_spans_json, kg_swap,
-    kg_swap_alternative, load_thesaurus, prepare_thesaurus, role_snapshot_json, thesaurus_name,
-    KgError, KgSpan, KG_MODEL,
+    kg_swap_alternative, load_default_thesaurus, load_thesaurus, prepare_thesaurus,
+    role_snapshot_json, thesaurus_name, KgError, KgSpan, KG_MODEL,
 };
 
 // Pluggable alternatives providers (issue #83, R-8.7).
@@ -111,6 +111,7 @@ pub fn start() -> Result<(), JsValue> {
         .and_then(|d| d.get_element_by_id("app"))
         .is_some();
     if has_app {
+        load_default_thesaurus().map_err(|error| JsValue::from_str(&error.to_string()))?;
         run()
     } else {
         Ok(())
