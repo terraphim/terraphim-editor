@@ -642,7 +642,7 @@ class TeAlternativesPanel {
   /** [{ text, source, active }] for the lines shown (pending: the original only). */
   lines() {
     if (this.span) {
-      return this.span.alts.map((a, i) => ({ text: a.text, source: a.source, active: i === this.span.active }));
+      return this.span.alts.map((a, i) => ({ text: a.text, source: a.source, model: a.model, active: i === this.span.active }));
     }
     if (this.target && this.target.pending) {
       return [{ text: this.target.pending.text, source: 'original', active: true }];
@@ -724,7 +724,9 @@ class TeAlternativesPanel {
     input.dataset.committed = line.text;
     input.spellcheck = false;
     input.setAttribute('autocomplete', 'off');
-    const who = line.source === 'ai' ? 'suggested by AI' : line.source === 'original' ? 'original, read-only' : 'written by you';
+    const who = line.source === 'ai'
+      ? (line.model === 'kg' ? 'knowledge graph synonym' : 'suggested by AI')
+      : line.source === 'original' ? 'original, read-only' : 'written by you';
     input.setAttribute('aria-label', `Alternative ${index + 1} of ${total}, ${who}${line.active ? ', active' : ''}`);
     if (index === 0) input.readOnly = true;
     li.append(glyph, input);
