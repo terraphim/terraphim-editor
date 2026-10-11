@@ -92,4 +92,4 @@ pub use model::{
 };
 pub use offset::{byte_to_utf16, utf16_len, utf16_to_byte};
 pub use reanchor::{ReanchorReport, Unresolved, UnresolvedGhost, UnresolvedReason};
-pub use synonyms::SynonymGroup;
+pub use synonyms::{SynonymExportError, SynonymGroup};

@@ -91,3 +91,45 @@ impl Document {
             .collect()
     }
 }
+
+/// A document group cannot be represented without changing its meaning.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum SynonymExportError {
+    /// The shared flat thesaurus cannot distinguish the two scoped concepts.
+    #[error(
+        "Cannot share the graph: '{term}' belongs to different alternative groups. Rename an alternative or remove the conflicting group first."
+    )]
+    AmbiguousTerm {
+        /// Normalized term shared by multiple distinct document groups.
+        term: String,
+    },
+}
+
+impl Document {
+    /// Export current attached synonym groups as a portable Terraphim thesaurus.
+    ///
+    /// Uses the same parsed `synonyms::` and typed registrations as the editor.
+    /// Each span keeps a distinct exported concept ID. The document and active
+    /// role are unchanged; the returned graph is an explicit sharing snapshot.
+    ///
+    /// # Errors
+    /// Refuses terms present in multiple groups instead of merging their meanings.
+    pub fn export_synonym_thesaurus(&self) -> Result<Thesaurus, SynonymExportError> {
+        let mut graph = Thesaurus::new("Document alternatives".into());
+        let mut attached = self.clone();
+        attached.reanchor();
+        for (offset, group) in attached.synonym_groups().iter().enumerate() {
+            for (key, value) in &group.thesaurus {
+                if graph.get(key).is_some() {
+                    return Err(SynonymExportError::AmbiguousTerm {
+                        term: key.to_string(),
+                    });
+                }
+                let mut concept = value.clone();
+                concept.id = offset as u64 + 1;
+                graph.insert(key.clone(), concept);
+            }
+        }
+        Ok(graph)
+    }
+}

@@ -708,6 +708,24 @@ impl DocumentSession {
         json!(groups)
     }
 
+    /// Share attached committed alternatives using the existing Terraphim types.
+    ///
+    /// # Errors
+    /// Refuses malformed preserved annotations or ambiguous cross-group terms.
+    pub fn export_knowledge_graph(&self) -> Result<String, String> {
+        if self.raw_block.is_some() {
+            return Err(
+                "Repair the document's malformed annotations before sharing its graph.".into(),
+            );
+        }
+        let graph = self
+            .doc
+            .export_synonym_thesaurus()
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string_pretty(&serde_json::to_value(graph).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())
+    }
+
     /// Query a live authored concept using Terraphim's registered synonym index.
     /// Scope is this document plus `span_id`; detached/unknown groups return [].
     pub fn synonyms_for(&self, span_id: &str, text: &str) -> Vec<String> {
@@ -1100,6 +1118,15 @@ pub fn save_document() -> String {
 #[wasm_bindgen]
 pub fn export_document() -> String {
     with_session(|s| s.export())
+}
+
+/// Downloadable Terraphim graph of the current document's authored synonyms.
+///
+/// # Errors
+/// Refuses malformed annotations and ambiguous cross-group terms.
+#[wasm_bindgen]
+pub fn export_knowledge_graph() -> Result<String, JsValue> {
+    with_session(|s| s.export_knowledge_graph()).map_err(|e| JsValue::from_str(&e))
 }
 
 /// `{ words, chars }` of the body, ghosted text included.

@@ -2821,6 +2821,14 @@ class MarkdownEditor {
     return api.export_document();
   }
 
+  /** Portable graph of committed document alternatives, using Rust synonym types. */
+  exportKnowledgeGraph() {
+    const api = this.requireDocumentApi();
+    this.alignDocumentModel(api);
+    if (typeof api.export_knowledge_graph !== 'function') throw new Error('Knowledge graph export needs an updated editor build.');
+    return api.export_knowledge_graph();
+  }
+
   /** { words, chars } of the body, ghosted text included. */
   counts() {
     const api = this.requireDocumentApi();
