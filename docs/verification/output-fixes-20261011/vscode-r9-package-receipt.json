@@ -3,5 +3,6 @@
   "sha256": "9c9aa9bdb3047d18a07fb7e0340dc3c4b46ba68d2ff3befac9e380e58d62ae04",
   "assetsMatched": 122,
   "runtimeDependencyIncluded": true,
-  "qualification": "BUILD AND 14 REAL-WASM TESTS ONLY; native UI checks belong to r8, r9 native retest pending"
+  "qualification": "BUILD, 14 REAL-WASM TESTS AND NATIVE STARTUP SMOKE; r9 native UI retest pending",
+  "nativeStartupSmoke": "4 checks PASS; vscode-native-smoke-r9.json"
 }

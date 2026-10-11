@@ -1,0 +1,14 @@
+{
+  "vsix": "/private/tmp/terraphim-it-0.0.4-output-fixes-r10.vsix",
+  "sha256": "622b5e65ca211d18888148fa4c50b0d781232fa2d079f1599a773164d850efcd",
+  "assetCount": 122,
+  "nativeSmoke": "vscode-native-smoke-r9.json (same reviewed runtime sources; packaged r10 not installed/retested)",
+  "tests": {
+    "editorNative": 497,
+    "lspCore": 415,
+    "bridgeWasm": 14,
+    "assetImporter": 6
+  },
+  "qualification": "NOT ALL-41 ACCEPTED",
+  "gitea": "https://git.terraphim.cloud/terraphim/terraphim-ai/issues/3483"
+}

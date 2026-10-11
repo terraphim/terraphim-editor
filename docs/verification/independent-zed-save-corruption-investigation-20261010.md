@@ -1,0 +1,21 @@
+# Read-only investigation: native Zed immediate-save anchor corruption
+
+The observed save corruption remains unresolved. The malformed saved anchors are user-visible data failure, not accepted complete functionality. No production source or native UI was modified by this investigation.
+
+Reviewed existing extension `/Users/alex/projects/terraphim/zed-terraphim` at `26fced425584fca66fc01499fa7fd6151004953c`, and the locally available pinned rc.3 LSP source commit `aafcf6f5e212de55b5c5696f87bb7a7a463b80a8` in `terraphim-ai` (per extension qualification's release association). This source association is not independent proof of the currently running executable's hash/source. Current terraphim-ai checkout HEAD differs; inspected rc.3 blobs with `git show` into scratch files instead of treating current checkout as released source.
+
+Source SHA-256:
+
+- Extension `src/lib.rs`: `dcf2b5a7d777dd65e80f0d0360d629730372762a4a78eb8a2b57428dd5443db5`.
+- rc.3 `terraphim_lsp/src/server.rs`: `52e45f6a0b6a930be22fff16705f4c7101cfcb07167afbf52eb7e7cebbf2cbdd`.
+- rc.3 `terraphim_lsp/src/convert.rs`: `b4846626964f582836f1d0e4e2d5632444cff18f9644e2285e0b02954fafd5a0`.
+- rc.3 `terraphim_lsp_core/src/stored.rs`: `cdcd304546e85d20d96810bd0029f3fa0a9de44fad287711c5dd3feae422c073`.
+- rc.3 `terraphim_lsp_core/src/reanchor.rs`: `72424fae8023d4437caa29f7f0bb95dc46777a21f50f75246d44f6838c0bad7e`.
+
+The extension is a launcher/settings adapter; it does not construct the stored alternative's annotation edits. Core `select_alternative` opens/reanchors the document, changes active alternative, and returns two nonoverlapping edits into the *original* text: body replacement and complete trailing-block replacement. `convert::text_edit` maps original byte ranges to UTF-16 LSP ranges. These inspected paths serialize integer offsets; there is no direct source operation concatenating decimal anchor strings. This rules out a simple intentional `146`+`146` numeric serialization path in the reviewed functions, not all possible implementation defects.
+
+There are two potential producers of trailing-block workspace edits: the stored-alternative code action, and `didSave`'s automatic `reanchor_on_save`. The latter snapshots stored document text/version and sends a complete block replacement via `workspace/applyEdit`, waiting at most two seconds for a newer `didChange`. Save handling does not reconcile from `DidSaveTextDocumentParams.text`; it relies on the last stored `didChange`. Automatic save reanchoring is deliberately disabled unless the client advertises versioned edits. When enabled, both producers use `documentChanges` with `Some(document.version)`. This safeguard should reject edits made for stale text. It must not be assumed absent merely because a race looks plausible.
+
+A plausible investigation path is overlapping host application of the code action and save-triggered reanchor, or host coordinate/diff handling while concurrent edits arrive. Concatenated old/new digits are compatible with an insertion/merge problem, but the saved file alone cannot locate it. There is no captured initialize capability, source version, outgoing edit ranges, applyEdit response, ordered didChange text/version or disk-save timing trace for the failing attempt. `store_document` also assigns received versions without a monotonic guard; an out-of-order notification could create a stale snapshot, but no evidence establishes that ordering here. These remain hypotheses, not findings of root cause.
+
+Needed reproduction evidence: original complete document hash; exact code-action response and versioned body/block edit ranges; client initialize `documentChanges` capability; didChange versions/text hashes in arrival order; didSave ordering; automatic applyEdit payload/response; final buffer/disk hashes; and native undo result. Reproduce immediate save vs observed-settled save without suppressing reanchor or silently delaying normal save as acceptance. A deterministic regression must assert all saved anchor ranges slice to their text, active/list preservation and unchanged ghost context. The parent reports separate exact undo/redo hashes but has no timestamped receipts for each; this review does not certify those paths. No bug fix, browser/native test, or root-cause declaration was made here.
