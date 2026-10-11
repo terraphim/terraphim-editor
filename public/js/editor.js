@@ -42,6 +42,7 @@ class EditorSurface {
     this.composing = false;
     this.programmatic = false;
     this.pendingSource = null;
+    this.historyOwner = options.historyOwner || null;
     this.history = [];
     this.historyIndex = -1;
     this.historyLimit = options.historyLimit || 500;
@@ -497,14 +498,17 @@ class EditorSurface {
   }
 
   canUndo() {
+    if (this.historyOwner) return true;
     return this.historyIndex > 0;
   }
 
   canRedo() {
+    if (this.historyOwner) return true;
     return this.historyIndex < this.history.length - 1;
   }
 
   undo() {
+    if (this.historyOwner) { this.historyOwner.undo(); return true; }
     if (!this.canUndo()) return false;
     const undone = this.history[this.historyIndex];
     if (undone.ghostHistory || (undone.edits && undone.edits.some((step) => step.ghost))) {
@@ -517,6 +521,7 @@ class EditorSurface {
   }
 
   redo() {
+    if (this.historyOwner) { this.historyOwner.redo(); return true; }
     if (!this.canRedo()) return false;
     const next = this.history[this.historyIndex + 1];
     if (next.ghostHistory || (next.edits && next.edits.some((step) => step.ghost))) {
@@ -1498,7 +1503,7 @@ class MarkdownEditor {
       return;
     }
 
-    this.surface = new EditorSurface(this.input);
+    this.surface = new EditorSurface(this.input, { historyOwner: this.config.historyOwner });
     this.connectDocumentModel();
     this.observeRolePublications();
 
@@ -1557,7 +1562,7 @@ class MarkdownEditor {
 
     // #76 #73 Save, open, autosave drafts and the Markdown export view
     // (public/js/persistence.js): last, so it sees the chrome and panels.
-    if (typeof window.TePersistence === 'function') {
+    if (!this.config.hostManaged && typeof window.TePersistence === 'function') {
       this.persistence = new window.TePersistence(this, { signal: this.abortController.signal });
     }
   }

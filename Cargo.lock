@@ -1325,6 +1325,7 @@ dependencies = [
  "markdown",
  "rinja",
  "serde_json",
+ "sha2",
  "terraphim_alternatives",
  "terraphim_lab",
  "terraphim_lsp_core",

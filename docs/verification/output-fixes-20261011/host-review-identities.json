@@ -1,0 +1,8 @@
+{
+  "scope": "source review; no native acceptance inferred",
+  "sha256": {
+    "public/js/host-session.js": "9e5efc4c3f1f2003cd86f05b266b6666e546c68a065eaca67c897c2328a09388",
+    "/private/tmp/terraphim-ai-output-fixes-20261011/vs-code-terraphim-it/src/alternativeControl.ts": "e58bbb5fb5ce859c1abf2365d4e0a86895b69092dab9959fc050d90bcba0b0d3",
+    "/private/tmp/terraphim-ai-output-fixes-20261011/vs-code-terraphim-it/media/alternative-control.js": "65ac568e14de69b32611c2384d34727fc2514b941af1e42e02990ea6d62b45fa"
+  }
+}

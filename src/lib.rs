@@ -5,6 +5,8 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, Event, Window};
 
 mod document;
+/// Reusable instance-owned host session protocol.
+pub mod host;
 // Cohort C: native mixed-history/checkpoint bridge; no serialized session clones.
 pub use document::{
     abort_document_history_transaction, abort_history_transaction_json,
