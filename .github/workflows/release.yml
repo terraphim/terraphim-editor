@@ -71,7 +71,23 @@ jobs:
               'archiveSha256': hashlib.sha256((output / 'editor-candidate.tar.gz').read_bytes()).hexdigest(),
               'sourceHead': head,
           }, indent=2) + '\n')
+          archive = output / 'editor-candidate.tar.gz'
+          qualification = output / 'qualification.json'
+          archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+          release = {
+              'schema': 1, 'releaseId': 'editor-' + head, 'channel': 'candidate',
+              'artifacts': [{'host': 'browser', 'version': 'candidate-' + head[:12],
+                  'sourceCommit': head, 'path': archive.name, 'bytes': archive.stat().st_size,
+                  'sha256': archive_sha}],
+              'evidence': [{'host': 'browser', 'kind': 'receipt', 'artifactSha256': archive_sha,
+                  'path': qualification.name, 'bytes': qualification.stat().st_size,
+                  'sha256': hashlib.sha256(qualification.read_bytes()).hexdigest()}],
+              'limitations': [{'host': 'browser', 'requirement': 'all41', 'status': 'OPEN',
+                  'issue': 'https://git.terraphim.cloud/terraphim/terraphim-editor/issues/122'}],
+          }
+          (output / 'release-manifest.json').write_text(json.dumps(release, indent=2) + '\n')
           PY
+          python3 scripts/check-release-readiness.py target/candidate/release-manifest.json --root target/candidate --claim integrity
       - name: Retain candidate for qualification
         uses: actions/upload-artifact@v4
         with:
