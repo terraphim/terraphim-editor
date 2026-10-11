@@ -1,34 +1,80 @@
-name: Release
+name: Release candidate
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  release:
+  candidate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+      - name: Verify release source admission
+        run: |
+          python3 -m unittest discover -s tests -p test_release_source.py -v
+          python3 scripts/check-release-source.py
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-          
+      - name: Install pinned bundle tools
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare locked minifiers and matching bindgen CLI
+        run: |
+          mkdir -p target/release-tools/node
+          cp scripts/ci/node/package.json scripts/ci/node/package-lock.json target/release-tools/node/
+          npm ci --prefix target/release-tools/node --ignore-scripts --no-audit --no-fund
+          echo "$PWD/target/release-tools/node/node_modules/.bin" >> "$GITHUB_PATH"
+          cargo install wasm-bindgen-cli --version 0.2.129 --locked
       - name: Install Trunk
         uses: jetli/trunk-action@v0.4.0
-        
-      - name: Build
-        run: trunk build --release --dist dist
-        
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
         with:
-          files: |
-            dist/*
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          version: v0.21.14
+      - name: Prepare locked registry dependencies
+        run: bash scripts/ci/registry.sh
+      - name: Build isolated candidate
+        run: |
+          SOURCE_HEAD="$(python3 scripts/check-release-source.py)"
+          bash scripts/ci/run.sh --network cargo fetch --locked
+          bash scripts/ci/run.sh trunk build --release --locked --dist "$PWD/target/release-staging-ci"
+          python3 scripts/check-release-source.py --expected-head "$SOURCE_HEAD"
+          python3 scripts/ci/rolegraph-production-check.py assets target/release-staging-ci
+          python3 scripts/ci/runtime-assets-check.py --check target/release-staging-ci/vendor
+      - name: Inventory and archive all admitted nested assets
+        run: |
+          python3 - <<'PY'
+          import hashlib, importlib.util, json, pathlib, subprocess, tarfile
+          spec = importlib.util.spec_from_file_location('publisher', 'scripts/publish-editor-dist.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          stage = pathlib.Path('target/release-staging-ci').resolve()
+          assets = module.inventory(stage)
+          head = subprocess.check_output(['python3', 'scripts/check-release-source.py'], text=True).strip()
+          manifest = {'schema': 1, 'sourceHead': head, 'assets': assets}
+          output = pathlib.Path('target/candidate')
+          output.mkdir()
+          raw = (json.dumps(manifest, indent=2, sort_keys=True) + '\n').encode()
+          (output / 'assets-manifest.json').write_bytes(raw)
+          with tarfile.open(output / 'editor-candidate.tar.gz', 'w:gz') as archive:
+              for name in sorted(assets):
+                  archive.add(stage / name, arcname=name, recursive=False)
+          (output / 'qualification.json').write_text(json.dumps({
+              'status': 'candidate-only', 'fullParityAccepted': False,
+              'manifestSha256': hashlib.sha256(raw).hexdigest(),
+              'archiveSha256': hashlib.sha256((output / 'editor-candidate.tar.gz').read_bytes()).hexdigest(),
+              'sourceHead': head,
+          }, indent=2) + '\n')
+          PY
+      - name: Retain candidate for qualification
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-candidate-${{ github.sha }}
+          path: target/candidate/
+          if-no-files-found: error

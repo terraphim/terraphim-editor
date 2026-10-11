@@ -21,7 +21,11 @@ HASH_ASSET = re.compile(
 FIXED = {"index.html", "example.html", "terraphim-editor.min.js", "terraphim-editor.min.css",
          "terraphim_editor.js", "terraphim_editor_bg.wasm", "js/rolegraph-worker.js",
          "rolegraph/rolegraph-worker.js", "rolegraph/terraphim_rolegraph_browser.js",
-         "rolegraph/terraphim_rolegraph_browser_bg.wasm"}
+         "rolegraph/terraphim_rolegraph_browser_bg.wasm",
+         # The default role (issue #123): the editor embeds the same bytes at
+         # compile time, and publishers ship them so a reader outside the WASM
+         # module (terraphim-grep, a host) can take them with --thesaurus.
+         "roles/default.json"}
 
 
 def digest(data):
@@ -437,6 +441,11 @@ def main():
         raise ValueError("refusing to overwrite an existing publication report")
     if os.environ.get("TE_ROLEGRAPH_SOURCE"):
         raise ValueError("TE_ROLEGRAPH_SOURCE is forbidden for releases")
+    # Verify both direct invocations and release-dist builds against admitted source.
+    source_check = [sys.executable, "scripts/check-release-source.py"]
+    if args.source_head:
+        source_check.extend(["--expected-head", args.source_head])
+    subprocess.run(source_check, cwd=repo, check=True, stdout=subprocess.DEVNULL)
     files = inventory(stage)
     for command in (["scripts/ci/rolegraph-production-check.py", "assets", str(stage)],
                     ["scripts/ci/runtime-assets-check.py", "--check", str(stage / "vendor")]):

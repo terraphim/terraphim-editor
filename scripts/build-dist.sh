@@ -2,7 +2,8 @@
 
 # Writes the embeddable bundle (issue #77): terraphim-editor.min.js,
 # terraphim-editor.min.css, the WebAssembly module under fixed names
-# (terraphim_editor.js, terraphim_editor_bg.wasm) and example.html.
+# (terraphim_editor.js, terraphim_editor_bg.wasm), the default role
+# (roles/default.json, issue #123) and example.html.
 #
 # Output directory, in order of precedence:
 #   1. first argument:       scripts/build-dist.sh some/dir
@@ -28,6 +29,14 @@ python3 scripts/ci/runtime-assets-check.py --check public/vendor
 mkdir -p "$OUT/vendor"
 cp -R public/vendor/. "$OUT/vendor/"
 python3 scripts/ci/runtime-assets-check.py --check "$OUT/vendor"
+
+# The default role (issues #123, #127, #128). The editor embeds the same file
+# at compile time with include_str!, so the bundle has knowledge-graph
+# synonyms with no host call. Copying it keeps the reader outside the WASM
+# module on the identical bytes: terraphim-grep and other tools take it with
+# --thesaurus, and a host can read it without opening the module.
+mkdir -p "$OUT/roles"
+cp public/roles/default.json "$OUT/roles/default.json"
 
 # Copy and minify JS files
 # Order matters: config, then the Write_On chrome, the decoration

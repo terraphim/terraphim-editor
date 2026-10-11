@@ -7,7 +7,7 @@ if [ -n "${TE_ROLEGRAPH_SOURCE:-}" ]; then
   exit 1
 fi
 unset TRUNK_STAGING_DIR TRUNK_DIST_DIR
-SOURCE_HEAD="$(git rev-parse HEAD)"
+SOURCE_HEAD="$(python3 scripts/check-release-source.py)"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --allow-replace|--prior-owned)
@@ -24,4 +24,5 @@ STAGE="$(mktemp -d "$PWD/target/release-staging-XXXXXXXX")"
 MANIFEST="target/release-manifests/${STAGE##*/}.json"
 echo "release-dist: isolated stage $STAGE; metadata $MANIFEST"
 trunk build --release --dist "$STAGE"
+python3 scripts/check-release-source.py --expected-head "$SOURCE_HEAD"
 python3 scripts/publish-editor-dist.py --stage "$STAGE" --manifest "$MANIFEST" --source-head "$SOURCE_HEAD" ${ARGS[@]+"${ARGS[@]}"}
