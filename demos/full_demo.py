@@ -158,6 +158,14 @@ def full_storyboard(d, fixture, duration, pause, metadata):
     d.click('.te-alt-input--new'); d.text('thumbtack'); d.keys(['\ue007'])
     body('Pass me a thumbtack','Article reverses to a',['R-2.6'])
     check('Original-first ordered created alternatives',d.evaluate('return window.terraphimEditor.altPanel.lines().map(x=>x.text);'),['paperclip','eraser','thumbtack'],['R-2.2','R-4.3'])
+    group=d.evaluate(ANNOTATIONS)['synonymGroups'][0]
+    check('Newly authored alternatives use actual synonyms:: KG syntax',group['markdown'],'synonyms:: paperclip, eraser, thumbtack\n',[])
+    members=['eraser','paperclip','thumbtack']
+    for term in members:
+        check('Actual scoped KG query for '+term,d.evaluate('return JSON.parse(window.wasmBindings.document_synonyms(arguments[0],arguments[1])).sort();',group['spanId'],term),members,[])
+    check('Authored aliases share the actual typed KG concept',sorted({v['id'] for v in group['thesaurus']['data'].values()}),[1],[])
+    metadata['authoredSynonymRegistration']={'group':group,'source':'real UI-created alternatives; actual shared WASM query outputs'}
+    caption('Verified KG output — '+group['markdown'].strip()+'; all three terms resolve to the same scoped concept.')
     d.click('.te-alt-line[data-index="0"] .te-alt-input'); d.keys(['\ue015'])
     body('Pass me an eraser','Panel Down cycles in context',['R-4.5','R-2.6'])
     d.keys(['\ue013']); body(base,'Panel Up restores original',['R-4.5','R-2.6'])
@@ -201,6 +209,8 @@ def full_storyboard(d, fixture, duration, pause, metadata):
     check('Generated AI provenance',d.evaluate(ANNOTATIONS)['spans'][0]['alts'][1]['source'],'ai',['R-4.4','R-8.6'])
     d.keys(['\ue00c']); undo(fixture['body'],['R-4.6'])
     check('Undo removes generated span',len(d.evaluate(ANNOTATIONS)['spans']),0,['R-4.6','R-2.7'])
+    check('Undo removes generated KG synonym membership',d.evaluate(ANNOTATIONS)['synonymGroups'],[],[])
+    check('Undo removes visible inline indicator rows',d.evaluate("return document.querySelectorAll('.te-ind-row').length;"),0,['R-4.6','R-2.7'])
 
     ghost_body='Keep this. Ghost these words.'
     setup(ghost_body); caption('B05 — Ghost selected text; text and counts remain; Revive restores it.')
@@ -370,6 +380,10 @@ def full_storyboard(d, fixture, duration, pause, metadata):
     d.evaluate("return window.terraphimEditor.openDocument(arguments[0],'public-combined-reopened.md');",combined_saved)
     body(combined_active,'Reopen preserves chosen body',['R-2.5','R-9.1'])
     check('Reopen preserves full choice, ghost and Overflow state',d.evaluate(ANNOTATIONS),combined_ann,['R-2.5','R-5.3','R-6.5','R-9.2'])
+    reopened_group=d.evaluate(ANNOTATIONS)['synonymGroups'][0]
+    for term in ['paperclip','eraser']:
+        check('Fresh reopened authored KG query for '+term,d.evaluate('return JSON.parse(window.wasmBindings.document_synonyms(arguments[0],arguments[1])).sort();',reopened_group['spanId'],term),['eraser','paperclip'],[])
+    caption('Verified reopened KG output — '+reopened_group['markdown'].strip()+'. Choice, ghost and Overflow were restored together.')
     check('Combined clean export excludes ghost and Overflow',d.evaluate('return window.terraphimEditor.exportDocument();'),'Keep this.',['R-9.3'])
     pause(3)
     caption('B12 — Merge overlapping ghost coverage, revive an interior selection, then delete the ghosted text.')

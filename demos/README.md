@@ -51,3 +51,17 @@ python3 -m unittest discover -s demos -p 'test_*.py'
 ```
 
 The reviewed failure-visible recorder has 35 passing helper tests. Actual recording evidence remains separate: Chrome/Firefox each have 120 finite PASS checks plus six semantic observations; Safari has 112 PASS, two FAIL and six semantic observations. Review media hashes, probe, cadence, chapter transitions, actual output frames and unrelated/private pixels before acceptance. Sampled frame review is not every-frame certification. Sidecar times are storyboard-relative; requirement indices disclose capture-offset uncertainty. No source-video requirement may be marked passed merely because a control, fixture, menu or caption appears.
+
+## Short storyboard captions
+
+These describe the original short recording, not acceptance results:
+
+1/4 This synthetic draft contains Unicode before a local knowledge-graph term.
+
+2/4 Select the term and request its local alternatives with the visible controls.
+
+3/4 Choose eraser in the alternatives panel; only the selected term changes.
+
+4/4 One undo restores the exact draft, including all Unicode characters.
+
+The refreshed full storyboard also queries newly authored alternatives through the actual shared KG synonym index, records their `synonyms::` output and typed concept IDs, verifies generated-group removal on Undo, and queries the reconstructed group after reopen.
