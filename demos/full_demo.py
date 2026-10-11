@@ -207,10 +207,13 @@ def full_storyboard(d, fixture, duration, pause, metadata):
     tail(fixture['term']); d.keys(['\ue008','\ue03a']); d.click('.te-selection-menu-item[data-item="ai-alternatives"]'); pause(2)
     check('Generated local alternatives',d.evaluate('return window.terraphimEditor.altPanel.lines().map(x=>x.text);'),[fixture['term'],fixture['replacement']],['R-8.6','R-8.7','R-4.4'])
     check('Generated AI provenance',d.evaluate(ANNOTATIONS)['spans'][0]['alts'][1]['source'],'ai',['R-4.4','R-8.6'])
+    generated_span_id=d.evaluate(ANNOTATIONS)['spans'][0]['id']
     d.keys(['\ue00c']); undo(fixture['body'],['R-4.6'])
     check('Undo removes generated span',len(d.evaluate(ANNOTATIONS)['spans']),0,['R-4.6','R-2.7'])
     check('Undo removes generated KG synonym membership',d.evaluate(ANNOTATIONS)['synonymGroups'],[],[])
-    check('Undo removes visible inline indicator rows',d.evaluate("return document.querySelectorAll('.te-ind-row').length;"),0,['R-4.6','R-2.7'])
+    check('Undo removes the authored inline indicator row',d.evaluate("return Array.from(document.querySelectorAll('.te-ind-row')).filter(n=>n.dataset.spanId===arguments[0]).length;",generated_span_id),0,['R-4.6','R-2.7'])
+    check('Undo query removes the authored synonym group',d.evaluate('return JSON.parse(window.wasmBindings.document_synonyms(arguments[0],arguments[1]));',generated_span_id,fixture['term']),[],[])
+    metadata['generatedUndoRemainingIndicators']=d.evaluate("return Array.from(document.querySelectorAll('.te-ind-row')).map(n=>({spanId:n.dataset.spanId,source:n.dataset.source}));")
 
     ghost_body='Keep this. Ghost these words.'
     setup(ghost_body); caption('B05 — Ghost selected text; text and counts remain; Revive restores it.')
