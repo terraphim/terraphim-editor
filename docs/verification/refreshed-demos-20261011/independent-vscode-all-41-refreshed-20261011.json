@@ -1,0 +1,353 @@
+{
+  "scope": "Native existing VSCode integration finite output review; all41 unaccepted; noZedfork",
+  "rawVideo": "/private/tmp/vscode-native-ghost-fixed-demo-20261011.mp4",
+  "rawVideoSha256": "682a62a5ebafebcbadcc47c6344e81690ad8ac5811b0201cc55da933044f37eb",
+  "savedFiles": {
+    "pull-saved.md": "b1524fc77eb98e3f925132f37248649f5f003602891dc35fa6c2a20899d2ef81",
+    "ghost-undo-saved.md": "c4cf90526d295474578ef09d767ccdb0c669d3428458dde8c38a4901823ba36e",
+    "writing.md": "b1524fc77eb98e3f925132f37248649f5f003602891dc35fa6c2a20899d2ef81",
+    "before-ghost-fix.saved.md": "c4cf90526d295474578ef09d767ccdb0c669d3428458dde8c38a4901823ba36e",
+    "ghost-saved.md": "8b92c314179e4e86fb74945f00e471726ae1b993b8de8fbd8f79a4c7c2508424",
+    "writing.clean.md": "0cfe09781de48df01b80fd7c2a6dd5be61ec829a4dd33c352382410b48de3512",
+    "stash-saved.md": "a8fb1d0dbcb879514a08b768bf779ba2c5b5fbea0103a218775b60ccb8008524"
+  },
+  "requirements": [
+    {
+      "id": "R-2.1",
+      "requirement": "Plain mode by default.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-2.2",
+      "requirement": "Span-anchored alternatives.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Saved s1 word anchor10\u201319, paperclip/eraser/thumbtack, active2; this video starts from existing alternatives, not their creation.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-2.3",
+      "requirement": "Three granularities.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-2.4",
+      "requirement": "In-place cycling.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Final thumbtack output exists; actual cycling operation not qualified by this recording.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-2.5",
+      "requirement": "Persistence.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Later native removal/undo/redo saved snapshots retain valid alternatives and ghost+Overflow; finite active2\u21920\u21922 history, not allgranularities.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-2.6",
+      "requirement": "Grammar fix-ups on swap.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-2.7",
+      "requirement": "Emptying removes the indicator.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Native deletion of thumbtack leaves paperclip+eraser and saved KG membership excludes thumbtack. Emptying every non-original alternative/indicator disappearance still NOT DEMONSTRATED.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-3.1",
+      "requirement": "Underline.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Word underline visible210/270s; exactwidth/baseline/theme not measured.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-3.2",
+      "requirement": "Dot row (word/sentence/headline).",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Word dots visible210/270s; exactgeometry/countforallgranularities not qualified.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-3.3",
+      "requirement": "Active-dot highlight.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Active dot styling visible; full RGB/alpha/transitions not independently measured.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-3.4",
+      "requirement": "Paragraph indicator.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-3.5",
+      "requirement": "Headline rendering.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-3.6",
+      "requirement": "Hover target.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-4.1",
+      "requirement": "Placement and toggle.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-4.2",
+      "requirement": "Tabs.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-4.3",
+      "requirement": "Alternative list.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Actual alternative panel/list visible in r14 history samples; full tabs/input creation not qualified.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-4.4",
+      "requirement": "Provenance marker.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-4.5",
+      "requirement": "Keyboard navigation.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-4.6",
+      "requirement": "Undo.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Native alternative removal Undo exactlyrestores pull-saved3altactive2, Redo exactlyrestores2altoriginal; GhostUndo/Redo and ReviveUndo separately saved. Full panel-input/bot-linehistory remains unaccepted.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-5.1",
+      "requirement": "Ghost.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Native ghost visibly dims phrase; saved UTF16 42\u201359 equalsGhost this aside.; exactopacity/countallcases absent.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-5.2",
+      "requirement": "Revive.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Native contextmenuRevive followed by actualSave removesghost; Undo savedfinalwriting equals priorpull includingghost. Exact allrange cases absent.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-5.3",
+      "requirement": "Ghosting is an independent layer, persisted with the document",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Ghost annotation persists alongside alternatives and laterOverflow, all savedanchors valid.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-6.1",
+      "requirement": "Placement and toggle.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "ActualrightOverflowpanelvisible210/270s; keyboardtogglebehavior notfullyqualified.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-6.2",
+      "requirement": "Content.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Overflowcontains exactstashedparagraph; editing/arbitraryMarkdown behavior notqualified.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-6.3",
+      "requirement": "Stash.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Savedstash removesparagraphfrombody, puts exactliteralintoOverflow; nativeframe210s.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-6.4",
+      "requirement": "Pull back.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Pullbodyrestoresparagraphand retainsOverflow copy; nativeframe270s. No native drag/drop success asserted.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-6.5",
+      "requirement": "Persistence.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Savedpull andfinalwriting exact982-byte source withOverflow+ghost+alternatives.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-7.1",
+      "requirement": "Layout.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Embeddedcustomeditorlayoutvisible; externalRestrictedModechromeandwindowinsetdifferfromsourcevideo. Exactparityunaccepted.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-7.2",
+      "requirement": "Corner controls (Write_On mode on)",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Later r14 nativeSave coordinateclick whileAltpanelopen produces saved2altremoval and reportedcleandirty state; basicSave qualified. EarlieroccludedSave failure retained; Open/allcontrols notfullyqualified.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-7.3",
+      "requirement": "Context menu on selection",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Ghostandstashoperations observedvia nativeinputs; completecontextmenucontents notqualified.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-7.4",
+      "requirement": "Existing shortcuts",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-8.1",
+      "requirement": "Lab popover.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope.",
+      "supplementalLocalRoleLabEvidence": "Native Labpopover visible; bundledlocalrole enables actualprotectedtrim. Exactpixel/focus/outsideclickclauses notfullyqualified."
+    },
+    {
+      "id": "R-8.2",
+      "requirement": "Mark actions",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope.",
+      "supplementalLocalRoleLabEvidence": "Actualnative markobservations ononefixture only; zero long/convoluted results validobservations, no semanticquality proof."
+    },
+    {
+      "id": "R-8.3",
+      "requirement": "Trim levels.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope.",
+      "supplementalLocalRoleLabEvidence": "Native Slight101\u219291 andSharper101\u219271 observed; allfivelevels notdemonstrated."
+    },
+    {
+      "id": "R-8.4",
+      "requirement": "Trim behaviour.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope.",
+      "supplementalLocalRoleLabEvidence": "Donebody unchanged;9newvalidghosts30words;2old detachedannotationspreserved/warned andexcluded. Exactprotected-range/targetconstraints notallqualified."
+    },
+    {
+      "id": "R-8.5",
+      "requirement": "Review.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope.",
+      "supplementalLocalRoleLabEvidence": "Done/Undo/Redo/reloadSave exactbytes; Walk/Keep/Make/Next/Previous absent."
+    },
+    {
+      "id": "R-8.6",
+      "requirement": "AI alternatives.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-8.7",
+      "requirement": "Provider abstraction.",
+      "status": "NOT DEMONSTRATED",
+      "accepted": false,
+      "evidence": "No refreshed native operation evidence for this clause; browser/protocol results do not transfer.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-9.1",
+      "requirement": "Document = Markdown + annotations.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "NativeTextDocument/diskactualMarkdownplusannotations.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    },
+    {
+      "id": "R-9.2",
+      "requirement": "Annotation schema (proposal).",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "All savedanchor UTF16slices valid, singleword/ghostfixture only; malformed/CRLF/ambiguity cases notcoveredhere.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope.",
+      "supplementalLocalRoleLabEvidence": "Ninevalidnewtrimanchors independentlysliced;2detachedexistingannotations intentionallypreserved, notcountedasvalid."
+    },
+    {
+      "id": "R-9.3",
+      "requirement": "Export.",
+      "status": "PARTIAL: finite native evidence, full clause unaccepted",
+      "accepted": false,
+      "evidence": "Literalactualexport77bytes equalsindependentexpected, dropsghostandannotationblock, includespulledbodyonce.",
+      "remainingCriteria": "Full multi-clause requirement remains unaccepted; see original requirement and finite scope."
+    }
+  ],
+  "supplementalVideoSha256": "1f650535c49d54240be8ed1be3a471f6ddb3c6b329471ad49c17d600f3370f08",
+  "profileQualification": "Normal VSCode profile in RestrictedMode; isolatedownedpublicwindow, not isolatedprofile",
+  "localRoleLabVideoSha256": "107d297c622000ec58bfdb73f5bc48feebc8e036f282ae0d98b6122f07c2c410"
+}

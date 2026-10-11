@@ -1,0 +1,62 @@
+{
+  "acceptance": "INCOMPLETE: all41 not proved",
+  "zedForkChanged": false,
+  "videos": [
+    {
+      "title": "Chrome \u2014 r14 output checks",
+      "file": "chrome-alternatives-guided-demo-2026-10-11-controls-r14.mp4",
+      "bytes": 1025957,
+      "sha256": "c86027e872e438cb1890923c187e9127356b0566b5af0d32cbf38ed0b2b84625",
+      "qualification": "134 PASS output checks; six unqualified semantic Lab observations."
+    },
+    {
+      "title": "Firefox \u2014 r14 output checks",
+      "file": "firefox-alternatives-guided-demo-2026-10-11-controls-r14.mp4",
+      "bytes": 1535609,
+      "sha256": "8451f5b83d7230ae2ec25139f12cafa41111e50616b0825cafa140e6b01c10d0",
+      "qualification": "134 PASS output checks; six unqualified semantic Lab observations."
+    },
+    {
+      "title": "Safari \u2014 full walkthrough",
+      "file": "safari-alternatives-guided-demo-2026-10-11-synonyms.mp4",
+      "bytes": 935434,
+      "sha256": "8d90a3a1361e125ae5b82c34a4e7b62e84b3c645076b2e1d220ffb190715799e",
+      "qualification": "122 PASS, two drag FAIL, six observations; nine dependent checks not executed."
+    },
+    {
+      "title": "Safari \u2014 native save/reopen and failed drag",
+      "file": "safari-native-drag-keyboard-demo-20261011.mp4",
+      "bytes": 2519649,
+      "sha256": "fbdab1ed91a0a4c817fbe4b645c3f6cdfa5d44298de56f29fafac5f91e1f67b6",
+      "qualification": "Actual179-byte save/reopen and keyboard pull pass. Native drag fails. Picker contents excluded."
+    },
+    {
+      "title": "Zed \u2014 existing extension",
+      "file": "zed-alternatives-native-demo-2026-10-11-synonyms.mp4",
+      "bytes": 3103416,
+      "sha256": "a42a44ba5bb12ae8e08bd1cb51886be8de79498586299ab74d1db618d6dc5dd9",
+      "qualification": "Finite native saved outputs, export, history, KG hover and Trim Done. Alternatives were annotation input; stock custom visual UI unsupported. Fork separate."
+    },
+    {
+      "title": "VS Code \u2014 ghost persistence/history/export",
+      "file": "vscode-native-ghost-fixed-demo-20261011.mp4",
+      "bytes": 8144259,
+      "sha256": "682a62a5ebafebcbadcc47c6344e81690ad8ac5811b0201cc55da933044f37eb",
+      "qualification": "Actual saved ghost/history/reopen, stash/pull and77-byte clean export. Starts from existing alternatives; earlier CSS build."
+    },
+    {
+      "title": "VS Code \u2014 panel Save, alternative history and Revive",
+      "file": "vscode-native-controls-history-demo-20261011.mp4",
+      "bytes": 4563856,
+      "sha256": "1f650535c49d54240be8ed1be3a471f6ddb3c6b329471ad49c17d600f3370f08",
+      "qualification": "Later r14 native pointer Save with alternatives panel open; saved removal, Undo/Redo and Revive."
+    },
+    {
+      "title": "VS Code \u2014 local role and Lab saved outputs",
+      "file": "vscode-native-local-role-lab-demo-20261011.mp4",
+      "bytes": 13350742,
+      "sha256": "107d297c622000ec58bfdb73f5bc48feebc8e036f282ae0d98b6122f07c2c410",
+      "qualification": "r16 role initialization; native Trim30 Done nine new valid ghosts/30 words; byte-exact Undo/Redo/reloadSave. Six Lab outputs observed on one fixture."
+    }
+  ]
+}

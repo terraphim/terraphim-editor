@@ -1,0 +1,31 @@
+{
+  "scope": "Finite output/provenance only; original failures remain historical",
+  "recordings": [
+    {
+      "browser": "chrome",
+      "sourceHead": "affee07596f9856df60afe1dc2848ef988534d60",
+      "manifestSha256": "1c0c80819b482a93e8cbbadd38ce579c452ba462f6d22973401cfd23e3cb7ca3",
+      "video": "/private/tmp/chrome-alternatives-guided-demo-2026-10-11-controls-r14.mp4",
+      "videoSha256": "c86027e872e438cb1890923c187e9127356b0566b5af0d32cbf38ed0b2b84625",
+      "sidecarSha256": "e32b939861e844f770c5513d88e77d5076af9de98c04cab7e45158b6090d7812",
+      "finitePASS": 134,
+      "semanticObservations": 6,
+      "allPASSActualEqualsExpected": true,
+      "acceptanceStatus": "FINITE CHECKS PASS; FULL REQUIREMENTS NOT ACCEPTED",
+      "reviewScope": "Independent byte/provenance/output-count check; no fresh full frame audit of this r14 pair"
+    },
+    {
+      "browser": "firefox",
+      "sourceHead": "affee07596f9856df60afe1dc2848ef988534d60",
+      "manifestSha256": "1c0c80819b482a93e8cbbadd38ce579c452ba462f6d22973401cfd23e3cb7ca3",
+      "video": "/private/tmp/terraphim-editor-demo-snapshot-20261011/demos/out/firefox-alternatives-guided-demo-2026-10-11-controls-r14.mp4",
+      "videoSha256": "8451f5b83d7230ae2ec25139f12cafa41111e50616b0825cafa140e6b01c10d0",
+      "sidecarSha256": "de96a9df1276356b99de23d67e490fd1b12171f21356a2c2f11b3408049a0e27",
+      "finitePASS": 134,
+      "semanticObservations": 6,
+      "allPASSActualEqualsExpected": true,
+      "acceptanceStatus": "FINITE CHECKS PASS; FULL REQUIREMENTS NOT ACCEPTED",
+      "reviewScope": "Independent byte/provenance/output-count check; no fresh full frame audit of this r14 pair"
+    }
+  ]
+}

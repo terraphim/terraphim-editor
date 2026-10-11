@@ -1,0 +1,23 @@
+✔ actual WASM queues edits until exact host ACK and rejects malformed ACK (52.798084ms)
+✔ two real views synchronize native history without independent undo (0.50225ms)
+✔ external conflict preserves unacknowledged draft and pauses until recovery (0.258584ms)
+✔ save waits for ACK and disposal prevents late messages (0.16875ms)
+✔ queued Undo then Save waits for host completion and rebases revision (0.185125ms)
+✔ two Undo commands execute separately and wrong completions cannot release queue (0.135667ms)
+✔ rejected host command cancels later commands rather than stalling (0.125041ms)
+✔ command completion before sync preserves newer local input as a conflict (0.610834ms)
+✔ LF presentation submits CRLF native output with correctly rebased second-line anchors (9.494666ms)
+✔ obsolete rejection cannot cancel a newer multi-view proposal (0.293333ms)
+✔ export freezes acknowledged source while newer typing waits behind the command (0.192333ms)
+✔ host history owns accepted alternatives but retains genuinely uncommitted input undo (0.060375ms)
+✔ stale export refusal releases the barrier while retaining newer local text (0.116666ms)
+✔ failed export with clean source releases once and an obsolete duplicate cannot cancel later edit (0.111125ms)
+✔ captured native alternative removal/undo/redo outputs register typed KG synonyms after real file reopen (6.746292ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 197.9865

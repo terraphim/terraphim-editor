@@ -1,5 +1,9 @@
 # Independent refreshed Firefox: all 41 requirements
 
+Current r14 recording provenance/output review: HEAD `affee07596f9856df60afe1dc2848ef988534d60`, admitted manifest `1c0c80819b482a93e8cbbadd38ce579c452ba462f6d22973401cfd23e3cb7ca3`, MP4 SHA-256 `8451f5b83d7230ae2ec25139f12cafa41111e50616b0825cafa140e6b01c10d0`, 1535609bytes, 181.0s. Independently verified134 literal PASS comparisons plus six semantic observations; full requirements remain unaccepted. This update checks identity/counts/actual values, without a fresh r14 frame audit. Original take2 footage, frame timing and failed takes below remain historical evidence; their timestamps do not describe the r14 file. The machine ledger holds current r14 check times separately from historical inspected frames.
+
+Historical take2 review follows.
+
 **134 PASS assertions + six semantic observations. All 41 requirements remain unaccepted.**
 
 The MP4 is 1,498,955 bytes, 181.000000 seconds, H264 at 1140×720/yuv420p. SHA-256: `bbf7b9e6b2a6e254f5067201ea77fca9243f7929650ea3d27f70e646de95d245`. Source HEAD `86f1291d36df50a694293a4c670c0f4961b83c7a` and manifest `b4287a48bae6211fce7c7fe350c96b6722b694f18f3f548d3329029f87dcce42` match the independent r2 admission and Chrome recording. All 134 literal PASS comparisons were independently checked.

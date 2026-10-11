@@ -1,5 +1,9 @@
 # Independent refreshed Chrome: all 41 requirements
 
+Current r14 recording provenance/output review: HEAD `affee07596f9856df60afe1dc2848ef988534d60`, admitted manifest `1c0c80819b482a93e8cbbadd38ce579c452ba462f6d22973401cfd23e3cb7ca3`, MP4 SHA-256 `c86027e872e438cb1890923c187e9127356b0566b5af0d32cbf38ed0b2b84625`, 1025957bytes, 181.0s. Independently verified134 literal PASS comparisons plus six semantic observations; full requirements remain unaccepted. This update checks identity/counts/actual values, without a fresh r14 frame audit. Original take2 footage, frame timing and failed takes below remain historical evidence; their timestamps do not describe the r14 file. The machine ledger holds current r14 check times separately from historical inspected frames.
+
+Historical take2 review follows.
+
 Reviewed11October2026. **134 PASS assertions + six semantic observations; all41 requirements remain unaccepted.** This is a refreshed completed recording, not full visual/functional acceptance. No browser/native operation or recorder mutation was performed by this reviewer.
 
 Video `chrome-alternatives-guided-demo-2026-10-11-synonyms-take2.mp4`: SHA-256 `9d3cc0ec0b79219e9bf6aaa298d3ef159f3db201456a7da65e4c8f5a6d5fe923`,1,311,191bytes,181.866667s,H2641140×720/yuv420p. SidecarSHA-256 `3c39d2ea367f70676ed2bb7911f4fabb52b66b2306cb97b6198184974851f0db`. Source snapshot`86f1291d36df50a694293a4c670c0f4961b83c7a` and129-asset manifest`b4287a48bae6211fce7c7fe350c96b6722b694f18f3f548d3329029f87dcce42` match independently admitted source/output identities. Every134 PASS entry independently equals its literal expected value.

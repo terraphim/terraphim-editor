@@ -1,0 +1,50 @@
+{
+  "result": "PASS",
+  "path": "/private/tmp/terraphim-vscode-native-proof-20261011/writing.md",
+  "sha256": "8b92c314179e4e86fb74945f00e471726ae1b993b8de8fbd8f79a4c7c2508424",
+  "body": "Pass me a thumbtack.\n\nKeep this sentence. Ghost this aside.\n\nMove this paragraph to Overflow.\n",
+  "annotations": {
+    "version": 1,
+    "spans": [
+      {
+        "id": "s1",
+        "kind": "word",
+        "anchor": {
+          "start": 10,
+          "end": 19,
+          "text": "thumbtack",
+          "before": "Pass me a ",
+          "after": ".\n\nKeep this sentence. Ghost "
+        },
+        "active": 2,
+        "alts": [
+          {
+            "text": "paperclip",
+            "source": "original"
+          },
+          {
+            "text": "eraser",
+            "source": "human"
+          },
+          {
+            "text": "thumbtack",
+            "source": "human"
+          }
+        ]
+      }
+    ],
+    "ghosts": [
+      {
+        "id": "g1",
+        "anchor": {
+          "start": 42,
+          "end": 59,
+          "text": "Ghost this aside.",
+          "before": "thumbtack.\n\nKeep this sentence. ",
+          "after": "\n\nMove this paragraph to "
+        }
+      }
+    ]
+  },
+  "qualification": "Finite actual saved-output regression; does not qualify all 41 requirements or native KG query"
+}

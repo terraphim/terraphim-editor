@@ -1,0 +1,17 @@
+[INFO]: 🎯  Checking for the Wasm target...
+   Compiling terraphim-editor v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor)
+    Finished `dev` profile [optimized] target(s) in 5.39s
+[INFO]: Getting geckodriver...
+    Finished `test` profile [optimized] target(s) in 0.11s
+     Running tests/web_chrome_occlusion.rs (/Users/alex/.cargo/build/40/444727d03eb195/wasm32-unknown-unknown/debug/deps/web_chrome_occlusion-2230984ab972bfa3.wasm)
+Running headless tests in Firefox on `http://127.0.0.1:64118/`
+Try find `webdriver.json` for configure browser's capabilities:
+Ok
+Loading Wasm module...
+
+running 1 test
+test save_and_open_remain_pointer_targets_above_the_alternatives_panel ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 filtered out; finished in 0.17s
+
+[WARN]: ⚠️   There's a newer version of wasm-pack available, the new version is: 0.15.0, you are using: 0.13.1. To update, navigate to: https://rustwasm.github.io/wasm-pack/installer/

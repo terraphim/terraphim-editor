@@ -1,0 +1,123 @@
+{
+  "result": "PASS",
+  "qualification": "Finite native Trim Done/history/reload proof; existing two detached annotations are preserved with an explicit UI warning, not counted as valid new ranges",
+  "newValidGhosts": [
+    {
+      "id": "g2",
+      "anchor": {
+        "start": 44,
+        "end": 51,
+        "text": " really",
+        "before": " opens every morning. It is",
+        "after": " just a bit too much for one "
+      }
+    },
+    {
+      "id": "g3",
+      "anchor": {
+        "start": 51,
+        "end": 56,
+        "text": " just",
+        "before": " every morning. It is really",
+        "after": " a bit too much for one small "
+      }
+    },
+    {
+      "id": "g4",
+      "anchor": {
+        "start": 56,
+        "end": 62,
+        "text": " a bit",
+        "before": "every morning. It is really just",
+        "after": " too much for one small team to "
+      }
+    },
+    {
+      "id": "g5",
+      "anchor": {
+        "start": 99,
+        "end": 146,
+        "text": " Perhaps the committee probably met on Tuesday.",
+        "before": "much for one small team to read.",
+        "after": " We recieve the letters every "
+      }
+    },
+    {
+      "id": "g6",
+      "anchor": {
+        "start": 264,
+        "end": 272,
+        "text": "I think ",
+        "before": " water every day in summer. ",
+        "after": "the stuff we got is kinda "
+      }
+    },
+    {
+      "id": "g7",
+      "anchor": {
+        "start": 312,
+        "end": 319,
+        "text": " really",
+        "before": " we got is kinda awesome. It is",
+        "after": " useful, and it is very helpful."
+      }
+    },
+    {
+      "id": "g8",
+      "anchor": {
+        "start": 337,
+        "end": 342,
+        "text": " very",
+        "before": " It is really useful, and it is",
+        "after": " helpful. Maybe we should "
+      }
+    },
+    {
+      "id": "g9",
+      "anchor": {
+        "start": 351,
+        "end": 397,
+        "text": " Maybe we should basically try a simpler plan.",
+        "before": " useful, and it is very helpful.",
+        "after": "\n\nThis is a decision about local"
+      }
+    },
+    {
+      "id": "g10",
+      "anchor": {
+        "start": 471,
+        "end": 515,
+        "text": " Perhaps the summary is probably quite long.",
+        "before": "The notes stay on this computer.",
+        "after": " We can make the wording a "
+      }
+    }
+  ],
+  "bodyUnchanged": true,
+  "ghostedWords": 30,
+  "undoExactBaseline": true,
+  "redoExactDone": true,
+  "reopenSaveExactDone": true,
+  "sha256": {
+    "lab-baseline-saved.md": "538aeeec62313add333ef7cddcc363448364e0e8e35e669e1ec6760db3e63934",
+    "lab-trim-done-saved.md": "b6b8da8de6dd3cbc834654ce27c56ae21ba8f24e6d6ad80007ffd21260b212fe",
+    "lab-trim-undo-saved.md": "538aeeec62313add333ef7cddcc363448364e0e8e35e669e1ec6760db3e63934",
+    "lab-trim-redo-saved.md": "b6b8da8de6dd3cbc834654ce27c56ae21ba8f24e6d6ad80007ffd21260b212fe",
+    "lab-reopened-saved.md": "b6b8da8de6dd3cbc834654ce27c56ae21ba8f24e6d6ad80007ffd21260b212fe"
+  },
+  "nativeLabObservations": {
+    "typos": 1,
+    "punctuation": 1,
+    "weakSentences": 2,
+    "longSentences": 0,
+    "convolutedSentences": 0,
+    "offToneWords": 3,
+    "fillers": 7,
+    "hedges": 6
+  },
+  "nativePreviews": {
+    "sharper": "101 \u2192 71 words \u00b7 \u221230%",
+    "slight": "101 \u2192 91 words \u00b7 \u221210%"
+  },
+  "limits": "Lab observations are actual AX outputs on one fixture, not universal semantic correctness or all five preview results."
+}

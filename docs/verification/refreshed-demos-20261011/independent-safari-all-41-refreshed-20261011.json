@@ -383,7 +383,8 @@
         }
       ],
       "status": "PARTIAL: finite outputs only",
-      "timePrecision": "Approximate storyboard seconds; capture lead-in missing"
+      "timePrecision": "Approximate storyboard seconds; capture lead-in missing",
+      "supplementalNativeEvidence": "Nativepickerreopen exactsavedsource+Overflow; noalternativegranularities present in this fixture."
     },
     {
       "id": "R-2.6",
@@ -1923,7 +1924,8 @@
         }
       ],
       "status": "FAIL: trusted native drag output requirement unmet",
-      "timePrecision": "Approximate storyboard seconds; capture lead-in missing"
+      "timePrecision": "Approximate storyboard seconds; capture lead-in missing",
+      "supplementalNativeEvidence": "Separate normalSafari CUA keyboardCtrlEnter appendsliteralPublicnote andretainsOverflow,14chars; nativeDragstillFAIL unchanged/noevents."
     },
     {
       "id": "R-6.5",
@@ -2123,7 +2125,8 @@
         }
       ],
       "status": "PARTIAL: finite outputs only",
-      "timePrecision": "Approximate storyboard seconds; capture lead-in missing"
+      "timePrecision": "Approximate storyboard seconds; capture lead-in missing",
+      "supplementalNativeEvidence": "Actual179-byte nativeSave/download and subsequentpickerreopen source exactlyequal,Overflowrestored."
     },
     {
       "id": "R-7.1",
@@ -3232,7 +3235,8 @@
         }
       ],
       "status": "PARTIAL: finite outputs only",
-      "timePrecision": "Approximate storyboard seconds; capture lead-in missing"
+      "timePrecision": "Approximate storyboard seconds; capture lead-in missing",
+      "supplementalNativeEvidence": "Native savedMarkdown+annotations179bytes exactlyrestored afterpickerreopen."
     },
     {
       "id": "R-9.2",
@@ -3484,5 +3488,8 @@
       "status": "PARTIAL: finite outputs only",
       "timePrecision": "Approximate storyboard seconds; capture lead-in missing"
     }
-  ]
+  ],
+  "supplementalNativeVideoSha256": "fbdab1ed91a0a4c817fbe4b645c3f6cdfa5d44298de56f29fafac5f91e1f67b6",
+  "nativeDragStatus": "FAIL; keyboard/save success does not repair dragfailure",
+  "pickerPrivacyReview": "Nopickercontent in eight-second/scene samples andfull140/158s; boundedreviewonly"
 }
