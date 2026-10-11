@@ -1,0 +1,142 @@
+   Compiling terraphim-editor v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor)
+    Finished `test` profile [optimized] target(s) in 3.59s
+     Running unittests src/lib.rs (/private/tmp/terraphim-editor-publication-build/debug/deps/terraphim_editor-6efe4b5ea2d7b089)
+
+running 110 tests
+test document::history_checkpoint_tests::mixed_history_intermediate_body_and_late_failure_are_atomic ... ok
+test document::history_checkpoint_tests::full_schema_validation_preserves_legitimate_overlapping_set_aside_hints ... ok
+test document::history_checkpoint_tests::checkpoint_schema_refusal_preserves_watermark_pending_and_raw_block ... ok
+test document::history_checkpoint_tests::identical_reopen_is_still_a_foreign_session ... ok
+test document::history_checkpoint_tests::checkpoint_exact_abort_wrong_tokens_and_consumed_tokens ... ok
+test document::history_checkpoint_tests::interleaved_open_never_discards_checkpoint_or_reuses_token ... ok
+test document::history_checkpoint_tests::conflicted_checkpoint_preserves_interleaved_metadata_and_requires_explicit_reopen ... ok
+test document::history_checkpoint_tests::full_namespace_validation_rejects_unresolved_collision_without_save_renaming ... ok
+test document::history_checkpoint_tests::overflow_unapplied_and_late_body_guards_leave_complete_session_unchanged ... ok
+test document::history_checkpoint_tests::private_token_exhaustion_and_failed_begin_are_safe ... ok
+test document::history_checkpoint_tests::all_legacy_kinds_use_model_semantics_and_check_replacement_envelopes ... ok
+test document::tests::a_preserved_malformed_block_refuses_overflow_changes ... ok
+test document::history_checkpoint_tests::strict_parser_rejects_unknown_conflicting_float_and_bad_snapshots ... ok
+test document::tests::a_refused_swap_changes_nothing ... ok
+test document::tests::a_refused_move_changes_nothing ... ok
+test document::tests::a_restored_ghost_merges_with_touching_ghosts ... ok
+test document::tests::add_edit_move_and_remove_round_trip_through_restore ... ok
+test document::tests::append_overflow_separates_entries_with_a_blank_line ... ok
+test document::tests::body_edit_is_minimal_and_char_safe ... ok
+test document::tests::counts_include_ghosted_text ... ok
+test document::tests::block_is_hidden_from_body_and_round_trips ... ok
+test document::tests::create_adds_span_and_first_alternative_as_one_operation ... ok
+test document::tests::deleting_ghosted_text_sets_the_ghost_aside_and_undo_restores_it ... ok
+test document::history_checkpoint_tests::same_body_alternatives_and_receipt_reservations_are_full_session_conflicts ... ok
+test document::history_checkpoint_tests::protected_checkpoint_role_invalidation_aborts_document_only ... ok
+test document::history_checkpoint_tests::protected_unsafe_role_and_joint_document_conflict_do_not_lose_checkpoint ... ok
+test document::tests::detached_spans_are_saved_and_survive_reopen ... ok
+test document::tests::edit_inside_a_span_detaches_it ... ok
+test document::tests::exhausted_span_identity_refuses_atomically ... ok
+test document::tests::edits_move_anchors_and_survive_save_and_reopen ... ok
+test document::tests::ghost_may_cover_and_partly_overlap_spans ... ok
+test document::history_checkpoint_tests::kept_limits_and_failed_protection_preserve_pending_and_session ... ok
+test document::tests::ghost_range_returns_id_and_annotations ... ok
+test document::tests::ghosts_follow_edits_and_survive_save_and_reopen ... ok
+test document::history_checkpoint_tests::protected_body_malformed_manual_overlap_and_noop_guards_precede_publication ... ok
+test document::tests::independent_transaction_manual_overlap_and_empty_are_no_mutation ... ok
+test document::tests::independent_transaction_exhaustion_live_set_aside_and_partial_batch ... ok
+test document::tests::independent_transaction_refusals_restore_entire_session ... ok
+test document::tests::independent_transaction_preserves_spans_overflow_and_set_aside ... ok
+test document::tests::independent_transaction_group_preflight_refuses_late_conflict_atomically ... ok
+test document::tests::invalid_ranges_return_an_error_object_and_change_nothing ... ok
+test document::tests::malformed_block_warns_once_and_is_saved_verbatim ... ok
+test document::tests::independent_transaction_adjacent_receipt_replay_and_reservation ... ok
+test document::tests::kg_span_reserves_detached_identity_and_preserves_provenance ... ok
+test document::tests::out_of_range_edit_is_refused_without_change ... ok
+test document::tests::overflow_round_trips_through_save_and_is_omitted_from_export ... ok
+test document::tests::partial_deletion_trims_and_a_wider_replacement_sets_the_ghost_aside ... ok
+test document::tests::plain_markdown_opens_and_saves_unchanged ... ok
+test document::tests::new_span_reserves_set_aside_and_undone_identities ... ok
+test document::tests::overlapping_and_touching_ghosts_merge ... ok
+test document::tests::move_carries_annotations_and_survives_save_and_reopen ... ok
+test document::tests::overflow_json_helpers_report_the_new_text ... ok
+test document::tests::partial_revive_trims_or_splits ... ok
+test document::tests::pull_back_at_a_line_end_makes_its_own_paragraph ... ok
+test document::tests::open_kind_and_notices_follow_the_set_aside_count ... ok
+test document::tests::pull_back_at_a_line_start_makes_its_own_paragraph ... ok
+test document::tests::pull_back_between_paragraphs_keeps_one_blank_line_each_side ... ok
+test document::tests::pull_back_follows_crlf_line_endings_and_never_splits_a_pair ... ok
+test document::tests::pull_back_into_an_empty_body_is_the_paragraph ... ok
+test document::tests::pull_back_of_a_multi_line_paragraph_keeps_its_lines ... ok
+test document::tests::pull_back_mid_line_inserts_inline ... ok
+test document::tests::pull_back_offsets_are_utf16 ... ok
+test document::tests::pull_back_refusals_change_nothing ... ok
+test document::tests::pull_back_takes_the_selection_or_the_current_line ... ok
+test document::tests::redo_fallback_appends_a_separate_entry ... ok
+test document::tests::pull_back_shifts_later_spans_past_the_separators ... ok
+test document::tests::replaying_a_stash_keeps_text_typed_in_the_panel ... ok
+test document::tests::removing_the_last_alternative_removes_the_span_and_undo_brings_it_back ... ok
+test document::tests::session_allocator_reserves_shared_namespace_and_removed_split_ids ... ok
+test document::tests::set_aside_hints_follow_a_move_and_reattach ... ok
+test document::tests::stash_moves_the_text_into_overflow_atomically ... ok
+test document::tests::stash_offsets_are_utf16_and_never_split_a_character ... ok
+test document::tests::set_aside_items_that_would_overlap_or_clash_are_moved_and_renamed ... ok
+test document::tests::swap_refreshes_context_and_moves_the_ghost ... ok
+test document::tests::undoing_the_detaching_edit_reattaches_the_span ... ok
+test document::tests::swap_offsets_are_utf16_and_set_aside_hints_follow ... ok
+test document::tests::restore_moves_other_anchors_and_refuses_what_does_not_fit ... ok
+test document::tests::set_aside_hints_follow_edits_before_them ... ok
+test document::tests::stale_anchors_are_reanchored_or_reported ... ok
+test document::tests::stash_sets_annotations_aside_and_undo_brings_them_back ... ok
+test document::tests::swap_returns_the_exact_edit_and_fixes_the_article ... ok
+test document::tests::sync_body_reanchors_after_drift ... ok
+test document::tests::unplaceable_ghosts_are_saved_too ... ok
+test kg::protection_tests::generation_exhaustion_refuses_all_publication_paths_without_mutation ... ok
+test kg::protection_tests::unicode_roles_are_trim_capable_but_empty_roles_are_not ... ok
+test kg::protection_tests::bundled_default_role_registers_real_synonyms_and_uses_shipped_bytes ... ok
+test lab::tests::fixture_exercises_every_action_outside_protected_text ... ok
+test lab::tests::actions_are_listed_in_popover_order_with_spec_labels ... ok
+test lab::tests::ids_round_trip_and_unknown_ids_are_rejected ... ok
+test lab::tests::lab_fixture_has_trim_cuts_at_every_level_and_a_nested_cut ... ok
+test lab::promotion_tests::nine_occurrences_and_unicode_remain_protected ... ok
+test lab::tests::marks_match_the_engine_and_use_utf16_offsets ... ok
+test lab::tests::marks_never_change_the_body_and_protected_text_is_skipped ... ok
+test lab::tests::session_marks_read_the_open_document ... ok
+test lab::tests::trim_plan_json_lists_levels_and_engine_cuts ... ok
+test lab::tests::trim_levels_round_trip_and_bad_input_is_an_error ... ok
+test lab::tests::protection_role_and_body_guards_are_atomic ... ok
+test lab::tests::session_trim_refuses_a_stale_plan_and_recomputes ... ok
+test tests::test_preview_api_without_editor_is_inert ... ok
+test tests::test_markdown_conversion ... ok
+test lab::tests::trim_status_and_make_cuts_equal_the_engine ... ok
+test lab::tests::unknown_action_is_an_error_not_a_panic ... ok
+test tests::test_render_markdown_matches_crate_output ... ok
+test tests::test_template_rendering ... ok
+test lab::promotion_tests::cached_body_role_finish_guards_and_manual_overlap_preserve_state ... ok
+test tests::test_template_renders_contenteditable_surface ... ok
+test lab::promotion_tests::containment_duplicates_adjacency_crossing_and_scalar_boundaries ... ok
+test lab::promotion_tests::exact_cached_fixture_begin_abort_finish_manual_and_kept_oracles ... ok
+test lab::promotion_tests::all_levels_all_keeps_preserve_preview_make_cuts_and_split_coverage ... ok
+test document::history_checkpoint_tests::byte_count_nesting_and_body_transport_limits_are_exact ... ok
+
+test result: ok. 110 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running tests/trim_protection.rs (/private/tmp/terraphim-editor-publication-build/debug/deps/trim_protection-a4742b20eaae4004)
+
+running 6 tests
+test exact_unicode_and_whole_boundaries ... ok
+test unicode_documents_are_supported_and_empty_roles_still_refused ... ok
+test actual_upstream_all_min_one_differential_and_original_offsets ... ok
+test unicode_byte_ranges_survive_actual_utf16_edits_and_fold_collisions_refuse ... ok
+test tidy_capitalization_and_duplicate_loss_refused ... ok
+test protection_filters_before_fit_and_retains_every_occurrence_all_levels ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/trim_unicode_normalization.rs (/private/tmp/terraphim-editor-publication-build/debug/deps/trim_unicode_normalization-f2512068636baf52)
+
+running 6 tests
+test canonical_role_collisions_remain_rejected ... ok
+test contextual_lowercase_and_complete_emoji_clusters ... ok
+test canonical_case_and_original_grapheme_ranges ... ok
+test whitespace_original_ranges_and_partial_graphemes ... ok
+test unicode_context_crosses_editor_word_boundaries ... ok
+test actual_trim_preserves_unicode_at_every_level ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

@@ -1,15 +1,17 @@
 //! Complete, original-offset KG occurrence protection, independent of UI ranking.
 //!
-//! Normalization is deliberately bounded: ASCII case-insensitivity, existing
-//! whitespace folding, exact CJK ideographs, and simple lowercase Latin-1,
-//! Greek and Cyrillic letters. Other Unicode (including combining marks,
-//! case expansion and non-ASCII uppercase) is refused, not silently unmatched.
+//! Matching uses Terraphim's normalized term type and compiled matcher. Canonical
+//! Unicode normalization is mapped by original graphemes; transformed bytes
+//! never become edit offsets or replace the document's original spelling.
+
+use unicode_normalization::UnicodeNormalization;
+use unicode_segmentation::UnicodeSegmentation;
 
 use terraphim_alternatives::{text::ByteRange, words::word_spans};
 use terraphim_lab::{
     automata::{CompiledMatcher, MatchOverlap, MatcherBuilder, MatcherOptions},
-    types::Thesaurus,
-    Cut, Folded, LabConfig, MadeCuts, TrimPlan,
+    types::{NormalizedTermValue, Thesaurus},
+    Cut, LabConfig, MadeCuts, TrimPlan,
 };
 
 /// One original occurrence. Canonical IDs never cross a lossy JS number seam.
@@ -25,41 +27,74 @@ pub struct ConceptProtection {
     matcher: CompiledMatcher,
 }
 
-/// Reject unsupported normalization before matching or publishing a plan.
-/// This is a capability whitelist, not a Unicode normalizer/casefold algorithm.
-/// Diagnostics intentionally contain no role aliases or document excerpts.
-pub fn validate_supported(text: &str) -> Result<(), String> {
-    for c in text.chars() {
-        if c.is_ascii() || c.is_whitespace() {
-            continue;
+/// Canonically normalized matching copy with only complete original grapheme
+/// boundaries admitted. Expansion/contraction cannot create a partial match.
+struct MatchingText {
+    text: String,
+    boundaries: Vec<Option<usize>>,
+}
+
+impl MatchingText {
+    fn new(original: &str) -> Result<Self, String> {
+        // Sentinels retain outer whitespace despite NormalizedTermValue::trim.
+        // Normalize the entire source so Unicode context (not editor word
+        // boundaries) determines final sigma across case-ignorable punctuation.
+        let normalized = NormalizedTermValue::from(format!("\0{original}\0"));
+        let mut lowered = normalized.as_str()[1..normalized.as_str().len() - 1].chars();
+        let mut result = Self {
+            text: String::new(),
+            boundaries: vec![Some(0)],
+        };
+        for (start, grapheme) in original.grapheme_indices(true) {
+            let end = start + grapheme.len();
+            let mut chunk = String::new();
+            for source in grapheme.chars() {
+                for expected in source.to_lowercase() {
+                    let actual = lowered
+                        .next()
+                        .ok_or("invalid_protection_mapping: lowercase length")?;
+                    // Rust's contextual lowercase changes sigma's value, never
+                    // its scalar count. Refuse unknown transformations rather
+                    // than publishing guessed source boundaries.
+                    if actual != expected && !(expected == 'σ' && actual == 'ς') {
+                        return Err("invalid_protection_mapping: lowercase context".into());
+                    }
+                    chunk.push(actual);
+                }
+            }
+            if grapheme.chars().all(char::is_whitespace) {
+                if result.text.ends_with(' ') {
+                    result.boundaries[result.text.len()] = Some(end);
+                    continue;
+                }
+                result.text.push(' ');
+                result.boundaries.push(Some(end));
+            } else {
+                let canonical: String = chunk.nfc().collect();
+                result.text.push_str(&canonical);
+                result.boundaries.resize(result.text.len() + 1, None);
+                result.boundaries[result.text.len()] = Some(end);
+            }
         }
-        let supported_letter = matches!(c, '\u{e0}'..='\u{f6}' | '\u{f8}'..='\u{ff}'
-            | '\u{3b1}'..='\u{3c9}' | '\u{430}'..='\u{44f}' | '\u{4e00}'..='\u{9fff}');
-        let punctuation = matches!(
-            c,
-            '—' | '–' | '‘' | '’' | '“' | '”' | '…' | '。' | '！' | '？' | '、' | '·'
-        );
-        // Final sigma is not round-trip simple case; no expansion is allowed.
-        if punctuation
-            || (supported_letter
-                && c.to_uppercase().count() == 1
-                && c.to_uppercase()
-                    .flat_map(char::to_lowercase)
-                    .eq(std::iter::once(c)))
-        {
-            continue;
+        if lowered.next().is_some() {
+            return Err("invalid_protection_mapping: trailing lowercase output".into());
         }
-        return Err("unsupported_normalization: KG-protected trim supports ASCII case, whitespace folding, exact CJK ideographs and simple lowercase Latin-1/Greek/Cyrillic; combining marks, case expansion and other Unicode require normalization support".into());
+        Ok(result)
     }
-    Ok(())
+
+    fn original_range(&self, start: usize, end: usize) -> Option<(usize, usize)> {
+        Some((
+            self.boundaries.get(start).copied().flatten()?,
+            self.boundaries.get(end).copied().flatten()?,
+        ))
+    }
 }
 
 impl ConceptProtection {
     pub fn from_thesaurus(thesaurus: &Thesaurus) -> Result<Self, String> {
         let mut patterns = Vec::new();
         for (key, term) in thesaurus {
-            validate_supported(key.as_str())?;
-            let pattern = Folded::new(key.as_str()).text.trim().to_owned();
+            let pattern = MatchingText::new(key.as_str())?.text.trim().to_owned();
             if pattern.is_empty() {
                 return Err("invalid_protection_role: blank pattern".into());
             }
@@ -92,8 +127,7 @@ impl ConceptProtection {
     }
 
     pub fn occurrences(&self, body: &str) -> Result<Vec<ConceptOccurrence>, String> {
-        validate_supported(body)?;
-        let folded = Folded::new(body);
+        let folded = MatchingText::new(body)?;
         let words: Vec<_> = word_spans(body).collect();
         let inside_word = |pos| {
             let i = words.partition_point(|w| w.0 < pos);
@@ -103,7 +137,9 @@ impl ConceptProtection {
         self.matcher.push_positions(&folded.text, &mut positions);
         let mut result = Vec::new();
         for m in positions {
-            let (start, end) = folded.to_original(m.start, m.end);
+            let Some((start, end)) = folded.original_range(m.start, m.end) else {
+                continue;
+            };
             if body.get(start..end).is_none() {
                 return Err("invalid_protection_mapping: non-scalar matcher range".into());
             }

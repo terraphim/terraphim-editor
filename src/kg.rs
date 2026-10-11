@@ -888,11 +888,16 @@ mod protection_tests {
     }
 
     #[test]
-    fn unsupported_and_empty_roles_remain_ordinary_kg_but_not_trim_capable() {
-        for role in [
-            r#"{"name":"public","data":{"Straße":{"id":1,"nterm":"strasse"}}}"#,
-            r#"{"name":"public","data":{}}"#,
-        ] {
+    fn unicode_roles_are_trim_capable_but_empty_roles_are_not() {
+        let unicode = r#"{"name":"public","data":{"Straße":{"id":1,"nterm":"strasse"}}}"#;
+        let token = prepare_thesaurus(unicode).unwrap();
+        commit_prepared_thesaurus(&token).unwrap();
+        let snapshot: Value = serde_json::from_str(&role_snapshot_json()).unwrap();
+        assert_eq!(snapshot["protectionReady"], true);
+        let protection = active_role_snapshot().unwrap().protection.unwrap();
+        assert_eq!(protection.occurrences("STRAẞE").unwrap().len(), 1);
+        {
+            let role = r#"{"name":"public","data":{}}"#;
             let token = prepare_thesaurus(role).unwrap();
             commit_prepared_thesaurus(&token).unwrap();
             let snapshot: Value = serde_json::from_str(&role_snapshot_json()).unwrap();

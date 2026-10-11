@@ -1008,18 +1008,21 @@ mod tests {
         crate::kg::commit_prepared_thesaurus(&token).unwrap();
         assert!(protected_trim_ranges("half", "[]").is_err());
         crate::with_session(|s| s.sync_body("Straße"));
-        assert!(session_trim_plan_json()
-            .unwrap_err()
-            .contains("unsupported_normalization"));
-        assert!(session_trim_make_cuts("sharper", "[]").is_err());
+        assert_eq!(session_trim_plan_json().unwrap()["kgProtected"], true);
+        assert_eq!(
+            session_trim_make_cuts("sharper", "[]").unwrap()["text"],
+            "Straße"
+        );
         assert_eq!(crate::with_session(|s| s.body().to_owned()), "Straße");
         crate::kg::load_thesaurus(
             r#"{"name":"unsupported","data":{"Straße":{"id":2,"nterm":"strasse"}}}"#,
         )
         .unwrap();
-        assert!(session_trim_plan_json()
-            .unwrap_err()
-            .contains("unsupported_normalization"));
+        assert_eq!(session_trim_plan_json().unwrap()["protectionCount"], 1);
+        assert_eq!(
+            session_trim_make_cuts("sharper", "[]").unwrap()["text"],
+            "Straße"
+        );
         crate::kg::clear_thesaurus();
         assert!(protected_trim_ranges("half", "[]")
             .unwrap_err()
