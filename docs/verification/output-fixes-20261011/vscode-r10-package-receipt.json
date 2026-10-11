@@ -4,11 +4,16 @@
   "assetCount": 122,
   "nativeSmoke": "vscode-native-smoke-r9.json (same reviewed runtime sources; packaged r10 not installed/retested)",
   "tests": {
-    "editorNative": 497,
     "lspCore": 415,
     "bridgeWasm": 14,
-    "assetImporter": 6
+    "assetImporter": 6,
+    "editorNativeDirtyWorkingTree": 497,
+    "editorNativeCleanWithCommittedSchema": 471
   },
   "qualification": "NOT ALL-41 ACCEPTED",
-  "gitea": "https://git.terraphim.cloud/terraphim/terraphim-ai/issues/3483"
+  "gitea": "https://git.terraphim.cloud/terraphim/terraphim-ai/issues/3483",
+  "draftPRs": [
+    "https://git.terraphim.cloud/terraphim/terraphim-editor/pulls/130",
+    "https://git.terraphim.cloud/terraphim/terraphim-ai/pulls/3484"
+  ]
 }

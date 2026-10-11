@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-11",
+  "status": "INCOMPLETE; native/all-41 qualification blocked",
+  "editorCommit": "48fbf84c0678a342de1349f0122bfa4729497fdc",
+  "aiCommit": "a202996f5d1fd321a3d788ab92f1572974b727fe",
+  "cleanNativeTests": 471,
+  "cleanSuites": 82,
+  "cleanClippy": "pass, all-targets -D warnings",
+  "cleanFmt": "pass",
+  "cleanBuildScope": "archive4d93e65 plus exact schema committed48fbf84; later evidence-only files do not alter build",
+  "dirtyWorkspaceNativeTests": 497,
+  "all41Accepted": false,
+  "all41Rows": 41,
+  "nativeBlocker": "CUA reports Mac locked after source reload attempt and fresh recheck",
+  "draftPRs": {
+    "framework": "https://git.terraphim.cloud/terraphim/terraphim-editor/pulls/130",
+    "lspAndExistingVSCode": "https://git.terraphim.cloud/terraphim/terraphim-ai/pulls/3484"
+  },
+  "zedFork": "separate, untouched",
+  "merged": false,
+  "released": false,
+  "temporaryZedTraceOverride": "removed only owned .zed/settings.json; recordings and outputs retained",
+  "logs": {
+    "editor-clean-tests-20261011.log": "aff0b60e6c259dbc437c28eaff37e037af49fa80f045bf7bc7b33186c3417f17",
+    "editor-clean-clippy-20261011.log": "3195469f48442c8203cc18e16eb791d04b5ff08627a2cbab445977cfd7c3d0b0"
+  }
+}

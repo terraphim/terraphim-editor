@@ -269,11 +269,15 @@
       "stock host visual UI gaps"
     ],
     "VSCode": [
-      "r9 native retest",
+      "latest r10 packaged native interaction retest",
       "reopen/export/split-view",
       "41-row visual/semantic acceptance",
       "demo video"
     ]
   },
-  "zedFork": "excluded and untouched"
+  "zedFork": "excluded and untouched",
+  "draftPRs": [
+    "https://git.terraphim.cloud/terraphim/terraphim-editor/pulls/130",
+    "https://git.terraphim.cloud/terraphim/terraphim-ai/pulls/3484"
+  ]
 }
