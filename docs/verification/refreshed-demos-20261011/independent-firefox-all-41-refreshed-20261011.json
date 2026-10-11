@@ -1,0 +1,4062 @@
+{
+  "scope": "Independent refreshed Firefox finite-output and sampled-media audit; all41 remain unaccepted",
+  "sourceHead": "86f1291d36df50a694293a4c670c0f4961b83c7a",
+  "manifestSha256": "b4287a48bae6211fce7c7fe350c96b6722b694f18f3f548d3329029f87dcce42",
+  "sidecarSha256": "fef1eb930cce477eea657399f86df399c90fb8ab76a88fde61525a1867a1cb73",
+  "videoSha256": "bbf7b9e6b2a6e254f5067201ea77fca9243f7929650ea3d27f70e646de95d245",
+  "videoBytes": 1498955,
+  "videoDurationSeconds": 181.0,
+  "counts": {
+    "PASS": 134,
+    "OBSERVED; NOT AN INDEPENDENT SEMANTIC ORACLE": 6
+  },
+  "frameSampling": {
+    "contactSheet": "/private/tmp/firefox-refreshed-contact-20261011.jpg",
+    "intervalSeconds": 7,
+    "fullResolutionFrameSeconds": [
+      16,
+      58,
+      62,
+      132,
+      136,
+      60.2,
+      67.5
+    ],
+    "limit": "Bounded samples; no exact captureLeadIn provided"
+  },
+  "requirements": [
+    {
+      "id": "R-2.1",
+      "requirement": "Plain mode by default.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 0,
+          "seconds": 2.37,
+          "name": "Plain mode via counter",
+          "actual": "plain",
+          "expected": "plain",
+          "status": "PASS",
+          "requirements": [
+            "R-2.1"
+          ]
+        },
+        {
+          "index": 1,
+          "seconds": 2.42,
+          "name": "Write_On via counter",
+          "actual": "write-on",
+          "expected": "write-on",
+          "status": "PASS",
+          "requirements": [
+            "R-2.1",
+            "R-7.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        2.37,
+        2.42
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Counter toggles both modes; startup default, only-text/count visibility and dim placement not fully audited."
+    },
+    {
+      "id": "R-2.2",
+      "requirement": "Span-anchored alternatives.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 4,
+          "seconds": 7.921,
+          "name": "First keystroke updates body and article",
+          "actual": "Pass me an e",
+          "expected": "Pass me an e",
+          "status": "PASS",
+          "requirements": [
+            "R-2.2",
+            "R-4.3",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 7,
+          "seconds": 12.853,
+          "name": "Original-first ordered created alternatives",
+          "actual": [
+            "paperclip",
+            "eraser",
+            "thumbtack"
+          ],
+          "expected": [
+            "paperclip",
+            "eraser",
+            "thumbtack"
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-2.2",
+            "R-4.3"
+          ]
+        },
+        {
+          "index": 118,
+          "seconds": 124.088,
+          "name": "Combined fixture choice is actual typed output",
+          "actual": "Keep this. Pass me an eraser",
+          "expected": "Keep this. Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-2.2",
+            "R-2.6"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        7.921,
+        124.088
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Typed original-first word list and active body; arbitrary contiguous spans/full inactive rendering not exhaustively checked."
+    },
+    {
+      "id": "R-2.3",
+      "requirement": "Three granularities.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 25,
+          "seconds": 22.407,
+          "name": "Created sentence replacement",
+          "actual": "A different sentence.",
+          "expected": "A different sentence.",
+          "status": "PASS",
+          "requirements": [
+            "R-2.3",
+            "R-4.2"
+          ]
+        },
+        {
+          "index": 26,
+          "seconds": 22.408,
+          "name": "Created span granularity",
+          "actual": "sentence",
+          "expected": "sentence",
+          "status": "PASS",
+          "requirements": [
+            "R-2.3"
+          ]
+        },
+        {
+          "index": 31,
+          "seconds": 29.934,
+          "name": "Created paragraph replacement",
+          "actual": "A different paragraph. Two sentences.",
+          "expected": "A different paragraph. Two sentences.",
+          "status": "PASS",
+          "requirements": [
+            "R-2.3",
+            "R-4.2"
+          ]
+        },
+        {
+          "index": 32,
+          "seconds": 29.937,
+          "name": "Created span granularity",
+          "actual": "paragraph",
+          "expected": "paragraph",
+          "status": "PASS",
+          "requirements": [
+            "R-2.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        22.407,
+        29.937
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Sentence and paragraph replacements; headline alternative creation/cycling missing."
+    },
+    {
+      "id": "R-2.4",
+      "requirement": "In-place cycling.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 16,
+          "seconds": 18.652,
+          "name": "Hover over word plus Down cycles actual body",
+          "actual": "Pass me an eraser",
+          "expected": "Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-2.4",
+            "R-3.6"
+          ]
+        },
+        {
+          "index": 23,
+          "seconds": 18.66,
+          "name": "Hover Up restores original",
+          "actual": "Pass me a paperclip",
+          "expected": "Pass me a paperclip",
+          "status": "PASS",
+          "requirements": [
+            "R-2.4"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        18.652,
+        18.66
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Word hover Up/Down changes actual body; all granularities/boundary cycling missing."
+    },
+    {
+      "id": "R-2.5",
+      "requirement": "Persistence.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 127,
+          "seconds": 133.62,
+          "name": "Active choice persisted in model",
+          "actual": 1,
+          "expected": 1,
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-9.2"
+          ]
+        },
+        {
+          "index": 128,
+          "seconds": 133.633,
+          "name": "Reopen preserves chosen body",
+          "actual": "Keep this. Pass me an eraser",
+          "expected": "Keep this. Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-9.1"
+          ]
+        },
+        {
+          "index": 129,
+          "seconds": 133.636,
+          "name": "Reopen preserves full choice, ghost and Overflow state",
+          "actual": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "expected": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-5.3",
+            "R-6.5",
+            "R-9.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        133.62,
+        133.636
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Full created choice/ghost/Overflow API roundtrip; OS save/open and later-session test missing."
+    },
+    {
+      "id": "R-2.6",
+      "requirement": "Grammar fix-ups on swap.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 4,
+          "seconds": 7.921,
+          "name": "First keystroke updates body and article",
+          "actual": "Pass me an e",
+          "expected": "Pass me an e",
+          "status": "PASS",
+          "requirements": [
+            "R-2.2",
+            "R-4.3",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 5,
+          "seconds": 10.232,
+          "name": "Completed candidate before Enter",
+          "actual": "Pass me an eraser",
+          "expected": "Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-4.3",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 6,
+          "seconds": 12.851,
+          "name": "Article reverses to a",
+          "actual": "Pass me a thumbtack",
+          "expected": "Pass me a thumbtack",
+          "status": "PASS",
+          "requirements": [
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 13,
+          "seconds": 13.917,
+          "name": "Panel Down cycles in context",
+          "actual": "Pass me an eraser",
+          "expected": "Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-4.5",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 14,
+          "seconds": 13.922,
+          "name": "Panel Up restores original",
+          "actual": "Pass me a paperclip",
+          "expected": "Pass me a paperclip",
+          "status": "PASS",
+          "requirements": [
+            "R-4.5",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 118,
+          "seconds": 124.088,
+          "name": "Combined fixture choice is actual typed output",
+          "actual": "Keep this. Pass me an eraser",
+          "expected": "Keep this. Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-2.2",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 122,
+          "seconds": 128.33,
+          "name": "Swap within ghost restores original wording",
+          "actual": "Keep this. Pass me a paperclip",
+          "expected": "Keep this. Pass me a paperclip",
+          "status": "PASS",
+          "requirements": [
+            "R-5.3",
+            "R-2.6"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        7.921,
+        128.33
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Reversible paperclip/eraser/thumbtack body; wider vowel-sound and untouched-outside-article cases missing."
+    },
+    {
+      "id": "R-2.7",
+      "requirement": "Emptying removes the indicator.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 41,
+          "seconds": 38.184,
+          "name": "Undo removes generated span",
+          "actual": 0,
+          "expected": 0,
+          "status": "PASS",
+          "requirements": [
+            "R-4.6",
+            "R-2.7"
+          ]
+        },
+        {
+          "index": 43,
+          "seconds": 38.189,
+          "name": "Undo removes the authored inline indicator row",
+          "actual": 0,
+          "expected": 0,
+          "status": "PASS",
+          "requirements": [
+            "R-4.6",
+            "R-2.7"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        38.184,
+        38.189
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Authored generated span/model/group/indicator ID removed by Undo; role-derived KG indicator remains. Manual deleting every non-original alternative and independent ghost preservation are still missing."
+    },
+    {
+      "id": "R-3.1",
+      "requirement": "Underline.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 19,
+          "seconds": 18.654,
+          "name": "Word underline rendered at one pixel",
+          "actual": [
+            "underline",
+            "1px"
+          ],
+          "expected": [
+            "underline",
+            "1px"
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.1"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        18.654,
+        18.654
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Actual word underline1px; full span width/baseline/color/no-hover-change audit missing."
+    },
+    {
+      "id": "R-3.2",
+      "requirement": "Dot row (word/sentence/headline).",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 17,
+          "seconds": 18.654,
+          "name": "Word has one visible dot per alternative",
+          "actual": 3,
+          "expected": 3,
+          "status": "PASS",
+          "requirements": [
+            "R-3.2"
+          ]
+        },
+        {
+          "index": 20,
+          "seconds": 18.654,
+          "name": "Dot row has rendered visible dots",
+          "actual": [
+            true,
+            true
+          ],
+          "expected": [
+            true,
+            true
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.2"
+          ]
+        },
+        {
+          "index": 21,
+          "seconds": 18.654,
+          "name": "Word dots are centred within two pixels",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-3.2"
+          ]
+        },
+        {
+          "index": 27,
+          "seconds": 22.41,
+          "name": "sentence indicators visible with exactly two choices and one active",
+          "actual": [
+            true,
+            2,
+            1
+          ],
+          "expected": [
+            true,
+            2,
+            1
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.2",
+            "R-3.3"
+          ]
+        },
+        {
+          "index": 28,
+          "seconds": 22.41,
+          "name": "sentence dots have visible rendered area",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-3.2"
+          ]
+        },
+        {
+          "index": 29,
+          "seconds": 22.41,
+          "name": "Sentence dots end at underline within two pixels",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-3.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        18.654,
+        22.41
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Word centering, sentence-right geometry and counts; dot diameter/spacing, multiline and headline geometry missing."
+    },
+    {
+      "id": "R-3.3",
+      "requirement": "Active-dot highlight.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 18,
+          "seconds": 18.654,
+          "name": "Exactly the chosen dot is bright",
+          "actual": [
+            1
+          ],
+          "expected": [
+            1
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.3"
+          ]
+        },
+        {
+          "index": 22,
+          "seconds": 18.654,
+          "name": "Active dot uses full lavender and dim dots differ",
+          "actual": [
+            "rgb(140, 134, 230)",
+            true,
+            true
+          ],
+          "expected": [
+            "rgb(140, 134, 230)",
+            true,
+            true
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.3"
+          ]
+        },
+        {
+          "index": 27,
+          "seconds": 22.41,
+          "name": "sentence indicators visible with exactly two choices and one active",
+          "actual": [
+            true,
+            2,
+            1
+          ],
+          "expected": [
+            true,
+            2,
+            1
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.2",
+            "R-3.3"
+          ]
+        },
+        {
+          "index": 33,
+          "seconds": 29.939,
+          "name": "paragraph indicators visible with exactly two choices and one active",
+          "actual": [
+            true,
+            2,
+            1
+          ],
+          "expected": [
+            true,
+            2,
+            1
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.4",
+            "R-3.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        18.654,
+        29.939
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Active1 full lavender, inactive alpha0.4, one active; wider transition/theme/pixel review missing."
+    },
+    {
+      "id": "R-3.4",
+      "requirement": "Paragraph indicator.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 33,
+          "seconds": 29.939,
+          "name": "paragraph indicators visible with exactly two choices and one active",
+          "actual": [
+            true,
+            2,
+            1
+          ],
+          "expected": [
+            true,
+            2,
+            1
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.4",
+            "R-3.3"
+          ]
+        },
+        {
+          "index": 34,
+          "seconds": 29.939,
+          "name": "paragraph dots have visible rendered area",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-3.4"
+          ]
+        },
+        {
+          "index": 35,
+          "seconds": 29.939,
+          "name": "Paragraph gutter rule replaces underline",
+          "actual": [
+            true,
+            "none"
+          ],
+          "expected": [
+            true,
+            "none"
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.4"
+          ]
+        },
+        {
+          "index": 36,
+          "seconds": 29.939,
+          "name": "Paragraph one-pixel gutter spans text height with dots on its left",
+          "actual": [
+            1,
+            true,
+            true,
+            true
+          ],
+          "expected": [
+            1,
+            true,
+            true,
+            true
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-3.4"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        29.939,
+        29.939
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Rule1px\u00d722px,20px gutter, left dots/no underline; multiline/scroll/zoom cases missing."
+    },
+    {
+      "id": "R-3.5",
+      "requirement": "Headline rendering.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 2,
+          "seconds": 2.421,
+          "name": "Headline rendered",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-3.5"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        2.421,
+        2.421
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Bold headline exists, but filmed Markdown # marker remains visible. Headline alternative creation/cycling, sentence-style indicators and exact source typography/colour/size are not proved.",
+      "sampledHeadingStateQualification": "Visible editable Markdown marker in caret-on-heading sample does not establish a global rendering defect; away-from-caret hiding not audited."
+    },
+    {
+      "id": "R-3.6",
+      "requirement": "Hover target.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 16,
+          "seconds": 18.652,
+          "name": "Hover over word plus Down cycles actual body",
+          "actual": "Pass me an eraser",
+          "expected": "Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-2.4",
+            "R-3.6"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        18.652,
+        18.652
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Real span hover triggers cycle; passive dots/direct-jump inferred behavior not checked."
+    },
+    {
+      "id": "R-4.1",
+      "requirement": "Placement and toggle.",
+      "status": "NOT DEMONSTRATED by output assertions; full requirement not accepted",
+      "accepted": false,
+      "checks": [],
+      "storyboardSeconds": [],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "NOT DEMONSTRATED: full-height18% clamp, shortcut/icon toggle and main-text dimming."
+    },
+    {
+      "id": "R-4.2",
+      "requirement": "Tabs.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 25,
+          "seconds": 22.407,
+          "name": "Created sentence replacement",
+          "actual": "A different sentence.",
+          "expected": "A different sentence.",
+          "status": "PASS",
+          "requirements": [
+            "R-2.3",
+            "R-4.2"
+          ]
+        },
+        {
+          "index": 31,
+          "seconds": 29.934,
+          "name": "Created paragraph replacement",
+          "actual": "A different paragraph. Two sentences.",
+          "expected": "A different paragraph. Two sentences.",
+          "status": "PASS",
+          "requirements": [
+            "R-2.3",
+            "R-4.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        22.407,
+        29.934
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Real tabs select sentence/paragraph kind; all labels/fonts/colors/population behavior missing."
+    },
+    {
+      "id": "R-4.3",
+      "requirement": "Alternative list.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 4,
+          "seconds": 7.921,
+          "name": "First keystroke updates body and article",
+          "actual": "Pass me an e",
+          "expected": "Pass me an e",
+          "status": "PASS",
+          "requirements": [
+            "R-2.2",
+            "R-4.3",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 5,
+          "seconds": 10.232,
+          "name": "Completed candidate before Enter",
+          "actual": "Pass me an eraser",
+          "expected": "Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-4.3",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 7,
+          "seconds": 12.853,
+          "name": "Original-first ordered created alternatives",
+          "actual": [
+            "paperclip",
+            "eraser",
+            "thumbtack"
+          ],
+          "expected": [
+            "paperclip",
+            "eraser",
+            "thumbtack"
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-2.2",
+            "R-4.3"
+          ]
+        },
+        {
+          "index": 15,
+          "seconds": 14.558,
+          "name": "Escape cancels new candidate",
+          "actual": "Pass me a paperclip",
+          "expected": "Pass me a paperclip",
+          "status": "PASS",
+          "requirements": [
+            "R-4.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        7.921,
+        14.558
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Typed first keystroke/Enter/ordered list/Escape; edit-existing-line and full list styling missing."
+    },
+    {
+      "id": "R-4.4",
+      "requirement": "Provenance marker.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 38,
+          "seconds": 37.159,
+          "name": "Generated local alternatives",
+          "actual": [
+            "rubber",
+            "eraser"
+          ],
+          "expected": [
+            "rubber",
+            "eraser"
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.6",
+            "R-8.7",
+            "R-4.4"
+          ]
+        },
+        {
+          "index": 39,
+          "seconds": 37.162,
+          "name": "Generated AI provenance",
+          "actual": "ai",
+          "expected": "ai",
+          "status": "PASS",
+          "requirements": [
+            "R-4.4",
+            "R-8.6"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        37.159,
+        37.162
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Actual generated source=`ai`; rendered robot/human glyphs and active text/glyph styling missing."
+    },
+    {
+      "id": "R-4.5",
+      "requirement": "Keyboard navigation.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 13,
+          "seconds": 13.917,
+          "name": "Panel Down cycles in context",
+          "actual": "Pass me an eraser",
+          "expected": "Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-4.5",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 14,
+          "seconds": 13.922,
+          "name": "Panel Up restores original",
+          "actual": "Pass me a paperclip",
+          "expected": "Pass me a paperclip",
+          "status": "PASS",
+          "requirements": [
+            "R-4.5",
+            "R-2.6"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        13.917,
+        13.922
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Panel Up/Down exact word output; edge/wrap/multigranularity missing."
+    },
+    {
+      "id": "R-4.6",
+      "requirement": "Undo.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 40,
+          "seconds": 37.176,
+          "name": "Undo restores literal body",
+          "actual": "\ud83e\udd80 Caf\u00e9 e\u0301 \u2014 a synthetic draft uses rubber",
+          "expected": "\ud83e\udd80 Caf\u00e9 e\u0301 \u2014 a synthetic draft uses rubber",
+          "status": "PASS",
+          "requirements": [
+            "R-4.6"
+          ]
+        },
+        {
+          "index": 41,
+          "seconds": 38.184,
+          "name": "Undo removes generated span",
+          "actual": 0,
+          "expected": 0,
+          "status": "PASS",
+          "requirements": [
+            "R-4.6",
+            "R-2.7"
+          ]
+        },
+        {
+          "index": 43,
+          "seconds": 38.189,
+          "name": "Undo removes the authored inline indicator row",
+          "actual": 0,
+          "expected": 0,
+          "status": "PASS",
+          "requirements": [
+            "R-4.6",
+            "R-2.7"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        37.176,
+        38.189
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Undo restores literal body and removes generated authored span/its indicator ID; derived role indicator is intentionally retained. Bot-line DOM disappearance and complete accepted-input/native host history lifecycle remain missing."
+    },
+    {
+      "id": "R-5.1",
+      "requirement": "Ghost.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 46,
+          "seconds": 43.66,
+          "name": "Ghost does not delete text",
+          "actual": "Keep this. Ghost these words.",
+          "expected": "Keep this. Ghost these words.",
+          "status": "PASS",
+          "requirements": [
+            "R-5.1"
+          ]
+        },
+        {
+          "index": 47,
+          "seconds": 43.668,
+          "name": "New ghost created",
+          "actual": 1,
+          "expected": 1,
+          "status": "PASS",
+          "requirements": [
+            "R-5.1"
+          ]
+        },
+        {
+          "index": 48,
+          "seconds": 43.672,
+          "name": "Ghost words remain counted",
+          "actual": 5,
+          "expected": 5,
+          "status": "PASS",
+          "requirements": [
+            "R-5.1"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        43.66,
+        43.672
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Real ghost preserves text/counts, actual color alpha0.1; right-click Ghost item/selectability still incomplete."
+    },
+    {
+      "id": "R-5.2",
+      "requirement": "Revive.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 49,
+          "seconds": 43.679,
+          "name": "Revive removes ghost",
+          "actual": 0,
+          "expected": 0,
+          "status": "PASS",
+          "requirements": [
+            "R-5.2"
+          ]
+        },
+        {
+          "index": 135,
+          "seconds": 142.852,
+          "name": "Selection menu offers Revive",
+          "actual": "Revive",
+          "expected": "Revive",
+          "status": "PASS",
+          "requirements": [
+            "R-5.2",
+            "R-7.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        43.679,
+        142.852
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Revive removes ghost and menu shows Revive; actual opacity restoration/right-click sequence not fully checked."
+    },
+    {
+      "id": "R-5.3",
+      "requirement": "Ghosting is an independent layer, persisted with the document",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 110,
+          "seconds": 116.111,
+          "name": "Done persists exact outermost preview ranges",
+          "actual": [
+            [
+              152,
+              179
+            ],
+            [
+              323,
+              331
+            ],
+            [
+              371,
+              378
+            ],
+            [
+              378,
+              383
+            ],
+            [
+              383,
+              389
+            ],
+            [
+              441,
+              450
+            ],
+            [
+              701,
+              709
+            ],
+            [
+              862,
+              868
+            ]
+          ],
+          "expected": [
+            [
+              152,
+              179
+            ],
+            [
+              323,
+              331
+            ],
+            [
+              371,
+              378
+            ],
+            [
+              378,
+              383
+            ],
+            [
+              383,
+              389
+            ],
+            [
+              441,
+              450
+            ],
+            [
+              701,
+              709
+            ],
+            [
+              862,
+              868
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.5",
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 112,
+          "seconds": 117.126,
+          "name": "Reopened saved body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-9.1",
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 113,
+          "seconds": 117.129,
+          "name": "Reopened newly created annotations",
+          "actual": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": ", and which, as you know, ",
+                  "before": " them before lunch.\n\nThe plan",
+                  "end": 179,
+                  "start": 152,
+                  "text": ", which we drafted in March"
+                },
+                "id": "g1"
+              },
+              {
+                "anchor": {
+                  "after": "the stuff we got is kinda ",
+                  "before": " all moved, is now final.\n\n",
+                  "end": 331,
+                  "start": 323,
+                  "text": "I think "
+                },
+                "id": "g2"
+              },
+              {
+                "anchor": {
+                  "after": " just a bit too much for one ",
+                  "before": " we got is kinda awesome. It is",
+                  "end": 378,
+                  "start": 371,
+                  "text": " really"
+                },
+                "id": "g3"
+              },
+              {
+                "anchor": {
+                  "after": " a bit too much for one small ",
+                  "before": " is kinda awesome. It is really",
+                  "end": 383,
+                  "start": 378,
+                  "text": " just"
+                },
+                "id": "g4"
+              },
+              {
+                "anchor": {
+                  "after": " too much for one small team to ",
+                  "before": "kinda awesome. It is really just",
+                  "end": 389,
+                  "start": 383,
+                  "text": " a bit"
+                },
+                "id": "g5"
+              },
+              {
+                "anchor": {
+                  "after": " met on Tuesday and it seems to ",
+                  "before": " team to read.\n\nThe committee",
+                  "end": 450,
+                  "start": 441,
+                  "text": " probably"
+                },
+                "id": "g6"
+              },
+              {
+                "anchor": {
+                  "after": "the weather will change soon ",
+                  "before": " water every day in summer. ",
+                  "end": 709,
+                  "start": 701,
+                  "text": "Perhaps "
+                },
+                "id": "g7"
+              },
+              {
+                "anchor": {
+                  "after": " simple to read.\n",
+                  "before": "\n```\n\n- A list item that is",
+                  "end": 868,
+                  "start": 862,
+                  "text": " quite"
+                },
+                "id": "g8"
+              }
+            ],
+            "kg": [],
+            "overflow": "",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [],
+            "synonymGroups": []
+          },
+          "expected": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": ", and which, as you know, ",
+                  "before": " them before lunch.\n\nThe plan",
+                  "end": 179,
+                  "start": 152,
+                  "text": ", which we drafted in March"
+                },
+                "id": "g1"
+              },
+              {
+                "anchor": {
+                  "after": "the stuff we got is kinda ",
+                  "before": " all moved, is now final.\n\n",
+                  "end": 331,
+                  "start": 323,
+                  "text": "I think "
+                },
+                "id": "g2"
+              },
+              {
+                "anchor": {
+                  "after": " just a bit too much for one ",
+                  "before": " we got is kinda awesome. It is",
+                  "end": 378,
+                  "start": 371,
+                  "text": " really"
+                },
+                "id": "g3"
+              },
+              {
+                "anchor": {
+                  "after": " a bit too much for one small ",
+                  "before": " is kinda awesome. It is really",
+                  "end": 383,
+                  "start": 378,
+                  "text": " just"
+                },
+                "id": "g4"
+              },
+              {
+                "anchor": {
+                  "after": " too much for one small team to ",
+                  "before": "kinda awesome. It is really just",
+                  "end": 389,
+                  "start": 383,
+                  "text": " a bit"
+                },
+                "id": "g5"
+              },
+              {
+                "anchor": {
+                  "after": " met on Tuesday and it seems to ",
+                  "before": " team to read.\n\nThe committee",
+                  "end": 450,
+                  "start": 441,
+                  "text": " probably"
+                },
+                "id": "g6"
+              },
+              {
+                "anchor": {
+                  "after": "the weather will change soon ",
+                  "before": " water every day in summer. ",
+                  "end": 709,
+                  "start": 701,
+                  "text": "Perhaps "
+                },
+                "id": "g7"
+              },
+              {
+                "anchor": {
+                  "after": " simple to read.\n",
+                  "before": "\n```\n\n- A list item that is",
+                  "end": 868,
+                  "start": 862,
+                  "text": " quite"
+                },
+                "id": "g8"
+              }
+            ],
+            "kg": [],
+            "overflow": "",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [],
+            "synonymGroups": []
+          },
+          "status": "PASS",
+          "requirements": [
+            "R-9.1",
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 120,
+          "seconds": 126.203,
+          "name": "Ghost covers the sentence containing the alternative",
+          "actual": [
+            [
+              11,
+              28
+            ]
+          ],
+          "expected": [
+            [
+              11,
+              28
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 122,
+          "seconds": 128.33,
+          "name": "Swap within ghost restores original wording",
+          "actual": "Keep this. Pass me a paperclip",
+          "expected": "Keep this. Pass me a paperclip",
+          "status": "PASS",
+          "requirements": [
+            "R-5.3",
+            "R-2.6"
+          ]
+        },
+        {
+          "index": 123,
+          "seconds": 128.334,
+          "name": "Ghost expands with longer original",
+          "actual": [
+            [
+              11,
+              30
+            ]
+          ],
+          "expected": [
+            [
+              11,
+              30
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 124,
+          "seconds": 130.354,
+          "name": "Swap within ghost restores active choice",
+          "actual": "Keep this. Pass me an eraser",
+          "expected": "Keep this. Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 125,
+          "seconds": 130.359,
+          "name": "Ghost contracts with shorter choice",
+          "actual": [
+            [
+              11,
+              28
+            ]
+          ],
+          "expected": [
+            [
+              11,
+              28
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 129,
+          "seconds": 133.636,
+          "name": "Reopen preserves full choice, ghost and Overflow state",
+          "actual": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "expected": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-5.3",
+            "R-6.5",
+            "R-9.2"
+          ]
+        },
+        {
+          "index": 134,
+          "seconds": 140.768,
+          "name": "Overlapping coverage merges into one whole-body ghost",
+          "actual": [
+            [
+              0,
+              28
+            ]
+          ],
+          "expected": [
+            [
+              0,
+              28
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 136,
+          "seconds": 144.89,
+          "name": "Reviving interior text splits the ghost",
+          "actual": [
+            [
+              0,
+              11
+            ],
+            [
+              18,
+              28
+            ]
+          ],
+          "expected": [
+            [
+              0,
+              11
+            ],
+            [
+              18,
+              28
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 138,
+          "seconds": 146.942,
+          "name": "Deleting the entire body removes its text",
+          "actual": "",
+          "expected": "",
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 139,
+          "seconds": 146.951,
+          "name": "Deleting all ghost text removes ghost ranges",
+          "actual": [],
+          "expected": [],
+          "status": "PASS",
+          "requirements": [
+            "R-5.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        116.111,
+        146.951
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Swap-driven resize, combined save/reopen, overlap merge, interior split and full deletion observed; adjacent merge, partial alternative overlap and ordinary interior typing missing."
+    },
+    {
+      "id": "R-6.1",
+      "requirement": "Placement and toggle.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 52,
+          "seconds": 50.048,
+          "name": "Stash destination",
+          "actual": "gamma.",
+          "expected": "gamma.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3",
+            "R-6.1"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        50.048,
+        50.048
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Overflow used;18%/clamp/full-height/right edge/title fonts/XYZ highlight/fixed corner glyphs not checked."
+    },
+    {
+      "id": "R-6.2",
+      "requirement": "Content.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 55,
+          "seconds": 53.871,
+          "name": "Ctrl+Enter pulls paragraph into body",
+          "actual": "Alpha beta gamma.\n\nPublic note",
+          "expected": "Alpha beta gamma.\n\nPublic note",
+          "status": "PASS",
+          "requirements": [
+            "R-6.2",
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 126,
+          "seconds": 133.62,
+          "name": "Typed Overflow reaches document model",
+          "actual": "A saved public note.",
+          "expected": "A saved public note.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.2",
+            "R-6.5"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        53.871,
+        133.62
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Exact typed note reaches model; font and notes/URLs/outlines variety missing."
+    },
+    {
+      "id": "R-6.3",
+      "requirement": "Stash.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 51,
+          "seconds": 50.047,
+          "name": "Stash source removal",
+          "actual": "Alpha beta ",
+          "expected": "Alpha beta ",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        },
+        {
+          "index": 52,
+          "seconds": 50.048,
+          "name": "Stash destination",
+          "actual": "gamma.",
+          "expected": "gamma.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3",
+            "R-6.1"
+          ]
+        },
+        {
+          "index": 53,
+          "seconds": 50.077,
+          "name": "Undo restores literal body",
+          "actual": "Alpha beta gamma.",
+          "expected": "Alpha beta gamma.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        },
+        {
+          "index": 54,
+          "seconds": 51.085,
+          "name": "Stash undo clears appended Overflow",
+          "actual": "",
+          "expected": "",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        },
+        {
+          "index": 69,
+          "seconds": 67.329,
+          "name": "Native stash drag has trusted source and destination",
+          "actual": [
+            [
+              "dragstart",
+              true,
+              "surface"
+            ],
+            [
+              "drop",
+              true,
+              "overflow"
+            ]
+          ],
+          "expected": [
+            [
+              "dragstart",
+              true,
+              "surface"
+            ],
+            [
+              "drop",
+              true,
+              "overflow"
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-6.3",
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 70,
+          "seconds": 67.33,
+          "name": "Native stash removes exact source paragraph",
+          "actual": "First paragraph.\n\nSecond paragraph.\n\n",
+          "expected": "First paragraph.\n\nSecond paragraph.\n\n",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        },
+        {
+          "index": 71,
+          "seconds": 67.331,
+          "name": "Native stash appends exact text after blank line",
+          "actual": "Existing note.\n\nThird paragraph.",
+          "expected": "Existing note.\n\nThird paragraph.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        },
+        {
+          "index": 72,
+          "seconds": 67.358,
+          "name": "Undo restores literal body",
+          "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+          "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        },
+        {
+          "index": 73,
+          "seconds": 68.363,
+          "name": "Native stash undo restores Overflow",
+          "actual": "Existing note.",
+          "expected": "Existing note.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        },
+        {
+          "index": 74,
+          "seconds": 68.368,
+          "name": "Native stash redo removes source again",
+          "actual": "First paragraph.\n\nSecond paragraph.\n\n",
+          "expected": "First paragraph.\n\nSecond paragraph.\n\n",
+          "status": "PASS",
+          "requirements": [
+            "R-6.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        50.047,
+        68.368
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof.",
+        "67.5s actual held stash output: source absent and appended Overflow text visible."
+      ],
+      "remainingCriteria": "Shortcut stash and trusted surface\u2192Overflow drop exact body/append/undo/redo; right-click Stash item missing."
+    },
+    {
+      "id": "R-6.4",
+      "requirement": "Pull back.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 55,
+          "seconds": 53.871,
+          "name": "Ctrl+Enter pulls paragraph into body",
+          "actual": "Alpha beta gamma.\n\nPublic note",
+          "expected": "Alpha beta gamma.\n\nPublic note",
+          "status": "PASS",
+          "requirements": [
+            "R-6.2",
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 56,
+          "seconds": 53.874,
+          "name": "Pull-back preserves Overflow copy",
+          "actual": "Public note",
+          "expected": "Public note",
+          "status": "PASS",
+          "requirements": [
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 60,
+          "seconds": 59.998,
+          "name": "Native pull drag has one trusted source and destination",
+          "actual": [
+            [
+              "dragstart",
+              true,
+              "overflow"
+            ],
+            [
+              "drop",
+              true,
+              "surface"
+            ]
+          ],
+          "expected": [
+            [
+              "dragstart",
+              true,
+              "overflow"
+            ],
+            [
+              "drop",
+              true,
+              "surface"
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 61,
+          "seconds": 59.998,
+          "name": "Native pull drop carries exact selected text",
+          "actual": "Public note.",
+          "expected": "Public note.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 62,
+          "seconds": 60.0,
+          "name": "Native pull inserts independently separated text",
+          "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+          "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 63,
+          "seconds": 60.001,
+          "name": "Native pull keeps Overflow copy",
+          "actual": "Public note.",
+          "expected": "Public note.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 64,
+          "seconds": 60.04,
+          "name": "Undo restores literal body",
+          "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+          "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 65,
+          "seconds": 61.046,
+          "name": "Native pull redo restores exact body",
+          "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+          "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.4"
+          ]
+        },
+        {
+          "index": 69,
+          "seconds": 67.329,
+          "name": "Native stash drag has trusted source and destination",
+          "actual": [
+            [
+              "dragstart",
+              true,
+              "surface"
+            ],
+            [
+              "drop",
+              true,
+              "overflow"
+            ]
+          ],
+          "expected": [
+            [
+              "dragstart",
+              true,
+              "surface"
+            ],
+            [
+              "drop",
+              true,
+              "overflow"
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-6.3",
+            "R-6.4"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        53.871,
+        67.329
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof.",
+        "60.2s actual held pull-back output, exact body visible; retained Overflow copy."
+      ],
+      "remainingCriteria": "Chrome/Firefox Ctrl+Enter and trusted Overflow\u2192surface copy exact output/undo/redo; Safari take5 trusted-drop FAIL and take6 handoff unexecuted; hint, ordinary copy/paste and all caret boundaries missing."
+    },
+    {
+      "id": "R-6.5",
+      "requirement": "Persistence.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 126,
+          "seconds": 133.62,
+          "name": "Typed Overflow reaches document model",
+          "actual": "A saved public note.",
+          "expected": "A saved public note.",
+          "status": "PASS",
+          "requirements": [
+            "R-6.2",
+            "R-6.5"
+          ]
+        },
+        {
+          "index": 129,
+          "seconds": 133.636,
+          "name": "Reopen preserves full choice, ghost and Overflow state",
+          "actual": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "expected": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-5.3",
+            "R-6.5",
+            "R-9.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        133.62,
+        133.636
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Typed Overflow exact API save/reopen; OS and later-session persistence missing."
+    },
+    {
+      "id": "R-7.1",
+      "requirement": "Layout.",
+      "status": "NOT DEMONSTRATED by output assertions; full requirement not accepted",
+      "accepted": false,
+      "checks": [],
+      "storyboardSeconds": [],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "NOT DEMONSTRATED: full-bleed,70-char centered column/top margin and toolbar absence."
+    },
+    {
+      "id": "R-7.2",
+      "requirement": "Corner controls (Write_On mode on)",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 1,
+          "seconds": 2.42,
+          "name": "Write_On via counter",
+          "actual": "write-on",
+          "expected": "write-on",
+          "status": "PASS",
+          "requirements": [
+            "R-2.1",
+            "R-7.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        2.42,
+        2.42
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Counter used; all corner positions/icons/tooltips/reference and intentionally blocked posts not audited."
+    },
+    {
+      "id": "R-7.3",
+      "requirement": "Context menu on selection",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 135,
+          "seconds": 142.852,
+          "name": "Selection menu offers Revive",
+          "actual": "Revive",
+          "expected": "Revive",
+          "status": "PASS",
+          "requirements": [
+            "R-5.2",
+            "R-7.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        142.852,
+        142.852
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Actual selection menu Revive item exercised; all four items, shortcuts, rounded/colors/hover styling missing."
+    },
+    {
+      "id": "R-7.4",
+      "requirement": "Existing shortcuts",
+      "status": "NOT DEMONSTRATED by output assertions; full requirement not accepted",
+      "accepted": false,
+      "checks": [],
+      "storyboardSeconds": [],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "NOT DEMONSTRATED: existing bold/italic/code/link/heading collision regression."
+    },
+    {
+      "id": "R-8.1",
+      "requirement": "Lab popover.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 75,
+          "seconds": 73.956,
+          "name": "typos_and_punctuation never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 78,
+          "seconds": 77.005,
+          "name": "weakest_sentences never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 81,
+          "seconds": 80.059,
+          "name": "long_sentences never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 84,
+          "seconds": 83.104,
+          "name": "convoluted_sentences never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 87,
+          "seconds": 86.143,
+          "name": "off_tone never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 90,
+          "seconds": 89.177,
+          "name": "hedges_and_filler never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        73.956,
+        89.177
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Lab opens and all actions are invoked. Filmed popover has added protection explanation, result/count and Clear marks content compared with source frame300; exact source layout/anchoring/style is not accepted."
+    },
+    {
+      "id": "R-8.2",
+      "requirement": "Mark actions",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 75,
+          "seconds": 73.956,
+          "name": "typos_and_punctuation never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 76,
+          "seconds": 73.958,
+          "name": "typos_and_punctuation produces marks",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 78,
+          "seconds": 77.005,
+          "name": "weakest_sentences never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 79,
+          "seconds": 77.006,
+          "name": "weakest_sentences produces marks",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 81,
+          "seconds": 80.059,
+          "name": "long_sentences never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 82,
+          "seconds": 80.063,
+          "name": "long_sentences produces marks",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 84,
+          "seconds": 83.104,
+          "name": "convoluted_sentences never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 85,
+          "seconds": 83.106,
+          "name": "convoluted_sentences produces marks",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 87,
+          "seconds": 86.143,
+          "name": "off_tone never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 88,
+          "seconds": 86.146,
+          "name": "off_tone produces marks",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 90,
+          "seconds": 89.177,
+          "name": "hedges_and_filler never rewrites body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.1",
+            "R-8.2"
+          ]
+        },
+        {
+          "index": 91,
+          "seconds": 89.179,
+          "name": "hedges_and_filler produces marks",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        73.956,
+        89.179
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "All six actions return ranges whose UTF-16 slices match recorded text and leave body unchanged. Typos/punctuation and lexical hedges have plausible finite examples; weakest-sentence ranking, tone suitability, precision/recall and independent positive/negative semantic oracles remain unaccepted.",
+      "supplementalLiteralQualification": {
+        "report": "/Users/alex/projects/terraphim/terraphim-editor/docs/verification/refreshed-demos-20261011/firefox-literal-lab-final-20261011.json",
+        "reportSha256": "65a8b0340388a3964eeecc8cf9cf465189d315e3adf0a97cb84642ec9b4e167e",
+        "runnerSha256": "53b24e641a6d58ce03ba1a14fe9d7f919e8dd8789d82b0062f31ccf1083d6fba",
+        "manifestSha256": "b4287a48bae6211fce7c7fe350c96b6722b694f18f3f548d3329029f87dcce42",
+        "actualCases": 12,
+        "positiveCases": 6,
+        "negativeCases": 6,
+        "allLiteralOutputsMatch": true,
+        "recordedInThisVideo": false,
+        "limitations": [
+          "weakest negative is structural single-sentence exclusion",
+          "punctuation suggestions not separately qualified",
+          "no general semantic quality or precision/recall acceptance"
+        ]
+      }
+    },
+    {
+      "id": "R-8.3",
+      "requirement": "Trim levels.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 93,
+          "seconds": 92.245,
+          "name": "Trim preview preserves exact body: original",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 94,
+          "seconds": 94.295,
+          "name": "Trim preview preserves exact body: slight",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 96,
+          "seconds": 96.587,
+          "name": "Trim preview preserves exact body: tighten",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 98,
+          "seconds": 98.887,
+          "name": "Trim preview preserves exact body: sharper",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 100,
+          "seconds": 101.193,
+          "name": "Trim preview preserves exact body: half",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        92.245,
+        101.193
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Five levels clicked, body preserved; exact labels/borders/selected styling missing."
+    },
+    {
+      "id": "R-8.4",
+      "requirement": "Trim behaviour.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 93,
+          "seconds": 92.245,
+          "name": "Trim preview preserves exact body: original",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 94,
+          "seconds": 94.295,
+          "name": "Trim preview preserves exact body: slight",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 95,
+          "seconds": 94.299,
+          "name": "slight card counts",
+          "actual": [
+            160,
+            146
+          ],
+          "expected": [
+            160,
+            146
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 96,
+          "seconds": 96.587,
+          "name": "Trim preview preserves exact body: tighten",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 97,
+          "seconds": 96.591,
+          "name": "tighten card counts",
+          "actual": [
+            160,
+            130
+          ],
+          "expected": [
+            160,
+            130
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 98,
+          "seconds": 98.887,
+          "name": "Trim preview preserves exact body: sharper",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 99,
+          "seconds": 98.89,
+          "name": "sharper card counts",
+          "actual": [
+            160,
+            113
+          ],
+          "expected": [
+            160,
+            113
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 100,
+          "seconds": 101.193,
+          "name": "Trim preview preserves exact body: half",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.3",
+            "R-8.4"
+          ]
+        },
+        {
+          "index": 101,
+          "seconds": 101.198,
+          "name": "half card counts",
+          "actual": [
+            160,
+            82
+          ],
+          "expected": [
+            160,
+            82
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.4"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        92.245,
+        101.198
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Independent counts160\u2192146/130/113/82 with9/19/29/49% cards and unchanged body; ghost rendering/card layout/text/buttons still need full visual audit."
+    },
+    {
+      "id": "R-8.5",
+      "requirement": "Review.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 102,
+          "seconds": 105.529,
+          "name": "Walk through visibly highlights the exact proposed cut",
+          "actual": ", which we drafted in March",
+          "expected": ", which we drafted in March",
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 103,
+          "seconds": 105.529,
+          "name": "Walk through renders a current-cut marker",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 104,
+          "seconds": 107.584,
+          "name": "Keep records the selected cut",
+          "actual": [
+            2
+          ],
+          "expected": [
+            2
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 105,
+          "seconds": 107.586,
+          "name": "Keep retains original body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 106,
+          "seconds": 109.691,
+          "name": "Make cuts changes body",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 107,
+          "seconds": 109.691,
+          "name": "Make cuts produces independently counted remainder",
+          "actual": 151,
+          "expected": 151,
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 108,
+          "seconds": 109.735,
+          "name": "Undo restores literal body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 109,
+          "seconds": 116.107,
+          "name": "Done keeps literal text",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-8.5"
+          ]
+        },
+        {
+          "index": 110,
+          "seconds": 116.111,
+          "name": "Done persists exact outermost preview ranges",
+          "actual": [
+            [
+              152,
+              179
+            ],
+            [
+              323,
+              331
+            ],
+            [
+              371,
+              378
+            ],
+            [
+              378,
+              383
+            ],
+            [
+              383,
+              389
+            ],
+            [
+              441,
+              450
+            ],
+            [
+              701,
+              709
+            ],
+            [
+              862,
+              868
+            ]
+          ],
+          "expected": [
+            [
+              152,
+              179
+            ],
+            [
+              323,
+              331
+            ],
+            [
+              371,
+              378
+            ],
+            [
+              378,
+              383
+            ],
+            [
+              383,
+              389
+            ],
+            [
+              441,
+              450
+            ],
+            [
+              701,
+              709
+            ],
+            [
+              862,
+              868
+            ]
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.5",
+            "R-5.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        105.529,
+        116.111
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Initial Walk marker, Keep id, changed/count-checked cuts, literal-body-preserving Done/exact promoted ghosts; Next/Previous lifecycle, faded-span click keep and literal every-character tidy oracle missing."
+    },
+    {
+      "id": "R-8.6",
+      "requirement": "AI alternatives.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 38,
+          "seconds": 37.159,
+          "name": "Generated local alternatives",
+          "actual": [
+            "rubber",
+            "eraser"
+          ],
+          "expected": [
+            "rubber",
+            "eraser"
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.6",
+            "R-8.7",
+            "R-4.4"
+          ]
+        },
+        {
+          "index": 39,
+          "seconds": 37.162,
+          "name": "Generated AI provenance",
+          "actual": "ai",
+          "expected": "ai",
+          "status": "PASS",
+          "requirements": [
+            "R-4.4",
+            "R-8.6"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        37.159,
+        37.162
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Real local generation appends exact ordered list with source=ai; rendered bot glyph and wider selection cases missing."
+    },
+    {
+      "id": "R-8.7",
+      "requirement": "Provider abstraction.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 38,
+          "seconds": 37.159,
+          "name": "Generated local alternatives",
+          "actual": [
+            "rubber",
+            "eraser"
+          ],
+          "expected": [
+            "rubber",
+            "eraser"
+          ],
+          "status": "PASS",
+          "requirements": [
+            "R-8.6",
+            "R-8.7",
+            "R-4.4"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        37.159,
+        37.159
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Local role-backed generation observed; provider switching/abstraction and offline runtime proof not in these artifacts. LLM optional per decision."
+    },
+    {
+      "id": "R-9.1",
+      "requirement": "Document = Markdown + annotations.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 111,
+          "seconds": 117.117,
+          "name": "Saved trailing annotation block",
+          "actual": true,
+          "expected": true,
+          "status": "PASS",
+          "requirements": [
+            "R-9.1"
+          ]
+        },
+        {
+          "index": 112,
+          "seconds": 117.126,
+          "name": "Reopened saved body",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-9.1",
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 113,
+          "seconds": 117.129,
+          "name": "Reopened newly created annotations",
+          "actual": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": ", and which, as you know, ",
+                  "before": " them before lunch.\n\nThe plan",
+                  "end": 179,
+                  "start": 152,
+                  "text": ", which we drafted in March"
+                },
+                "id": "g1"
+              },
+              {
+                "anchor": {
+                  "after": "the stuff we got is kinda ",
+                  "before": " all moved, is now final.\n\n",
+                  "end": 331,
+                  "start": 323,
+                  "text": "I think "
+                },
+                "id": "g2"
+              },
+              {
+                "anchor": {
+                  "after": " just a bit too much for one ",
+                  "before": " we got is kinda awesome. It is",
+                  "end": 378,
+                  "start": 371,
+                  "text": " really"
+                },
+                "id": "g3"
+              },
+              {
+                "anchor": {
+                  "after": " a bit too much for one small ",
+                  "before": " is kinda awesome. It is really",
+                  "end": 383,
+                  "start": 378,
+                  "text": " just"
+                },
+                "id": "g4"
+              },
+              {
+                "anchor": {
+                  "after": " too much for one small team to ",
+                  "before": "kinda awesome. It is really just",
+                  "end": 389,
+                  "start": 383,
+                  "text": " a bit"
+                },
+                "id": "g5"
+              },
+              {
+                "anchor": {
+                  "after": " met on Tuesday and it seems to ",
+                  "before": " team to read.\n\nThe committee",
+                  "end": 450,
+                  "start": 441,
+                  "text": " probably"
+                },
+                "id": "g6"
+              },
+              {
+                "anchor": {
+                  "after": "the weather will change soon ",
+                  "before": " water every day in summer. ",
+                  "end": 709,
+                  "start": 701,
+                  "text": "Perhaps "
+                },
+                "id": "g7"
+              },
+              {
+                "anchor": {
+                  "after": " simple to read.\n",
+                  "before": "\n```\n\n- A list item that is",
+                  "end": 868,
+                  "start": 862,
+                  "text": " quite"
+                },
+                "id": "g8"
+              }
+            ],
+            "kg": [],
+            "overflow": "",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [],
+            "synonymGroups": []
+          },
+          "expected": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": ", and which, as you know, ",
+                  "before": " them before lunch.\n\nThe plan",
+                  "end": 179,
+                  "start": 152,
+                  "text": ", which we drafted in March"
+                },
+                "id": "g1"
+              },
+              {
+                "anchor": {
+                  "after": "the stuff we got is kinda ",
+                  "before": " all moved, is now final.\n\n",
+                  "end": 331,
+                  "start": 323,
+                  "text": "I think "
+                },
+                "id": "g2"
+              },
+              {
+                "anchor": {
+                  "after": " just a bit too much for one ",
+                  "before": " we got is kinda awesome. It is",
+                  "end": 378,
+                  "start": 371,
+                  "text": " really"
+                },
+                "id": "g3"
+              },
+              {
+                "anchor": {
+                  "after": " a bit too much for one small ",
+                  "before": " is kinda awesome. It is really",
+                  "end": 383,
+                  "start": 378,
+                  "text": " just"
+                },
+                "id": "g4"
+              },
+              {
+                "anchor": {
+                  "after": " too much for one small team to ",
+                  "before": "kinda awesome. It is really just",
+                  "end": 389,
+                  "start": 383,
+                  "text": " a bit"
+                },
+                "id": "g5"
+              },
+              {
+                "anchor": {
+                  "after": " met on Tuesday and it seems to ",
+                  "before": " team to read.\n\nThe committee",
+                  "end": 450,
+                  "start": 441,
+                  "text": " probably"
+                },
+                "id": "g6"
+              },
+              {
+                "anchor": {
+                  "after": "the weather will change soon ",
+                  "before": " water every day in summer. ",
+                  "end": 709,
+                  "start": 701,
+                  "text": "Perhaps "
+                },
+                "id": "g7"
+              },
+              {
+                "anchor": {
+                  "after": " simple to read.\n",
+                  "before": "\n```\n\n- A list item that is",
+                  "end": 868,
+                  "start": 862,
+                  "text": " quite"
+                },
+                "id": "g8"
+              }
+            ],
+            "kg": [],
+            "overflow": "",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [],
+            "synonymGroups": []
+          },
+          "status": "PASS",
+          "requirements": [
+            "R-9.1",
+            "R-5.3"
+          ]
+        },
+        {
+          "index": 128,
+          "seconds": 133.633,
+          "name": "Reopen preserves chosen body",
+          "actual": "Keep this. Pass me an eraser",
+          "expected": "Keep this. Pass me an eraser",
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-9.1"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        117.117,
+        133.633
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Created annotations save trailing block and reopen exact body/model via API; actual picker/preview exclusion missing."
+    },
+    {
+      "id": "R-9.2",
+      "requirement": "Annotation schema (proposal).",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 127,
+          "seconds": 133.62,
+          "name": "Active choice persisted in model",
+          "actual": 1,
+          "expected": 1,
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-9.2"
+          ]
+        },
+        {
+          "index": 129,
+          "seconds": 133.636,
+          "name": "Reopen preserves full choice, ghost and Overflow state",
+          "actual": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "expected": {
+            "ghosts": [
+              {
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. ",
+                  "end": 28,
+                  "start": 11,
+                  "text": "Pass me an eraser"
+                },
+                "id": "g1"
+              }
+            ],
+            "kg": [],
+            "overflow": "A saved public note.",
+            "preservedBlock": false,
+            "setAside": {
+              "ghosts": [],
+              "spans": []
+            },
+            "spans": [
+              {
+                "active": 1,
+                "alts": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "anchor": {
+                  "after": "",
+                  "before": "Keep this. Pass me an ",
+                  "end": 28,
+                  "start": 22,
+                  "text": "eraser"
+                },
+                "id": "s1",
+                "kind": "word"
+              }
+            ],
+            "synonymGroups": [
+              {
+                "alternatives": [
+                  {
+                    "source": "original",
+                    "text": "paperclip"
+                  },
+                  {
+                    "source": "human",
+                    "text": "eraser"
+                  }
+                ],
+                "attached": true,
+                "markdown": "synonyms:: paperclip, eraser\n",
+                "spanId": "s1",
+                "synonyms": [
+                  "paperclip",
+                  "eraser"
+                ],
+                "thesaurus": {
+                  "data": {
+                    "eraser": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    },
+                    "paperclip": {
+                      "display_value": "paperclip",
+                      "id": 1,
+                      "nterm": "paperclip",
+                      "pinned": false
+                    }
+                  },
+                  "name": "alternative:s1"
+                },
+                "typedSynonyms": []
+              }
+            ]
+          },
+          "status": "PASS",
+          "requirements": [
+            "R-2.5",
+            "R-5.3",
+            "R-6.5",
+            "R-9.2"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        133.62,
+        133.636
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Exact created annotations roundtrip; displaced hints/context best-match thresholds/ambiguity/set-aside/legacy cases missing."
+    },
+    {
+      "id": "R-9.3",
+      "requirement": "Export.",
+      "status": "PARTIAL: finite outputs verified; full requirement not accepted",
+      "accepted": false,
+      "checks": [
+        {
+          "index": 114,
+          "seconds": 121.245,
+          "name": "Visible export dialog matches independent output",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-9.3"
+          ]
+        },
+        {
+          "index": 115,
+          "seconds": 121.245,
+          "name": "Export drops ghost ranges exactly",
+          "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+          "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+          "status": "PASS",
+          "requirements": [
+            "R-9.3"
+          ]
+        },
+        {
+          "index": 116,
+          "seconds": 121.245,
+          "name": "Export excludes annotation block",
+          "actual": false,
+          "expected": false,
+          "status": "PASS",
+          "requirements": [
+            "R-9.3"
+          ]
+        },
+        {
+          "index": 132,
+          "seconds": 134.649,
+          "name": "Combined clean export excludes ghost and Overflow",
+          "actual": "Keep this.",
+          "expected": "Keep this.",
+          "status": "PASS",
+          "requirements": [
+            "R-9.3"
+          ]
+        }
+      ],
+      "storyboardSeconds": [
+        121.245,
+        134.649
+      ],
+      "timePrecision": "Storyboard-relative only. Missing captureLeadIn field prevents exact video alignment; navigate within about2seconds and verify frame.",
+      "independentlyInspectedFrameEvidence": [
+        "26 seven-second contact samples cover chapter chronology; full-resolution KG captions16/136s and Overflow58/62s inspected. Per-check actual values are sidecar evidence; no continuous frame proof."
+      ],
+      "remainingCriteria": "Visible export value equals independent body-minus-ghost output, block/Overflow omitted; OS exported file and broader ranges/tidy cases missing."
+    }
+  ],
+  "authoredSynonymEvidence": [
+    {
+      "index": 8,
+      "seconds": 12.855,
+      "name": "Newly authored alternatives use actual synonyms:: KG syntax",
+      "actual": "synonyms:: paperclip, eraser, thumbtack\n",
+      "expected": "synonyms:: paperclip, eraser, thumbtack\n",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 9,
+      "seconds": 12.857,
+      "name": "Actual scoped KG query for eraser",
+      "actual": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 10,
+      "seconds": 12.859,
+      "name": "Actual scoped KG query for paperclip",
+      "actual": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 11,
+      "seconds": 12.861,
+      "name": "Actual scoped KG query for thumbtack",
+      "actual": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 12,
+      "seconds": 12.861,
+      "name": "Authored aliases share the actual typed KG concept",
+      "actual": [
+        1
+      ],
+      "expected": [
+        1
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 42,
+      "seconds": 38.187,
+      "name": "Undo removes generated KG synonym membership",
+      "actual": [],
+      "expected": [],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 44,
+      "seconds": 38.191,
+      "name": "Undo query removes the authored synonym group",
+      "actual": [],
+      "expected": [],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 130,
+      "seconds": 133.64,
+      "name": "Fresh reopened authored KG query for paperclip",
+      "actual": [
+        "eraser",
+        "paperclip"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "index": 131,
+      "seconds": 133.642,
+      "name": "Fresh reopened authored KG query for eraser",
+      "actual": [
+        "eraser",
+        "paperclip"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip"
+      ],
+      "status": "PASS",
+      "requirements": []
+    }
+  ],
+  "misleadingClaimsToAvoid": [
+    "140 PASS: actual134PASS plus6semantic observations",
+    "All41accepted or visual parity",
+    "Same-page APIreopen as OS/later-session persistence",
+    "Nonzero Lab marks as semantic-quality proof",
+    "Captured trusted drop as proof of intended prose/caret placement: actualChrome pull inserts inside First, producing FPublic note.irst...",
+    "No remaining indicator after generated Undo: one derivedroleindicator remains",
+    "Capture lead-in recorded separately: sidecarcontainsno lead-in field",
+    "All exact export/cut punctuation quality proved: Makecuts independentoracle checks wordcount only"
+  ],
+  "crossBrowserComparison": {
+    "sameSourceFilesHeadManifest": true,
+    "same140NamesRequirementsStatuses": true,
+    "identicalActualExpectedEntries": 138,
+    "differentIndices": [
+      62,
+      65
+    ],
+    "difference": "Chrome inserted atoffset1 insideFirst; Firefox appendedatend. Each matches its observedoffset oracle; no equivalentcaretplacement/prosequalityclaim."
+  },
+  "verifiedDragOutputHold": {
+    "pullFrameSeconds": 60.2,
+    "stashFrameSeconds": 67.5,
+    "source": "d.drag(...); pause(2) before literal checks and Undo",
+    "correction": "Initial check-to-Undo timing inference omitted the earlier pause; withdrawn after inspecting held output frames."
+  },
+  "supplementalLabDoesNotChangeVideoCounts": true
+}

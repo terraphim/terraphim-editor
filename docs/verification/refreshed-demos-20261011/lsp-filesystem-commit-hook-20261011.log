@@ -1,0 +1,85 @@
+Running Terraphim AI pre-commit checks...
+Checking for large files...
+[0;32m✓[0m No large files found
+Checking for secrets and sensitive data...
+grep: stdout: Broken pipe
+grep: stdout: Broken pipe
+[0;32m✓[0m No secrets detected
+Rust files detected, running comprehensive Rust checks...
+Checking Rust formatting...
+[0;32m✓[0m Rust formatting check passed
+Running cargo check...
+[0;32m✓[0m Cargo check passed
+Running Rust linter (clippy)...
+[0;32m✓[0m Rust linting passed
+Building Rust project...
+[0;32m✓[0m Cargo build passed
+Running Rust tests (single-threaded)...
+[0;32m✓[0m All Rust tests passed
+Checking for dead_code suppression...
+[0;32m✓[0m No dead_code suppression found
+Checking for trailing whitespace...
+[0;32m✓[0m No trailing whitespace found
+Checking configuration file syntax...
+[0;32m✓[0m TOML syntax checks passed
+Running Ultimate Bug Scanner on staged files...
+• env::var(...).unwrap()/expect()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+24. PERF/DoS HOTSPOTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: regex compilation in loops, chars().nth(n), format!/allocations in loops
+Some perf pitfalls become DoS risks on large inputs or hot paths; these often evade linting in non-bench builds
+
+• Regex::new occurrences and in-loop compilation
+  ✓ OK No regex::Regex::new detected
+
+• chars().nth(n)/nth_back(n) (O(n))
+
+• format!/to_string/allocations inside loops (heuristic)
+  ⚠ Warning (1 found)
+    String allocation inside loop
+    Consider preallocating buffers, using write!, or restructuring to reduce allocations
+      /private/tmp/terraphim-ai-output-fixes-20261011/crates/terraphim_lsp/tests/hover_provenance_tests.rs:265
+      assert!(hover.contains(&format!("- {synonym} (kg)")), "{hover}");
+
+═══════════════════════════════════════════════════════════════════════════
+                    🎯 SCAN COMPLETE 🎯                                  
+═══════════════════════════════════════════════════════════════════════════
+
+Summary Statistics:
+  Files scanned:    1
+  Critical issues:  5
+  Warning issues:   184
+  Info items:       20
+
+Priority Actions:
+  🔥 FIX CRITICAL ISSUES IMMEDIATELY
+  These cause crashes, security vulnerabilities, or data corruption
+  ⚠ Review and fix WARNING items
+  These cause bugs, performance issues, or maintenance problems
+  ℹ Consider INFO suggestions
+  Code quality improvements and best practices
+
+Scan completed at: 2026-10-11 14:12:45
+
+Tip: Run with -v/--verbose for more code samples per finding.
+Add to CI: ./ubs --ci --fail-on-warning . > rust-bug-scan.txt
+
+
+──────── Combined Summary ────────
+Files: 1
+Critical: 5
+Warning: 184
+Info: 20
+[0;32m✓[0m No critical issues found by UBS
+[0;32m✓[0m All pre-commit checks passed!
+
+Validating conventional commit format...
+Commit message: test: reopen authored LSP synonyms from actual saved files
+
+[0;32m✓[0m Conventional commit format is valid!
+
+[codex/alternative-control-output-fixes f2e004ea7] test: reopen authored LSP synonyms from actual saved files
+ 4 files changed, 10 insertions(+), 1 deletion(-)

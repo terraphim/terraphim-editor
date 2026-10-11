@@ -1,0 +1,3484 @@
+{
+  "browser": "firefox",
+  "recordingUUID": "c1801155-9771-4fb9-a060-6a443949469e",
+  "sourceIdentity": {
+    "head": "86f1291d36df50a694293a4c670c0f4961b83c7a",
+    "status": "",
+    "excludedReservationPaths": [
+      "demos/out/firefox-alternatives-guided-demo-2026-10-11-synonyms.mp4",
+      "demos/out/firefox-alternatives-guided-demo-2026-10-11-synonyms.json"
+    ],
+    "files": {
+      "Cargo.lock": "66fd358f080ea4fa16267ec2e81b3397847430e9531c41814be6e519112c86b5",
+      "Cargo.toml": "486527075168b36664c2273fb6a8e99d07090672edcc7a6fe5b916818a0b2457",
+      "Trunk.toml": "c464fea85a779da3c0bae07bdd18a36ebfbe23ea0862b0f394e19d9417cd8fef",
+      "crates/terraphim_alternatives/Cargo.toml": "1232ea3f0b04cef60334e64273714930bebb5cfed24a2e6279cbbf19aa3089d0",
+      "crates/terraphim_alternatives/benches/alternatives_bench.rs": "80fa8403663ac40b52dad4cf5e4ee9d41c11daa71f66b8211c0abf4ced79fc46",
+      "crates/terraphim_alternatives/src/article.rs": "cddca703adaf691e30be5714001a6bea4746596d8c6a28b0e775862db47b0ebd",
+      "crates/terraphim_alternatives/src/block.rs": "95f285e23e867e8360be838657ec4e245dd96be90b5500c3128a7f5efe0e3244",
+      "crates/terraphim_alternatives/src/context.rs": "34edb185d5bc0d9fcc3e5e203ce6b1562a62b4e26b23f6593e461f369980b82f",
+      "crates/terraphim_alternatives/src/document.rs": "2a5fb7b2ba3dbc17d1a7801d9b77cc6e333d64ab75964f0b3e1c595976ab1949",
+      "crates/terraphim_alternatives/src/lib.rs": "09f92a651e7ed2ba94959ecb24ed26c22895a167168d1e666da837b213ad1aad",
+      "crates/terraphim_alternatives/src/model.rs": "a59b7601da6c56af6dee5e2ba623593e75786d40bbd636e1c463a81df6c95e69",
+      "crates/terraphim_alternatives/src/offset.rs": "eb2e2099fb0cd2725a312a85b994523c91c05b89d196d30215207e4efc4440ed",
+      "crates/terraphim_alternatives/src/reanchor.rs": "b9bafc338fcc40d03aca8d44df91375eea941f6d0b9330aa358ec57a4e6bbc5c",
+      "crates/terraphim_alternatives/src/synonyms.rs": "910543ffb7e5275d9e7fcfa377011af0fd939c0976edfccdea4a3ac18bab1b5f",
+      "crates/terraphim_alternatives/src/text.rs": "4b2c0acc7e2e81c525e4968c6cfa40448623791eede49c6bb232926844cad85c",
+      "crates/terraphim_alternatives/src/words.rs": "ab3d0b05174aecc48b699ab4801b602ef682229aac9b8e308a93407647823549",
+      "crates/terraphim_alternatives/tests/article_swap.rs": "8a8ee01fda5affd414a5819f9e10bf2352ba1ef0b63252046e933e19017797bd",
+      "crates/terraphim_alternatives/tests/block_round_trip.rs": "b97ac841cbdf12dcb2b1f3e5810525da30a863a3fa1c380054869b737671ec80",
+      "crates/terraphim_alternatives/tests/common/mod.rs": "31623d533fe232d926988c1212bcd36fcfa143f52b9a0e4538e7bea5a15517ed",
+      "crates/terraphim_alternatives/tests/context_reanchor.rs": "d4767f676c712db116d670c0a7afd0ec8606a4987150eb1ef13ea6691d3b1b59",
+      "crates/terraphim_alternatives/tests/fixtures/example_block_at_end.md": "bb02036eb5c82a3849d82c6d0437c58faa25dadd5fb3712d1611baeb688541e0",
+      "crates/terraphim_alternatives/tests/fixtures/full.md": "c8ca29c6940a3bfcf779bed1fe8c8fc1e133a970f9d6c5af818c0700892a1e00",
+      "crates/terraphim_alternatives/tests/fixtures/ghost_only.md": "4569191066b4683b28d4ebf4aa8c6b3c4dceb4fd6640a4f9db5ee45e9ef30958",
+      "crates/terraphim_alternatives/tests/fixtures/legacy_ghost_only.md": "b8baa0dd1da1d5bb0191ec3c2ef7b290e2b5db881867d94b737ffdd43e05b44c",
+      "crates/terraphim_alternatives/tests/fixtures/legacy_no_context.md": "fbf6e2b85bdabc3810a0f0baa79e90b0862ca4adf9a23e3e74f66f18c5004bcd",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/context_wrong_type.md": "0b6d2064a6e7fa8e731bbd8a5f2cca98f085f8844cb974880d55df5ae7132548",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/duplicate_ghost_id.md": "243e9cf2d3575a88f42766c870a711388c66da84a25d7fb88949f7a007be9ebd",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/duplicate_ids.md": "aa09f3bc4de62797cd79ef07030c5648ff0c2bddad876f753a5578f8b6edbe83",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/invalid_json.md": "3e48ab5bc39c2908defb5e0fe316d41979bfc1f8ad6abb520c044439fdfb681a",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/overlapping.md": "1300c97cdea3e80eb3f2d51cb2092a5a42dd823a890704d89477f17844920344",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/overlapping_ghosts.md": "a5f168c01e1906c1fb54351265e3d4a30f844833a08e25b6998dbff0b0e8a16e",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/truncated.md": "be224e2b4904ae5a2f9e63e9c8601fc353aeb7a909236a1bf47a4128439960e3",
+      "crates/terraphim_alternatives/tests/fixtures/malformed/unknown_version.md": "9543e1c80e71fb2960f63880c77f2609bbe0b81da25b9e1c35af276e8ea3eafb",
+      "crates/terraphim_alternatives/tests/fixtures/overflow_only.md": "3fd88aaf3b9d5b8871687a1f4b54b73f8d53db3ea26a9c659983b5a8ee713239",
+      "crates/terraphim_alternatives/tests/fixtures/plain.md": "df64ca979fe76b9baae5a179496d768ea646fa484f3a1856109dfa4a62649555",
+      "crates/terraphim_alternatives/tests/fixtures/two_example_blocks.md": "60df86e11f6273cef1c1977e4223ee2565c775b438023db955e2870185b4a63d",
+      "crates/terraphim_alternatives/tests/ghost_allocation.rs": "4d0b9392137ca254837f9718c844af76d111620cd5a54f73dfebf1194524dc2f",
+      "crates/terraphim_alternatives/tests/ghosts.rs": "158587d0e81d6ad09382a658426b3a913f2e613693742c7118a44e367bd2bba7",
+      "crates/terraphim_alternatives/tests/lifecycle.rs": "dfa3572b64557dbe9b5bbb3898c2bd376cbea7d81c8284df0f8b3479c6aef285",
+      "crates/terraphim_alternatives/tests/moves.rs": "ba9b443da55670cc8c8221d79e3ae612432f783a551a78a2de8eca38fdae50c8",
+      "crates/terraphim_alternatives/tests/reanchor_matcher.rs": "ce5b8954ba2538be2effcfe92b871cde6519557f915bcb76ae0e4e1b71efef55",
+      "crates/terraphim_alternatives/tests/reanchoring.rs": "29fcfa106f19f68759cd6ad8827eead5c885465975869f1b77a131198b2812fe",
+      "crates/terraphim_alternatives/tests/synonym_registration.rs": "8ff4b51a74c979f72268989c1b7d53a1096f623b56d49f089cd12a14302131bb",
+      "crates/terraphim_alternatives/tests/text_boundaries.rs": "89231af37a4559ae8cffb609afce17144a9651ca71e9040d357c3247e0dc4535",
+      "crates/terraphim_lab/Cargo.toml": "0a83e03bc9b2f720e0010bdfbc843ba4cd4afb800843543713480a5730bc996c",
+      "crates/terraphim_lab/benches/lab_bench.rs": "60dcf2675cec126663f0b69f781f7a0870137e23d9489f1ae5a7021dc3c99cb7",
+      "crates/terraphim_lab/kg/lab-filler.md": "53571cbce50a5f680820c16584c4162bc15e05f743edf0908eb08990c2504f9b",
+      "crates/terraphim_lab/kg/lab-hedge-phrase.md": "6602e5a42e30b1243cd98afaa4ca9f5da445e12f4b52dbfad1285263b0cb8510",
+      "crates/terraphim_lab/kg/lab-hedge.md": "0fa940df138c03d775cd404ad868b092b8b3823987f8b975a3ee0f2e4fcb2c86",
+      "crates/terraphim_lab/kg/lab-style.json": "908b44c78bf813522ddaf4fc88524d781f8a84e3050016aab87e701091d5799b",
+      "crates/terraphim_lab/kg/lab-tone.md": "87f5bfa3098630668de9378ef22efff412ab7f97f661b314d7e29e9ddbd421f0",
+      "crates/terraphim_lab/kg/typos.json": "239386ef7eb073390193f7fd3e820ecf0d5d6d8f56b9faeb53cf450cba76c2a5",
+      "crates/terraphim_lab/scripts/kg_to_json.py": "431f14b2ed34b867707956bc15e66309bad8b3d9f064f91d0b2579ec007f08ec",
+      "crates/terraphim_lab/src/actions.rs": "52704c7c34409d938463e0aa620f8c1db4739e309b30b14b0010b45cdf38acaa",
+      "crates/terraphim_lab/src/cuts.rs": "e3d8a0cdf555f81655aa53dd61428a0912bece0d99dd3e76a2f2f91988b2291c",
+      "crates/terraphim_lab/src/lib.rs": "710ca6c1d503a680cf801c645a9ff43165d5e308e48f2daf35e2024bbc98e943",
+      "crates/terraphim_lab/src/lists.rs": "ab229d80eb3a14036e316d261515dde2743b01df9c738039ffd75b3335108ebb",
+      "crates/terraphim_lab/src/offset.rs": "04840c49f24500cb794579386926f0d63b4e4e535cf08c849c1a4ccaaaf5ae43",
+      "crates/terraphim_lab/src/rolegraph.rs": "35e95a0d1f2ace3df8aadc200d931d073e271abb12e7e1b09def2861680f1124",
+      "crates/terraphim_lab/src/text.rs": "b420e219381be249307147c3ebed3b7f0b5d8d72e5122aba5c9941b1afe0a2f7",
+      "crates/terraphim_lab/src/trim.rs": "95c5ab5a2ba61439c9b35b49e21b5a8cede235630ae9f2c980fcaea95d539c22",
+      "crates/terraphim_lab/src/weak.rs": "5191262febe4fb70d0442812736931d6c83156ca3a6c770fefa5810539eb0043",
+      "crates/terraphim_lab/tests/actions.rs": "1060f9476fe2efb2eb776c4ff469615dad10f0702dd08570b04ebc6353ca454b",
+      "crates/terraphim_lab/tests/common/mod.rs": "42dc838e57f6fb0c8523d6ce60691933fc1683c88d19e95510f373e1f2472ae6",
+      "crates/terraphim_lab/tests/fixtures/corpus/lsp-spans.md": "4e52268c64819740477f8df8aabd6bff97e4069d55bcdf02f903785e01092a8d",
+      "crates/terraphim_lab/tests/fixtures/corpus/shared-schema.md": "dddabc2285ca4791193e1b8858e0e20eeeab8af412f6c3867b85e80aef38ffbf",
+      "crates/terraphim_lab/tests/fixtures/corpus/thesaurus.md": "430d10ce8427822e491fb0d3566727a4a41cfe621ae2bb793835d8e2d259df7c",
+      "crates/terraphim_lab/tests/fixtures/corpus/zed-adapter.md": "87e7dfb81dced0df73f0f7e9529c1b47dd683cf7341ad8c6ce61fa08993fd298",
+      "crates/terraphim_lab/tests/fixtures/domain/language server.md": "6a43e07329289614c1f89d05fd65bbcfc544193c71dce3e0881218e47a0a3204",
+      "crates/terraphim_lab/tests/fixtures/domain/span model.md": "47d4fe21b26a8bea558e1d66ba88a92c02650d7dd4c980ddf5619d88d91bfe74",
+      "crates/terraphim_lab/tests/fixtures/domain/thesaurus.md": "adadc372f0af87ba9ff5b7f8cb81fed6e5ce5822b49f8553e9143a5cd5fd2b0c",
+      "crates/terraphim_lab/tests/fixtures/domain/wasm.md": "4489e146b5744ec0af72e9fd4d2f48e731cd1411ef764cee1fd6c03349511d79",
+      "crates/terraphim_lab/tests/fixtures/domain/zed.md": "f6019463c12b0414467ec673e5169ec20b9ec0ac74a8a4cd97ff0e57c9be7503",
+      "crates/terraphim_lab/tests/fixtures/role-thesaurus.json": "27290de25871c862da7ec0006d1ca717334c2ce3841df470e1584e71c7a2631c",
+      "crates/terraphim_lab/tests/fixtures/rolegraph.json": "0f5337a4e38cb9f94479548e0187a9386eb03267cbb1af6be27ffec5ebac1b81",
+      "crates/terraphim_lab/tests/fixtures/three-men-ch1.md": "40e80720ae4f499be730bf7672fcdab101cfc6c9f48a632f27a529431349a143",
+      "crates/terraphim_lab/tests/fixtures/walden-economy.md": "284b35f42de0ebf5a66f98065893584eaccb4600cbbba55380ff79c741582787",
+      "crates/terraphim_lab/tests/fixtures/zed-plugin-fit-full.md": "3ac79c84c409d59017cb8c684c77a77133e4f382982479d488dbd541302e7406",
+      "crates/terraphim_lab/tests/fixtures/zed-plugin-fit.md": "cb1c8edc00cf5713a2e1beb2381e986218d0c3d703da9712a076b4f0b698afe1",
+      "crates/terraphim_lab/tests/invariants.rs": "3527b14bd193f6922e199db7252ca9e6c628b72ebab90e0a016c0c9478cb76e5",
+      "crates/terraphim_lab/tests/rolegraph_conformance.rs": "f5677d492d52e5e1b28615ceab4075e464701872965f417f1ada8c7a47ab5dc4",
+      "crates/terraphim_lab/tests/trim.rs": "2e051baf90b3ac02f959a299a4b09850fd22dd075428d52372401ef03fe5de44",
+      "crates/terraphim_rolegraph_browser/.gitignore": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+      "crates/terraphim_rolegraph_browser/Cargo.toml": "77172f9e4e76f080b3d78c27aa4c0168dff5ff5980731fe808b2661197d95c38",
+      "crates/terraphim_rolegraph_browser/README.md": "041092ebeed6a76ebeab8cb1f33d7874b5e41d5b131c827aba6c4cf3ac37afc0",
+      "crates/terraphim_rolegraph_browser/src/bounded_json.rs": "9fbaa7d0b9a67aa13de83afe014423139ccf2b426a17f6cf58665bde8a5312c3",
+      "crates/terraphim_rolegraph_browser/src/checkpoint.rs": "12115d514c40130a6014bd8d9b5191e2370f0c18e9ae9db358d2693d10bf6bf9",
+      "crates/terraphim_rolegraph_browser/src/lib.rs": "da76bf6ac6e71edb327a6d181325472cf249cda699b56f6c0d0131853e563496",
+      "crates/terraphim_rolegraph_browser/src/session.rs": "7f09b9ab206ca8a8461bd96274396ce75e4dc937d32a6a1e3964e666ab342fc3",
+      "crates/terraphim_rolegraph_browser/src/validation.rs": "fdcf8f67c28429ded486ffae02df69b0f1ae560fe662a693cddb816feb3adf5f",
+      "crates/terraphim_rolegraph_browser/src/wire.rs": "a27312c711d27f8d2d0412704073673702bb09eca98d16ff7cc3b2147623921b",
+      "crates/terraphim_rolegraph_browser/tests/fixtures/review_scenario.json": "2f7be08212c88def38b1adeb901106f02f740e4e24bf7a28838922f2f5e6ff46",
+      "crates/terraphim_rolegraph_browser/tests/fixtures/scenario.json": "a3df7907cf639d635833533e1cf9a40b118d3c6bc6a90de4cd491f569c9db507",
+      "crates/terraphim_rolegraph_browser/tests/native_goldens.rs": "bede615872800ce30a2de60f1798195e8d89d9d99d42c8618ee52945215f08aa",
+      "crates/terraphim_rolegraph_browser/tests/review_regressions.rs": "5b149de26dd4c25fa2e7d6243e1cc9081063d648be1f86026ace8fb00d79d83a",
+      "crates/terraphim_rolegraph_browser/tests/review_shared.rs": "c22803bb41ca5e14131a961a46bfbf15c3eb4c8bb4855a2f070f337ced547c2b",
+      "crates/terraphim_rolegraph_browser/tests/schema_contract.py": "e85f7d950f1d30e29b4a0341e262d432bd3bd826b5217678503653b4e397244a",
+      "crates/terraphim_rolegraph_browser/tests/session.rs": "e95c6137e350b92dbdb5b1d682cc110902848db716973fd8e8a1212d8d7c9ba2",
+      "crates/terraphim_rolegraph_browser/tests/web_review.html": "603be81f8f3a69219665168f1f8dfb4e0d15d5ff3390ab48d4925b2a9f1e18e0",
+      "crates/terraphim_rolegraph_browser/tests/web_rolegraph.html": "07ca07ffc34d5f144796d107f70b33772e4f5ea52c0a015bfb97b4a3b3dd9dfc",
+      "crates/terraphim_rolegraph_browser/tests/wire.rs": "97148527d19c5b4037f2181831b8bfd2671c45344d386a0061873fa20fb51636",
+      "demos/README.md": "86bfcda480939f2af56521c58e5f347fbf380d8aadbc0427caa42dc6ffae2ff9",
+      "demos/browser_demo_common.py": "f9fffc7f52a6ef9ec001151839cc2608858764929b3b5f45a85c5ac42ae9bb0e",
+      "demos/fixtures/alternatives.json": "5daa6e637be6f0d621c045129cc12cef2394174eee624c1e7e9e94bfea4db9d5",
+      "demos/full_demo.py": "149db7a0137e1c9cdd54dcfa36c21e6ec679b52c97d43c74b31037f7acbb111c",
+      "demos/record-browser.py": "be09b27811783f48f2ace00fe4c6a750340cf5101c73e7a10b6b4adf97e87938",
+      "demos/record-safari.py": "ef676464777af13183306e1c92fdb1a1c849d5976d56421a53cbaea855868631",
+      "demos/record-zed-window.swift": "3fdb306141bc1b62bcd267890845017e0323eb1e9e2114098eea49d5dbbf1590",
+      "demos/test_full_demo.py": "30dd1f5c24b3d7d64d4da25bd556b9a2e0b1ea5f77517fd9cd392455bcad8008",
+      "demos/test_recording.py": "264182263266f0581979ddc5bc71f5f3abdab9cad990645744537124e0677416",
+      "index.html": "10e1d16caf8dfe50b8ab055787be8e87d31a9cd252f178783ca54de0fc663bd3",
+      "public/css/alternatives-panel.css": "a99a407d3f6aa52f48e3013bf865ef4b44bd0b9e4028d9e68c1a6dd32f8a68a8",
+      "public/css/blocks.css": "383c0e9197f015d651363e3abd31fdf67b56a6b4bde72ebe764a7b1e417c5b4c",
+      "public/css/lab.css": "1fe0441a83177e9713ac112fac85336ad3315b3ac755ec8a625e008c4ca1f967",
+      "public/css/overflow.css": "8fa1a611df91541508b1532d3628addffecec02b2516a3f7a2c98bc385ada218",
+      "public/css/persistence.css": "da87a8b790fadebdc4b451dce2535eb829291c799d7199a6734ce9cf19f68ffd",
+      "public/css/selection-menu.css": "7d0790ed1bf0c6e3955e5305d31ace2bd67f6df5f5f2b7be9692f9c79843891e",
+      "public/css/tokens.css": "71e359d23d7ec44c9c838f74cf77f6e33aa3c33c57757cfc4cfb96e22a09de55",
+      "public/css/trim.css": "fe79acb70b9906e404d30e19b7d5e1cf6589bc0aa155f1c1dc93ed18e6dee81d",
+      "public/css/write-on.css": "422071ace43853bcdb7518132705a503dcfdb9531cc05fdb3a1adabf7c95b923",
+      "public/js/alert.js": "10f29baa9d06e6f8ef923f162866a87a0de1ceae1f80a2df5badb107e0138a33",
+      "public/js/alternatives-panel.js": "a008abad1752cfe26fc63726c265ba055eb707122a8e0557cd05058e871d901f",
+      "public/js/blocks.js": "745172693f008147f43640534b0a73d605bd05d8e53d4d2307c0c7f45496c490",
+      "public/js/chrome.js": "72713f968a1a9cb109f01113a4eec8fc1420285b70eecbebfcf3d2ee83e390ff",
+      "public/js/config.js": "300643d895edbfc8e119937f7f31cf874148b5c714a9741c930982ac804378ed",
+      "public/js/editor.js": "4f358041d304bbe7de9eb3a9ee89d5ead5727cb6850a2c28803f56409a452015",
+      "public/js/host-session.js": "9e5efc4c3f1f2003cd86f05b266b6666e546c68a065eaca67c897c2328a09388",
+      "public/js/indicators.js": "b486a08fd9ce5642546f59798efb90a3e4d949d438c81b45ab6296bc9642e772",
+      "public/js/lab.js": "2d598eaa14d92387d35e00ef3587676c0556f06ccaea96d94f2bb3711f4da9d2",
+      "public/js/overflow.js": "89878f48826f0e57daf6fe46ab3fbb8101ff7726e7e83df43ced4dc1b858b9f4",
+      "public/js/persistence.js": "8b9d0a8929007c86a02ca041b348a1f66eeba7130edd4bc4bacf5964f0cb59bb",
+      "public/js/rolegraph-client.js": "637cb1e987d638defc50dcf9ad239d110da66c680c7e884f3fe822be5d4e5cd2",
+      "public/js/rolegraph-storage.js": "050647cd6552209833d0237c4fb7a276f42bdd7c131c01bb436e9b9a627620dd",
+      "public/js/rolegraph-worker.js": "8240803c0aef05acd66b6ec91eaee16e53a556252aa48c8487a4c3bd9a8924d9",
+      "public/js/runtime-assets.js": "e4d1ee24da34212a69e6fe7873e3d0ea738277945743900b87ec82944efaa985",
+      "public/js/selection-menu.js": "38268d4b32e1014aa2cf009e9f970880ea29cf2774288ee99e1862458affbfc2",
+      "public/js/terraphim-editor.js": "c24c2385cc8556bed0d67f4718541d33dc95b31d6e5965286270cb59f205176a",
+      "public/js/trim.js": "70ed39d25de7632864812bec21e40c2cc68f3ee7b271cdc07aa21b24b1d8ecfd",
+      "public/roles/default.json": "e850422ec72faa06aae0d6c2893a9f1d2e36d60a5aef79bd8f863daa2d71b015",
+      "public/styles.css": "f29574a7188b7d934951c4fb93bc21b38e43b3281b73b292e809cc87ee534b67",
+      "scripts/browser-tests-load-test.sh": "8fec3dbfb1c959669c9e78ddc18e6c06b2695805531b865b7150c60af16facc8",
+      "scripts/browser-tests.sh": "7d656cfa3706800bfbdb946016b816176f9f211b014e0332abbb2e2dd5135723",
+      "scripts/build-dist.sh": "0a86d153bf9a5b1d0d48e530680a8408648fa625fea1e50a2096b71f4b7858b9",
+      "scripts/build-host-assets.py": "97242adbd5e17750c81b05c655527cc9106b69c13bcf8bdcc8d3db0274250aba",
+      "scripts/build-rolegraph.sh": "a9b6e3567c8868de1bb5a7b07e43d009c93a66649bd2a7ecb3be72aabec2d65f",
+      "scripts/ci/browser-tests.sh": "83b94d474fab83882637d1faa1627f5021bc388589290fa3d4280ef2f15db010",
+      "scripts/ci/covmap-ir.py": "6b1fcc43380f32438c7a9d627bb68f1257830d22445e4ed06deec4ad040c2ca2",
+      "scripts/ci/editor-interaction-check.py": "159e2e3f28159a098a007267992ab7c209e2b0ea1a8bdf8d927bec8691ebe03a",
+      "scripts/ci/editor-offline-check.py": "dd5b4c4257f7c2b559918f1591360194d7f6ea5b73a512ce0dde046c2905c53c",
+      "scripts/ci/editor-safari-offline-check.py": "8840c64e122fa5a4974b47221441dc9c417bc8dbec56d19cd4b913ba047b8d3a",
+      "scripts/ci/env.sh": "404f91199ccb330e83298ae6516ebdc47714b4aea1b7a803467c2613e19626cd",
+      "scripts/ci/js-coverage-cdp.py": "321d40e6997cb627d2f7450f7687a6088a530645c4afdb7f34112138efed7345",
+      "scripts/ci/node/package-lock.json": "e8929a9a894f79609cb04033935aea6d39b0db2240f6be933348c935ddcb4e7a",
+      "scripts/ci/node/package.json": "f329ecb36c9b8f831ffed15d38e20be182d7e63edb375fe3e65576d69845e6b3",
+      "scripts/ci/registry.sh": "3ea0866fa7dbfcb5c71fce9df1e1cf549ef716adfd358b04ca2bb45f1ddbc248",
+      "scripts/ci/rolegraph-browser-check.py": "7b613920b0319fa2937317a50275e140aef34fd0839beba6e54b9a03ac94b790",
+      "scripts/ci/rolegraph-corpus-check.py": "58f67135e9bdf3049e02332bc6e5a494028a3ca9a446c9aa910d03856c029ca8",
+      "scripts/ci/rolegraph-desktop-check.py": "32b67bba6b850d3c8bed9ec02bfeef58f6f8f294c75e2d81ca5dfcf6f343c55a",
+      "scripts/ci/rolegraph-performance-check.py": "ebe5300e95bc91ced75ad8997317a3552e82963c1c1a684e3c8cb57ce042a0b0",
+      "scripts/ci/rolegraph-production-check.py": "70cef7661ee9f6100ac2d60db05377b861af884a2789d0409d7df6d3475e00b5",
+      "scripts/ci/rolegraph-quota-check.py": "1bcd63574fdba7429c5b603f22ee49613908e57d62db37a91faf3a78fe827d6a",
+      "scripts/ci/rolegraph-safari-check.py": "ed4cf836a1d8a6bce088d70bda6d39864855a6fbaf2898389edf89bb033e77b9",
+      "scripts/ci/rolegraph-safari-performance-check.py": "520c20d76aea71941d223f1717b6e26ea610a26b256fe9213a229521b71ea35d",
+      "scripts/ci/run.sh": "5d5338352caf86bc8fe296d02f60d8f986941f1a7cca903419c49b7e1472f622",
+      "scripts/ci/runtime-assets-check.py": "1ed6f1ba4e3161d2e3f3c3a428935e280e7941872d2b4dfcd8a6580d86bd54f5",
+      "scripts/ci/secrets-audit.sh": "ff2357675cc6b5b24c2e40a5afad4847d634f4bf5fcd418fe3bbad133a7dee5e",
+      "scripts/ci/secrets-names-test.sh": "135a883ac005f64b3dfe72111d933dac11cf72dceca21df30c874cdd4dcbdf14",
+      "scripts/ci/tools.sh": "c7b11ec159fc101fff7bf1b2c8e234b21d1353b05769e3786a24f28336c308de",
+      "scripts/ci/typing-benchmark-diagnostics.py": "25db6d0735af8bad02393a66a41fe91a81c8f0ce9a4f863b5e5b73fede0aaf26",
+      "scripts/ci/wasm-coverage.sh": "4e033bb935f9b65aeab28b2262dd79d66ee3648a4eef8953e99fca951b7a14a1",
+      "scripts/ci/webdriver-merge-test.sh": "e506222dc7e1d9d4fc75f08eb0487bb2cfe7d4e43b10e164c5832333bae75dc6",
+      "scripts/ci/webdriver-merge.py": "fdc7c1b755687d6cc7674f3f1bf22ce47960d9b8c4401d6f1916f6385d6b3cba",
+      "scripts/publish-editor-dist.py": "25f23626e410cb994a73b185fa68c8a84b4200eb1b7aebbfc4c34a7d626bb1b0",
+      "scripts/release-dist.sh": "105c6ef754a131e421fe4d5ab1941d215a3d49ba2e0f22a979cbf8004173de48",
+      "scripts/vendor-runtime-assets.py": "d5b0399b9f11317869aed268a20bf32255f11a2f3725076b2aaf8130eb2d5992",
+      "src/document.rs": "9e0573573a16552322011c0484a19cadaf33b19b6f17c1a5c29c9d8d8ddcc9a4",
+      "src/host.rs": "e5d6b98e36d4141818c7dad32b20d734aa7199ea3ddfa7d58e467c8acf2acabb",
+      "src/kg.rs": "7f47426a270bd831cb9c73c267ad862c005eb2115c2f3f9f5a1ad38f8a38c30d",
+      "src/lab.rs": "66e8933780c1f6e8a7281a61aa4da33af35f24301ac6a0f448a5899dc97061ce",
+      "src/lib.rs": "7fa17c98313a42bb07c83978d939eaf22a9e4818be1f1d94999fe5c1a1e6e335",
+      "src/protection.rs": "6b519e44687f9cfa02b2b6d67545e8095f0db4f166dd37b087602748bf7a8a0e",
+      "src/providers.rs": "342383c12cce4b2c0672c05cb78e2fce58f58011b883b7ede81644d8def44484",
+      "src/text.rs": "c2aea85f512a415ec49466c965fccdfdea1aafc16f4a1a43d6b27bc0db09947a"
+    }
+  },
+  "manifest": {
+    "assets": {
+      "alternatives-panel-f7a68a7707d04dfa.css": "a99a407d3f6aa52f48e3013bf865ef4b44bd0b9e4028d9e68c1a6dd32f8a68a8",
+      "blocks-b2480c8f9f3d63b3.css": "383c0e9197f015d651363e3abd31fdf67b56a6b4bde72ebe764a7b1e417c5b4c",
+      "index.html": "ea534ebf7d01ba6eeef87b21c09473fc634a0b8688ee4682711006f2e9da4ac1",
+      "js/rolegraph-worker.js": "8240803c0aef05acd66b6ec91eaee16e53a556252aa48c8487a4c3bd9a8924d9",
+      "lab-3fee6e89acf44fa1.css": "1fe0441a83177e9713ac112fac85336ad3315b3ac755ec8a625e008c4ca1f967",
+      "overflow-cc1be2ca3843f438.css": "8fa1a611df91541508b1532d3628addffecec02b2516a3f7a2c98bc385ada218",
+      "persistence-cb27cfbe192754a.css": "da87a8b790fadebdc4b451dce2535eb829291c799d7199a6734ce9cf19f68ffd",
+      "rolegraph/rolegraph-worker.js": "8240803c0aef05acd66b6ec91eaee16e53a556252aa48c8487a4c3bd9a8924d9",
+      "rolegraph/terraphim_rolegraph_browser.js": "0f155f7ebe48ffd9958266c153f965447f98e26724e8fa994d1e18d879a9f4dc",
+      "rolegraph/terraphim_rolegraph_browser_bg.wasm": "7002fd7e4614ae03acc1593c7225fc82d586641ee96d991780339244ed5eea8a",
+      "roles/default.json": "e850422ec72faa06aae0d6c2893a9f1d2e36d60a5aef79bd8f863daa2d71b015",
+      "selection-menu-317cedafb0e3952e.css": "7d0790ed1bf0c6e3955e5305d31ace2bd67f6df5f5f2b7be9692f9c79843891e",
+      "terraphim-editor-713b9e107f43bdb.js": "a9f1dcb4f52dcb0c2869b5a0764602be53708a1271f6778316901a1dc2d9af20",
+      "terraphim-editor-713b9e107f43bdb_bg.wasm": "e78c39a30abf6f1f31523ddfae87dab1721c4ac652a95965f1c4fa4c58f0a280",
+      "terraphim-editor.min.css": "6e66a660872175046d6724fc3c3d33a5716b56f5d5ef43539ec67347d60b5b2c",
+      "terraphim-editor.min.js": "ed82ccd9552bf11ddd52b0fa32773726c9b6ac6a305a51f0ea9b9e72064736bc",
+      "terraphim_editor.js": "a9f1dcb4f52dcb0c2869b5a0764602be53708a1271f6778316901a1dc2d9af20",
+      "terraphim_editor_bg.wasm": "e78c39a30abf6f1f31523ddfae87dab1721c4ac652a95965f1c4fa4c58f0a280",
+      "tokens-36540e1e0e83eb54.css": "71e359d23d7ec44c9c838f74cf77f6e33aa3c33c57757cfc4cfb96e22a09de55",
+      "trim-a64aceacb4246fba.css": "fe79acb70b9906e404d30e19b7d5e1cf6589bc0aa155f1c1dc93ed18e6dee81d",
+      "vendor/fontawesome/6.5.2/LICENSE.txt": "9b914eae88817d63b576eab5aafde7068c7a1abae125d7cdfb034f1da43a9afc",
+      "vendor/fontawesome/6.5.2/css/brands.min.css": "e10425ad768bc98ff1fb272a0ac8420f9d1ba22f0612c08ff1010c95080ffe7e",
+      "vendor/fontawesome/6.5.2/css/fontawesome.min.css": "137b1cf3cea9a8adb7884343a9a5ddddf4280f59153f74dc782fb7f7bf0d0519",
+      "vendor/fontawesome/6.5.2/css/regular.min.css": "6f4f16d58da1c82c0c3a3436e021a3d39b4742f741192c546e73e947eacfd92f",
+      "vendor/fontawesome/6.5.2/css/solid.min.css": "e65dc5b48fb5f39b142360c57c3a215744c94e56c755c929cc3e88fe12aab4d3",
+      "vendor/fontawesome/6.5.2/webfonts/fa-brands-400.ttf": "e28096fa75a96ac77020155ea3a6dd7312983e84115366d4cf49a0c312ec6d51",
+      "vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2": "232c6f6a7678304f9efaa26f30b1610debc2ba9f4cd636b5e6751c8d73761b92",
+      "vendor/fontawesome/6.5.2/webfonts/fa-regular-400.ttf": "9174757efc83e072436e873c22be1663d3c103b0a16d7fb73569af4918d4d351",
+      "vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2": "c27da6f833431da5aa295c44540bfac0fd8270ba6a3c4346427006d8a7b34b76",
+      "vendor/fontawesome/6.5.2/webfonts/fa-solid-900.ttf": "b4990d0d0c5f5d38d62e936eea120674e584c7eea8dcee38a975c0cf9a37539b",
+      "vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2": "ae17c16afbea216707b2203ea1cf9bdb45b9bfe47d0f4ae3258ddbc6294dd02f",
+      "vendor/manifest.json": "ab09bfd030127e9476d9bf35aa063b445d48324c903a8806bebaf9584a373141",
+      "vendor/shoelace/2.12.0/LICENSE.md": "ac9ffacbfc877b6f4253a481b3c0edbad0c019ac3506a3b51415b336f4a0c054",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/LICENSE": "0623348b57e817b6897c41b6065380b599d5befe2839d83270566c605e430441",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/code.svg": "e66b460f5fd8ca4327d155aa79510cb114d11c50d1b62d25c7520ad1baa02e1b",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/link.svg": "0634bc395f62df3ff42772c56af5c07bb6eba6ab23a70613ad0f255737e6511f",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/question-circle.svg": "b9408c681dfb0002a76f91c9ac864b7127ae52428aa81eca188985504a61d7e0",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/type-bold.svg": "8e7adb4a29d9fd60445e2e9d96461ddc1212ef14bfd76f41ffb951fa9968eade",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/type-h1.svg": "9a211647fe7df5c57c0b86e6625cd9c661e3df540f646c30465890aece8e1207",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/type-h2.svg": "0a5ce744585975247d8784149d3807ad57f1cbf834a34a5ab8e394a8660ba934",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/type-h3.svg": "c588ec487945d9306c1005196ed7f84bd314633423171559f0aefa6b18c97211",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/type-italic.svg": "29722685928ea226f897ebb7784132e810e976ffb61e21f625d875467f853153",
+      "vendor/shoelace/2.12.0/cdn/assets/icons/type-underline.svg": "e1038bb0001fe6f8e4e7f250bd497b71df555a093a1970aa99be189a83a3089e",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.24R5WE5A.js": "d820009490ad7b49fb616d2eac3eab89a9159c7e3d29796e522b6b903fa01be1",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.27ILGUWR.js": "c7a8c01697a327f9a24f20a80892eba4289b275114876996b7468d95a889ad94",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.2AIXAFCV.js": "243637209fe98b86324a9e50bc4b119786f749087a83f769fa5d35540e9cee8c",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.2SZPKEN5.js": "a06102043565da0ed6dbff17f50fdacadbb9cae0cf43f1904535101fc8938413",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.2X5EERK2.js": "b08f0ec5efc3540bab614d7b5f6c4ccbdbf2ef9b517cf1e3ddf7d204d223aaa2",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.3GITBIC4.js": "65f42f91445f0b5123f13e695f2973cbeb3a643a10dccb86baa620de0f0a32ef",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.3TFKS637.js": "14f82f632089ec1a68784a8aa36aec1e4a713623749ad880fbbd0119f78da043",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.3Y6SB6QS.js": "f1cea1705e0c978806be53c89f206e9c4be9cac5348d77fae76b8d759ff2a9c9",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.43GPPE74.js": "bb0054a347cbb37a414c64621c5151385e305c5a51451b9346ecd636dfde9c1b",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.4S3RCQCG.js": "822f662c32036ec0fd981cee20a7726a5d21c160a57dcc5597bddcc639349a98",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.52GJFLW5.js": "1c85cb5aba7188eb4a8587a8076781f49a5819be22740985e9b0c31e3fd8e0a3",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.52OC5JIK.js": "8e6b5b64330fa64475326259787126ac9a69fd19e63e0d872461ad8f42d00f79",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.6LJMKLWZ.js": "14a4528f459174f043fc09a0c85870a3a13c622e99db52a52f653cc12cc49de3",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.6U4GOUZA.js": "68684064e5e3af813bcf7022ce4cfe32f9169cc87de96cd5a6541c51a2904813",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.7G6CFCYN.js": "008d0d801c35fdea8829b0a18af142786bac4aa5403d8d2450140f0523a57363",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.7I3HGH5I.js": "5ff9e71578f1148596cd76ff6518f4a9350c3a78dcdc7ec83a1f968bb575e113",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.ABG77QVN.js": "eb49eecff1bdad654b2ccd12a899c841708f42b4941d06a3a588c6e24fb2ae5c",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.B3ILE7LN.js": "0fb77ecfeabdd945703ef57a818c219a87889d5409f0287e9e8d3c6be3241d48",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.B4BZKR24.js": "8bdb8b4bf886773489e9b8436aaf39a63de270073002ff62341649d857ea27cd",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.BXWBYEBW.js": "fe753faaca5c419872f5816aebc4af4afa97ded7380ec52675cf0908929652f9",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.DOYC4G7X.js": "cbccc5fca4cded950114904fb9db9471eb581c03eea6242c0c8bc47bbd56ee9a",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.E7LAXGG4.js": "4a6f1bf858fb8735a9fde90e6c7ba7a1aff940d5d1240f3701802cb504208cd2",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.ESELY2US.js": "c4097a6aa14847ee845e5f0cfe35a3a4291962c383d08d3523e3056878af9720",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.FDFOFJDR.js": "fb369159ef9c20b824925cee0f9978ffdb3a6c521d2f07a8fc135291d535a177",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.FZX37GM3.js": "2cbb7c5c4a53cb51a470e8d569ea78933aeaf5d5ed17e5380059fb70aa1fab9c",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.G2QSU2BF.js": "7828cb2a3a091d166721f1080ea93372f7dda91dc08f2f85878b5f87d58cb52f",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.GL3UMKIL.js": "ebb9e48d84cb4d0a9dffe8c8f6e63bb4c59d0e8555710fb7adf5e34052edb226",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.HAL7R4WT.js": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.HF7GESMZ.js": "4f1d59a3fb42615764c821c9f633ef85fd2ec5e7701355c82ea22eac263950a4",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.HPQ3PGLN.js": "bffc0c50bd516e7403b794eb9af5e894775bc1a13bd2b5ecc66ddbed1b53f31b",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.HQAAUCQS.js": "e0c9a4907115439faf7167b42a66b711858b930809afbe5ef3d04ff733811b98",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.HTWHAKXT.js": "86ba3477e5fff6f7844ac3343b2b2812ca299c7f537d6904855a112111f90ac3",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.I5LOVG5T.js": "637e9bc9f021553298c96430c3057a266f3cf4d6746b687a4d5057bd4342acfd",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.JJNPZ52S.js": "e869c821cc70ece9f594c1cf6cb2d8458ee6de5b33d2f7c4abb75544aa1cb29d",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.M2U2QT2K.js": "7c7463cbf1286d791c43b09b02ddf87828b07f2d2156454e7c59edf593641f91",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.MKSGYDJ7.js": "8ec92f56da768dd469e9c4e1b2d84bf305598eeb487b5172f54f390973c4ebb0",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.MOUXRZGR.js": "4b6060f74725dfa6d2e00708eeb68622e80032c29e8a29690cd32c3e7cf43b16",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.MTYRJPGI.js": "66a0947074c14ad59db09bca8d072469ef928736c3705cc7deeb98e029b5324d",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.NEZCQBYJ.js": "89adf06f2beac497d981a3fc37b45698bb90fb349a72938ba4a60ad7cd22d959",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.NH3SRVOC.js": "76b91e0a54ce01582a347456246f7433e936029ab1f9e80a87ced715864c4fa9",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.NYIIDP5N.js": "32772b78bca61210992bc3a593669ce2621d213e72b0b382e60cc09ddd87a539",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.O27EHOBW.js": "1a9aeba601f49a8ddb7507d1be6dac6ada4757edd7a69c9252f3421040854476",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.OQXQSIH6.js": "f72e99e832ab8262e441cd7fc4aef6cae99dfa32e7aa2d663184dcde34e5be0d",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.OZPGMRHW.js": "3ba2b5e16c8626a2ed2df8f71152bcc0c95df1b1903093bbfab76dae8082c65a",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.P7ZG6EMR.js": "11da9e127aa1b30b0969bf5d90bfbeb62e0c6e35c7e0c165d35d7171358b06d5",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.PCNTRSPK.js": "d50534e993927bedc5b34e6d1561e767e7b8f72fa6357e62bfcb7b954ccc0e21",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.PNPJ7KDG.js": "0cdc32350809cc64b71ecca105bd7ea95f177ca11a7e65f0a8cdb70202f8bfde",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.QOTN4UPW.js": "f0a57a7554f90327e24beea70b9d933fe294549d9c3a3352051bb5403bf27bae",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.QPSNFEB2.js": "9363a2487d32bff55b2ac56dcb57bfe1c07630c74d35171cd00ab492d16a3a47",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.RBTTBYTX.js": "6be2e7bdfc5e93af07b81a78bd188f24e22e7b3f0f7597626a924e17bb30601a",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.RIBKWZXP.js": "1f1d6889fc039c40fbd5ef439b79c05fba241aa1e221619f1d6e8ee7042ded6b",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.RK73WSZS.js": "06df6b1b1b699b5a462620b1aeacad9bef7ca4706d3d0fe146292d7316bc3357",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.TDLFM7SW.js": "a1d916205572ca7dea93311989aac9706f7d66147bb7619ce8104107fc1ab5cc",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.WAIE6M2P.js": "047a6b9e403b0e2c6e7986dedfee63031379cb31ec23a2a08bf5b5ca1fa4cace",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.WFFSQ5E5.js": "408c5d6195fcd0e23b8d97797d96289a2cff9b298ca6d37680243b564121d1d0",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.XAOA43RZ.js": "223cef3722caa4e3fb6efb90d5d4bc67ec30d51683e6df6e163a1c29884f72ce",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.XQ4KBI5G.js": "6b8ea2bf689231baa347d7c13c65e018f0876cbfc73b2f32d217dd7c5b070899",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.XXIXGO5R.js": "1ed2486116dcc58a15b579402169f054027b1e7bef36ee258d98014976656e03",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.XZMYMJVO.js": "b4f349ee02e854ba3dd6888bdbda3248c91da52772de86261d630b22c1f865e4",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.YCHBWCKL.js": "bd70677c7a805a7f0af02c88b2c217f96ae6391679b04938252238efaaf4710f",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.YGMDV7QR.js": "f81b5a698455691fc798d0c778899017d2935cb288692f0ccb837b899bf46243",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.YPBP7XEQ.js": "65de5249054ea64c13504137a773c08a3ecedf2f6c9762bf9ca8e670b762a20a",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.YZETUBD6.js": "78fb7c2ef495d0c74629aa6aee0ae3592bbd4c5103d6d37bc179b7695f2f74b3",
+      "vendor/shoelace/2.12.0/cdn/chunks/chunk.ZL53POKZ.js": "1f0c820ee81e8cd783cefcba1b28f075b64014f72932823c134cfbd45aee61c1",
+      "vendor/shoelace/2.12.0/cdn/components/badge/badge.js": "d8ee2039ef00280a52f17661d088647e328c677e090830381f3749fa343eccd9",
+      "vendor/shoelace/2.12.0/cdn/components/button-group/button-group.js": "d40c5473fa0a54722f6bbb5442339e9ae7fc10b34a8bc7d5bc5ac6138713ed31",
+      "vendor/shoelace/2.12.0/cdn/components/button/button.js": "d2c4baaf63d05b25d7e5d9950ae2a4cecdedff13f484387767dffa937beaf3c9",
+      "vendor/shoelace/2.12.0/cdn/components/dialog/dialog.js": "62df6c895cd87fc0c7731b094695ed80b62a23fb13b895b124fcb9f1d9154ea9",
+      "vendor/shoelace/2.12.0/cdn/components/divider/divider.js": "79e2fd331684c7fc545ce40cfdf9bcc92f3e26ec40566a08703da4c9dde8ad6a",
+      "vendor/shoelace/2.12.0/cdn/components/icon/icon.js": "b2eb2f56da87f532693ad0bce20a9c258d19964a37f4ebc51db6893cf306c636",
+      "vendor/shoelace/2.12.0/cdn/components/input/input.js": "084441c5b23b3842cc405fbc5e9fa54676f558b6a3bba5884582c667d8b057c3",
+      "vendor/shoelace/2.12.0/cdn/components/split-panel/split-panel.js": "e1780bedaa9c3b17612eae9560c39f448fd03c1f224c953fdc4c6df44ad38ae4",
+      "vendor/shoelace/2.12.0/cdn/components/tooltip/tooltip.js": "7e435dd2b5b7aa59e00e2967b90c8a9db61df5de781d55ec7f6b689007499d5e",
+      "vendor/shoelace/2.12.0/cdn/themes/light.css": "7bc8fb762a0f357d171df3126797e53cc0210d798080472fac6f72093acaf708",
+      "vendor/shoelace/2.12.0/cdn/utilities/base-path.js": "81b967daca7f541a910bdfabf297dbb0ec3d7fbf4588a9fb8bb8bae1b2ae28e1",
+      "vendor/shoelace/2.12.0/cdn/utilities/icon-library.js": "dbbfd83ee038e1c5d94f7107e5117fdf835523cbf595bcc87c7ec21a76157b19",
+      "vendor/shoelace/2.12.0/third-party-notices/composed-offset-position/LICENSE.md": "086c588bc8fd118a6a316d4701cf46bba36aa934f94fcfd933a35127c24627e4",
+      "vendor/shoelace/2.12.0/third-party-notices/floating-ui_core/LICENSE": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+      "vendor/shoelace/2.12.0/third-party-notices/floating-ui_dom/LICENSE": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+      "vendor/shoelace/2.12.0/third-party-notices/floating-ui_utils/LICENSE": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+      "vendor/shoelace/2.12.0/third-party-notices/lit-element/LICENSE": "45d31799d0db956cc3eb5469346abbd9b7025babc5ff29fab10d7095da992ef1",
+      "vendor/shoelace/2.12.0/third-party-notices/lit/LICENSE": "45d31799d0db956cc3eb5469346abbd9b7025babc5ff29fab10d7095da992ef1",
+      "vendor/shoelace/2.12.0/third-party-notices/lit_node_modules_lit-html/LICENSE": "2b66f9390afde29edfe4314daff93f01fb182e1178053e228120178987e5db75",
+      "vendor/shoelace/2.12.0/third-party-notices/lit_node_modules_lit_reactive-element/LICENSE": "45d31799d0db956cc3eb5469346abbd9b7025babc5ff29fab10d7095da992ef1",
+      "vendor/shoelace/2.12.0/third-party-notices/shoelace-style_localize/LICENSE.md": "ac9ffacbfc877b6f4253a481b3c0edbad0c019ac3506a3b51415b336f4a0c054",
+      "write-on-d8d89c7405e4744a.css": "422071ace43853bcdb7518132705a503dcfdb9531cc05fdb3a1adabf7c95b923"
+    },
+    "schema": 1,
+    "sourceHead": "86f1291d36df50a694293a4c670c0f4961b83c7a"
+  },
+  "manifestSha256": "b4287a48bae6211fce7c7fe350c96b6722b694f18f3f548d3329029f87dcce42",
+  "fixtureSha256": "5daa6e637be6f0d621c045129cc12cef2394174eee624c1e7e9e94bfea4db9d5",
+  "viewport": {
+    "width": 1140,
+    "height": 720
+  },
+  "storyboard": [
+    {
+      "seconds": 0.003,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 1.329,
+      "caption": "B01 \u2014 Plain mode and Write_On toggle; visible controls, headline and layout."
+    },
+    {
+      "seconds": 5.423,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 6.746,
+      "caption": "B02/B03 \u2014 Create a real word alternative; body updates from the first keystroke."
+    },
+    {
+      "seconds": 12.862,
+      "caption": "Verified KG output \u2014 synonyms:: paperclip, eraser, thumbtack; all three terms resolve to the same scoped concept."
+    },
+    {
+      "seconds": 18.661,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 19.951,
+      "caption": "B02 \u2014 Create sentence alternatives through the panel, then cycle."
+    },
+    {
+      "seconds": 25.416,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 26.493,
+      "caption": "B02 \u2014 Create paragraph alternatives through the panel, then cycle."
+    },
+    {
+      "seconds": 32.945,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 34.016,
+      "caption": "B04 \u2014 Local KG generates alternatives; robot provenance is generated output, not fixture setup."
+    },
+    {
+      "seconds": 38.194,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 39.502,
+      "caption": "B05 \u2014 Ghost selected text; text and counts remain; Revive restores it."
+    },
+    {
+      "seconds": 45.684,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 46.992,
+      "caption": "B06 \u2014 Stash moves selected text to Overflow; undo restores both locations."
+    },
+    {
+      "seconds": 53.877,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 55.18,
+      "caption": "B06 \u2014 Native selected-text drag from Overflow into real rendered text; independently check insertion and undo."
+    },
+    {
+      "seconds": 61.047,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 62.353,
+      "caption": "B06 \u2014 Native drag of the last paragraph into Overflow; verify move, append, undo and redo."
+    },
+    {
+      "seconds": 68.369,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 69.662,
+      "caption": "B08 \u2014 Execute all six Lab mark actions; inspect actual marks and unchanged body."
+    },
+    {
+      "seconds": 89.21,
+      "caption": "B09 \u2014 Execute every trim level. Python independently splices proposed ranges and counts words."
+    },
+    {
+      "seconds": 116.112,
+      "caption": "B10 \u2014 Serialize newly created ghosts and reopen saved content. API persistence bridge; not OS picker proof."
+    },
+    {
+      "seconds": 117.13,
+      "caption": "B10 \u2014 Inspect clean Markdown export through the visible export control."
+    },
+    {
+      "seconds": 121.257,
+      "caption": "SETUP \u2014 open public fixture; preloaded state is not an operation result."
+    },
+    {
+      "seconds": 122.57,
+      "caption": "B11 \u2014 Create a choice, ghost and Overflow note, then save and reopen all three together."
+    },
+    {
+      "seconds": 133.644,
+      "caption": "Verified reopened KG output \u2014 synonyms:: paperclip, eraser. Choice, ghost and Overflow were restored together."
+    },
+    {
+      "seconds": 137.657,
+      "caption": "B12 \u2014 Merge overlapping ghost coverage, revive an interior selection, then delete the ghosted text."
+    },
+    {
+      "seconds": 146.955,
+      "caption": "Coverage: completed actions are checked outputs. Advanced drag, OS picker, ambiguity and pixel review remain separately identified, never implied PASS."
+    }
+  ],
+  "fullFunctionality": true,
+  "status": "complete",
+  "outputReservation": {
+    "device": 16777231,
+    "inode": 348181460
+  },
+  "playwrightRecordingEncoder": {
+    "registryPath": "/private/var/folders/rb/l4_6j2nx0lnfhysk974ldpg40000gn/T/opencode/rolegraph-playwright-browsers/ffmpeg-1011/ffmpeg-mac",
+    "resolvedTarget": "/opt/homebrew/Cellar/ffmpeg/9.0.2/bin/ffmpeg",
+    "symlinkTarget": "/opt/homebrew/bin/ffmpeg",
+    "binarySha256": "1ede5c7fd4e97d832ec69c97c78231875de7d69c55423158f5f4a4d923227dd5",
+    "version": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+    "provenance": "externally supplied system encoder via symlink"
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:144.0) Gecko/20100101 Firefox/144.0",
+  "browserVersion": "144.0.2",
+  "captureMethod": "Playwright viewport recording; isolated context",
+  "outputChecks": [
+    {
+      "seconds": 2.37,
+      "name": "Plain mode via counter",
+      "actual": "plain",
+      "expected": "plain",
+      "status": "PASS",
+      "requirements": [
+        "R-2.1"
+      ]
+    },
+    {
+      "seconds": 2.42,
+      "name": "Write_On via counter",
+      "actual": "write-on",
+      "expected": "write-on",
+      "status": "PASS",
+      "requirements": [
+        "R-2.1",
+        "R-7.2"
+      ]
+    },
+    {
+      "seconds": 2.421,
+      "name": "Headline rendered",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-3.5"
+      ]
+    },
+    {
+      "seconds": 7.794,
+      "name": "Selection precondition: exact tail",
+      "actual": "paperclip",
+      "expected": "paperclip",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 7.921,
+      "name": "First keystroke updates body and article",
+      "actual": "Pass me an e",
+      "expected": "Pass me an e",
+      "status": "PASS",
+      "requirements": [
+        "R-2.2",
+        "R-4.3",
+        "R-2.6"
+      ]
+    },
+    {
+      "seconds": 10.232,
+      "name": "Completed candidate before Enter",
+      "actual": "Pass me an eraser",
+      "expected": "Pass me an eraser",
+      "status": "PASS",
+      "requirements": [
+        "R-4.3",
+        "R-2.6"
+      ]
+    },
+    {
+      "seconds": 12.851,
+      "name": "Article reverses to a",
+      "actual": "Pass me a thumbtack",
+      "expected": "Pass me a thumbtack",
+      "status": "PASS",
+      "requirements": [
+        "R-2.6"
+      ]
+    },
+    {
+      "seconds": 12.853,
+      "name": "Original-first ordered created alternatives",
+      "actual": [
+        "paperclip",
+        "eraser",
+        "thumbtack"
+      ],
+      "expected": [
+        "paperclip",
+        "eraser",
+        "thumbtack"
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-2.2",
+        "R-4.3"
+      ]
+    },
+    {
+      "seconds": 12.855,
+      "name": "Newly authored alternatives use actual synonyms:: KG syntax",
+      "actual": "synonyms:: paperclip, eraser, thumbtack\n",
+      "expected": "synonyms:: paperclip, eraser, thumbtack\n",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 12.857,
+      "name": "Actual scoped KG query for eraser",
+      "actual": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 12.859,
+      "name": "Actual scoped KG query for paperclip",
+      "actual": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 12.861,
+      "name": "Actual scoped KG query for thumbtack",
+      "actual": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip",
+        "thumbtack"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 12.861,
+      "name": "Authored aliases share the actual typed KG concept",
+      "actual": [
+        1
+      ],
+      "expected": [
+        1
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 13.917,
+      "name": "Panel Down cycles in context",
+      "actual": "Pass me an eraser",
+      "expected": "Pass me an eraser",
+      "status": "PASS",
+      "requirements": [
+        "R-4.5",
+        "R-2.6"
+      ]
+    },
+    {
+      "seconds": 13.922,
+      "name": "Panel Up restores original",
+      "actual": "Pass me a paperclip",
+      "expected": "Pass me a paperclip",
+      "status": "PASS",
+      "requirements": [
+        "R-4.5",
+        "R-2.6"
+      ]
+    },
+    {
+      "seconds": 14.558,
+      "name": "Escape cancels new candidate",
+      "actual": "Pass me a paperclip",
+      "expected": "Pass me a paperclip",
+      "status": "PASS",
+      "requirements": [
+        "R-4.3"
+      ]
+    },
+    {
+      "seconds": 18.652,
+      "name": "Hover over word plus Down cycles actual body",
+      "actual": "Pass me an eraser",
+      "expected": "Pass me an eraser",
+      "status": "PASS",
+      "requirements": [
+        "R-2.4",
+        "R-3.6"
+      ]
+    },
+    {
+      "seconds": 18.654,
+      "name": "Word has one visible dot per alternative",
+      "actual": 3,
+      "expected": 3,
+      "status": "PASS",
+      "requirements": [
+        "R-3.2"
+      ]
+    },
+    {
+      "seconds": 18.654,
+      "name": "Exactly the chosen dot is bright",
+      "actual": [
+        1
+      ],
+      "expected": [
+        1
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.3"
+      ]
+    },
+    {
+      "seconds": 18.654,
+      "name": "Word underline rendered at one pixel",
+      "actual": [
+        "underline",
+        "1px"
+      ],
+      "expected": [
+        "underline",
+        "1px"
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.1"
+      ]
+    },
+    {
+      "seconds": 18.654,
+      "name": "Dot row has rendered visible dots",
+      "actual": [
+        true,
+        true
+      ],
+      "expected": [
+        true,
+        true
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.2"
+      ]
+    },
+    {
+      "seconds": 18.654,
+      "name": "Word dots are centred within two pixels",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-3.2"
+      ]
+    },
+    {
+      "seconds": 18.654,
+      "name": "Active dot uses full lavender and dim dots differ",
+      "actual": [
+        "rgb(140, 134, 230)",
+        true,
+        true
+      ],
+      "expected": [
+        "rgb(140, 134, 230)",
+        true,
+        true
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.3"
+      ]
+    },
+    {
+      "seconds": 18.66,
+      "name": "Hover Up restores original",
+      "actual": "Pass me a paperclip",
+      "expected": "Pass me a paperclip",
+      "status": "PASS",
+      "requirements": [
+        "R-2.4"
+      ]
+    },
+    {
+      "seconds": 20.991,
+      "name": "Selection precondition: entire body",
+      "actual": [
+        0,
+        26
+      ],
+      "expected": [
+        0,
+        26
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 22.407,
+      "name": "Created sentence replacement",
+      "actual": "A different sentence.",
+      "expected": "A different sentence.",
+      "status": "PASS",
+      "requirements": [
+        "R-2.3",
+        "R-4.2"
+      ]
+    },
+    {
+      "seconds": 22.408,
+      "name": "Created span granularity",
+      "actual": "sentence",
+      "expected": "sentence",
+      "status": "PASS",
+      "requirements": [
+        "R-2.3"
+      ]
+    },
+    {
+      "seconds": 22.41,
+      "name": "sentence indicators visible with exactly two choices and one active",
+      "actual": [
+        true,
+        2,
+        1
+      ],
+      "expected": [
+        true,
+        2,
+        1
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.2",
+        "R-3.3"
+      ]
+    },
+    {
+      "seconds": 22.41,
+      "name": "sentence dots have visible rendered area",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-3.2"
+      ]
+    },
+    {
+      "seconds": 22.41,
+      "name": "Sentence dots end at underline within two pixels",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-3.2"
+      ]
+    },
+    {
+      "seconds": 27.554,
+      "name": "Selection precondition: entire body",
+      "actual": [
+        0,
+        32
+      ],
+      "expected": [
+        0,
+        32
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 29.934,
+      "name": "Created paragraph replacement",
+      "actual": "A different paragraph. Two sentences.",
+      "expected": "A different paragraph. Two sentences.",
+      "status": "PASS",
+      "requirements": [
+        "R-2.3",
+        "R-4.2"
+      ]
+    },
+    {
+      "seconds": 29.937,
+      "name": "Created span granularity",
+      "actual": "paragraph",
+      "expected": "paragraph",
+      "status": "PASS",
+      "requirements": [
+        "R-2.3"
+      ]
+    },
+    {
+      "seconds": 29.939,
+      "name": "paragraph indicators visible with exactly two choices and one active",
+      "actual": [
+        true,
+        2,
+        1
+      ],
+      "expected": [
+        true,
+        2,
+        1
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.4",
+        "R-3.3"
+      ]
+    },
+    {
+      "seconds": 29.939,
+      "name": "paragraph dots have visible rendered area",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-3.4"
+      ]
+    },
+    {
+      "seconds": 29.939,
+      "name": "Paragraph gutter rule replaces underline",
+      "actual": [
+        true,
+        "none"
+      ],
+      "expected": [
+        true,
+        "none"
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.4"
+      ]
+    },
+    {
+      "seconds": 29.939,
+      "name": "Paragraph one-pixel gutter spans text height with dots on its left",
+      "actual": [
+        1,
+        true,
+        true,
+        true
+      ],
+      "expected": [
+        1,
+        true,
+        true,
+        true
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-3.4"
+      ]
+    },
+    {
+      "seconds": 35.087,
+      "name": "Selection precondition: exact tail",
+      "actual": "rubber",
+      "expected": "rubber",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 37.159,
+      "name": "Generated local alternatives",
+      "actual": [
+        "rubber",
+        "eraser"
+      ],
+      "expected": [
+        "rubber",
+        "eraser"
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-8.6",
+        "R-8.7",
+        "R-4.4"
+      ]
+    },
+    {
+      "seconds": 37.162,
+      "name": "Generated AI provenance",
+      "actual": "ai",
+      "expected": "ai",
+      "status": "PASS",
+      "requirements": [
+        "R-4.4",
+        "R-8.6"
+      ]
+    },
+    {
+      "seconds": 37.176,
+      "name": "Undo restores literal body",
+      "actual": "\ud83e\udd80 Caf\u00e9 e\u0301 \u2014 a synthetic draft uses rubber",
+      "expected": "\ud83e\udd80 Caf\u00e9 e\u0301 \u2014 a synthetic draft uses rubber",
+      "status": "PASS",
+      "requirements": [
+        "R-4.6"
+      ]
+    },
+    {
+      "seconds": 38.184,
+      "name": "Undo removes generated span",
+      "actual": 0,
+      "expected": 0,
+      "status": "PASS",
+      "requirements": [
+        "R-4.6",
+        "R-2.7"
+      ]
+    },
+    {
+      "seconds": 38.187,
+      "name": "Undo removes generated KG synonym membership",
+      "actual": [],
+      "expected": [],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 38.189,
+      "name": "Undo removes the authored inline indicator row",
+      "actual": 0,
+      "expected": 0,
+      "status": "PASS",
+      "requirements": [
+        "R-4.6",
+        "R-2.7"
+      ]
+    },
+    {
+      "seconds": 38.191,
+      "name": "Undo query removes the authored synonym group",
+      "actual": [],
+      "expected": [],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 40.604,
+      "name": "Selection precondition: exact tail",
+      "actual": "Ghost these words.",
+      "expected": "Ghost these words.",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 43.66,
+      "name": "Ghost does not delete text",
+      "actual": "Keep this. Ghost these words.",
+      "expected": "Keep this. Ghost these words.",
+      "status": "PASS",
+      "requirements": [
+        "R-5.1"
+      ]
+    },
+    {
+      "seconds": 43.668,
+      "name": "New ghost created",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS",
+      "requirements": [
+        "R-5.1"
+      ]
+    },
+    {
+      "seconds": 43.672,
+      "name": "Ghost words remain counted",
+      "actual": 5,
+      "expected": 5,
+      "status": "PASS",
+      "requirements": [
+        "R-5.1"
+      ]
+    },
+    {
+      "seconds": 43.679,
+      "name": "Revive removes ghost",
+      "actual": 0,
+      "expected": 0,
+      "status": "PASS",
+      "requirements": [
+        "R-5.2"
+      ]
+    },
+    {
+      "seconds": 48.038,
+      "name": "Selection precondition: exact tail",
+      "actual": "gamma.",
+      "expected": "gamma.",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 50.047,
+      "name": "Stash source removal",
+      "actual": "Alpha beta ",
+      "expected": "Alpha beta ",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 50.048,
+      "name": "Stash destination",
+      "actual": "gamma.",
+      "expected": "gamma.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3",
+        "R-6.1"
+      ]
+    },
+    {
+      "seconds": 50.077,
+      "name": "Undo restores literal body",
+      "actual": "Alpha beta gamma.",
+      "expected": "Alpha beta gamma.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 51.085,
+      "name": "Stash undo clears appended Overflow",
+      "actual": "",
+      "expected": "",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 53.871,
+      "name": "Ctrl+Enter pulls paragraph into body",
+      "actual": "Alpha beta gamma.\n\nPublic note",
+      "expected": "Alpha beta gamma.\n\nPublic note",
+      "status": "PASS",
+      "requirements": [
+        "R-6.2",
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 53.874,
+      "name": "Pull-back preserves Overflow copy",
+      "actual": "Public note",
+      "expected": "Public note",
+      "status": "PASS",
+      "requirements": [
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 56.215,
+      "name": "Pull-drag shortcut targets the focused editor",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 56.216,
+      "name": "Pull-drag fixture starts with Overflow closed",
+      "actual": false,
+      "expected": false,
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 56.959,
+      "name": "Native Overflow selection precondition",
+      "actual": "Public note.",
+      "expected": "Public note.",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 59.998,
+      "name": "Native pull drag has one trusted source and destination",
+      "actual": [
+        [
+          "dragstart",
+          true,
+          "overflow"
+        ],
+        [
+          "drop",
+          true,
+          "surface"
+        ]
+      ],
+      "expected": [
+        [
+          "dragstart",
+          true,
+          "overflow"
+        ],
+        [
+          "drop",
+          true,
+          "surface"
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 59.998,
+      "name": "Native pull drop carries exact selected text",
+      "actual": "Public note.",
+      "expected": "Public note.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 60.0,
+      "name": "Native pull inserts independently separated text",
+      "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+      "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 60.001,
+      "name": "Native pull keeps Overflow copy",
+      "actual": "Public note.",
+      "expected": "Public note.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 60.04,
+      "name": "Undo restores literal body",
+      "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+      "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 61.046,
+      "name": "Native pull redo restores exact body",
+      "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+      "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\nPublic note.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 63.389,
+      "name": "Stash-drag shortcut targets the focused editor",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 63.39,
+      "name": "Stash-drag fixture starts with Overflow closed",
+      "actual": false,
+      "expected": false,
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 64.31,
+      "name": "Selection precondition: exact tail",
+      "actual": "Third paragraph.",
+      "expected": "Third paragraph.",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 67.329,
+      "name": "Native stash drag has trusted source and destination",
+      "actual": [
+        [
+          "dragstart",
+          true,
+          "surface"
+        ],
+        [
+          "drop",
+          true,
+          "overflow"
+        ]
+      ],
+      "expected": [
+        [
+          "dragstart",
+          true,
+          "surface"
+        ],
+        [
+          "drop",
+          true,
+          "overflow"
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-6.3",
+        "R-6.4"
+      ]
+    },
+    {
+      "seconds": 67.33,
+      "name": "Native stash removes exact source paragraph",
+      "actual": "First paragraph.\n\nSecond paragraph.\n\n",
+      "expected": "First paragraph.\n\nSecond paragraph.\n\n",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 67.331,
+      "name": "Native stash appends exact text after blank line",
+      "actual": "Existing note.\n\nThird paragraph.",
+      "expected": "Existing note.\n\nThird paragraph.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 67.358,
+      "name": "Undo restores literal body",
+      "actual": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+      "expected": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 68.363,
+      "name": "Native stash undo restores Overflow",
+      "actual": "Existing note.",
+      "expected": "Existing note.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 68.368,
+      "name": "Native stash redo removes source again",
+      "actual": "First paragraph.\n\nSecond paragraph.\n\n",
+      "expected": "First paragraph.\n\nSecond paragraph.\n\n",
+      "status": "PASS",
+      "requirements": [
+        "R-6.3"
+      ]
+    },
+    {
+      "seconds": 73.956,
+      "name": "typos_and_punctuation never rewrites body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.1",
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 73.958,
+      "name": "typos_and_punctuation produces marks",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 73.958,
+      "name": "typos_and_punctuation observed marks for semantic review",
+      "actual": [
+        {
+          "start": 74,
+          "end": 81,
+          "text": "recieve",
+          "kind": "typo"
+        },
+        {
+          "start": 107,
+          "end": 109,
+          "text": " ,",
+          "kind": "punctuation"
+        }
+      ],
+      "status": "OBSERVED; NOT AN INDEPENDENT SEMANTIC ORACLE",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 77.005,
+      "name": "weakest_sentences never rewrites body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.1",
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 77.006,
+      "name": "weakest_sentences produces marks",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 77.006,
+      "name": "weakest_sentences observed marks for semantic review",
+      "actual": [
+        {
+          "start": 366,
+          "end": 426,
+          "text": "It is really just a bit too much for one small team to read.",
+          "kind": "weak_sentence"
+        },
+        {
+          "start": 701,
+          "end": 752,
+          "text": "Perhaps the weather will change soon enough for us.",
+          "kind": "weak_sentence"
+        }
+      ],
+      "status": "OBSERVED; NOT AN INDEPENDENT SEMANTIC ORACLE",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 80.059,
+      "name": "long_sentences never rewrites body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.1",
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 80.063,
+      "name": "long_sentences produces marks",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 80.063,
+      "name": "long_sentences observed marks for semantic review",
+      "actual": [
+        {
+          "start": 144,
+          "end": 321,
+          "text": "The plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.",
+          "kind": "long_sentence"
+        },
+        {
+          "start": 428,
+          "end": 655,
+          "text": "The committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.",
+          "kind": "long_sentence"
+        }
+      ],
+      "status": "OBSERVED; NOT AN INDEPENDENT SEMANTIC ORACLE",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 83.104,
+      "name": "convoluted_sentences never rewrites body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.1",
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 83.106,
+      "name": "convoluted_sentences produces marks",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 83.106,
+      "name": "convoluted_sentences observed marks for semantic review",
+      "actual": [
+        {
+          "start": 144,
+          "end": 321,
+          "text": "The plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.",
+          "kind": "convoluted_sentence"
+        }
+      ],
+      "status": "OBSERVED; NOT AN INDEPENDENT SEMANTIC ORACLE",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 86.143,
+      "name": "off_tone never rewrites body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.1",
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 86.146,
+      "name": "off_tone produces marks",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 86.146,
+      "name": "off_tone observed marks for semantic review",
+      "actual": [
+        {
+          "start": 335,
+          "end": 340,
+          "text": "stuff",
+          "kind": "off_tone"
+        },
+        {
+          "start": 351,
+          "end": 356,
+          "text": "kinda",
+          "kind": "off_tone"
+        },
+        {
+          "start": 357,
+          "end": 364,
+          "text": "awesome",
+          "kind": "off_tone"
+        }
+      ],
+      "status": "OBSERVED; NOT AN INDEPENDENT SEMANTIC ORACLE",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 89.177,
+      "name": "hedges_and_filler never rewrites body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.1",
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 89.179,
+      "name": "hedges_and_filler produces marks",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 89.179,
+      "name": "hedges_and_filler observed marks for semantic review",
+      "actual": [
+        {
+          "start": 323,
+          "end": 330,
+          "text": "I think",
+          "kind": "hedge"
+        },
+        {
+          "start": 372,
+          "end": 378,
+          "text": "really",
+          "kind": "filler"
+        },
+        {
+          "start": 379,
+          "end": 383,
+          "text": "just",
+          "kind": "filler"
+        },
+        {
+          "start": 384,
+          "end": 389,
+          "text": "a bit",
+          "kind": "filler"
+        },
+        {
+          "start": 442,
+          "end": 450,
+          "text": "probably",
+          "kind": "hedge"
+        },
+        {
+          "start": 470,
+          "end": 478,
+          "text": "it seems",
+          "kind": "hedge"
+        },
+        {
+          "start": 701,
+          "end": 708,
+          "text": "Perhaps",
+          "kind": "hedge"
+        },
+        {
+          "start": 863,
+          "end": 868,
+          "text": "quite",
+          "kind": "filler"
+        }
+      ],
+      "status": "OBSERVED; NOT AN INDEPENDENT SEMANTIC ORACLE",
+      "requirements": [
+        "R-8.2"
+      ]
+    },
+    {
+      "seconds": 92.245,
+      "name": "Trim preview preserves exact body: original",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.3",
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 94.295,
+      "name": "Trim preview preserves exact body: slight",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.3",
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 94.299,
+      "name": "slight card counts",
+      "actual": [
+        160,
+        146
+      ],
+      "expected": [
+        160,
+        146
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 96.587,
+      "name": "Trim preview preserves exact body: tighten",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.3",
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 96.591,
+      "name": "tighten card counts",
+      "actual": [
+        160,
+        130
+      ],
+      "expected": [
+        160,
+        130
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 98.887,
+      "name": "Trim preview preserves exact body: sharper",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.3",
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 98.89,
+      "name": "sharper card counts",
+      "actual": [
+        160,
+        113
+      ],
+      "expected": [
+        160,
+        113
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 101.193,
+      "name": "Trim preview preserves exact body: half",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.3",
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 101.198,
+      "name": "half card counts",
+      "actual": [
+        160,
+        82
+      ],
+      "expected": [
+        160,
+        82
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-8.4"
+      ]
+    },
+    {
+      "seconds": 105.529,
+      "name": "Walk through visibly highlights the exact proposed cut",
+      "actual": ", which we drafted in March",
+      "expected": ", which we drafted in March",
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 105.529,
+      "name": "Walk through renders a current-cut marker",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 107.584,
+      "name": "Keep records the selected cut",
+      "actual": [
+        2
+      ],
+      "expected": [
+        2
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 107.586,
+      "name": "Keep retains original body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 109.691,
+      "name": "Make cuts changes body",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 109.691,
+      "name": "Make cuts produces independently counted remainder",
+      "actual": 151,
+      "expected": 151,
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 109.735,
+      "name": "Undo restores literal body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 116.107,
+      "name": "Done keeps literal text",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-8.5"
+      ]
+    },
+    {
+      "seconds": 116.111,
+      "name": "Done persists exact outermost preview ranges",
+      "actual": [
+        [
+          152,
+          179
+        ],
+        [
+          323,
+          331
+        ],
+        [
+          371,
+          378
+        ],
+        [
+          378,
+          383
+        ],
+        [
+          383,
+          389
+        ],
+        [
+          441,
+          450
+        ],
+        [
+          701,
+          709
+        ],
+        [
+          862,
+          868
+        ]
+      ],
+      "expected": [
+        [
+          152,
+          179
+        ],
+        [
+          323,
+          331
+        ],
+        [
+          371,
+          378
+        ],
+        [
+          378,
+          383
+        ],
+        [
+          383,
+          389
+        ],
+        [
+          441,
+          450
+        ],
+        [
+          701,
+          709
+        ],
+        [
+          862,
+          868
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-8.5",
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 117.117,
+      "name": "Saved trailing annotation block",
+      "actual": true,
+      "expected": true,
+      "status": "PASS",
+      "requirements": [
+        "R-9.1"
+      ]
+    },
+    {
+      "seconds": 117.126,
+      "name": "Reopened saved body",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nI think the stuff we got is kinda awesome. It is really just a bit too much for one small team to read.\n\nThe committee probably met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. Perhaps the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is quite simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-9.1",
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 117.129,
+      "name": "Reopened newly created annotations",
+      "actual": {
+        "ghosts": [
+          {
+            "anchor": {
+              "after": ", and which, as you know, ",
+              "before": " them before lunch.\n\nThe plan",
+              "end": 179,
+              "start": 152,
+              "text": ", which we drafted in March"
+            },
+            "id": "g1"
+          },
+          {
+            "anchor": {
+              "after": "the stuff we got is kinda ",
+              "before": " all moved, is now final.\n\n",
+              "end": 331,
+              "start": 323,
+              "text": "I think "
+            },
+            "id": "g2"
+          },
+          {
+            "anchor": {
+              "after": " just a bit too much for one ",
+              "before": " we got is kinda awesome. It is",
+              "end": 378,
+              "start": 371,
+              "text": " really"
+            },
+            "id": "g3"
+          },
+          {
+            "anchor": {
+              "after": " a bit too much for one small ",
+              "before": " is kinda awesome. It is really",
+              "end": 383,
+              "start": 378,
+              "text": " just"
+            },
+            "id": "g4"
+          },
+          {
+            "anchor": {
+              "after": " too much for one small team to ",
+              "before": "kinda awesome. It is really just",
+              "end": 389,
+              "start": 383,
+              "text": " a bit"
+            },
+            "id": "g5"
+          },
+          {
+            "anchor": {
+              "after": " met on Tuesday and it seems to ",
+              "before": " team to read.\n\nThe committee",
+              "end": 450,
+              "start": 441,
+              "text": " probably"
+            },
+            "id": "g6"
+          },
+          {
+            "anchor": {
+              "after": "the weather will change soon ",
+              "before": " water every day in summer. ",
+              "end": 709,
+              "start": 701,
+              "text": "Perhaps "
+            },
+            "id": "g7"
+          },
+          {
+            "anchor": {
+              "after": " simple to read.\n",
+              "before": "\n```\n\n- A list item that is",
+              "end": 868,
+              "start": 862,
+              "text": " quite"
+            },
+            "id": "g8"
+          }
+        ],
+        "kg": [],
+        "overflow": "",
+        "preservedBlock": false,
+        "setAside": {
+          "ghosts": [],
+          "spans": []
+        },
+        "spans": [],
+        "synonymGroups": []
+      },
+      "expected": {
+        "ghosts": [
+          {
+            "anchor": {
+              "after": ", and which, as you know, ",
+              "before": " them before lunch.\n\nThe plan",
+              "end": 179,
+              "start": 152,
+              "text": ", which we drafted in March"
+            },
+            "id": "g1"
+          },
+          {
+            "anchor": {
+              "after": "the stuff we got is kinda ",
+              "before": " all moved, is now final.\n\n",
+              "end": 331,
+              "start": 323,
+              "text": "I think "
+            },
+            "id": "g2"
+          },
+          {
+            "anchor": {
+              "after": " just a bit too much for one ",
+              "before": " we got is kinda awesome. It is",
+              "end": 378,
+              "start": 371,
+              "text": " really"
+            },
+            "id": "g3"
+          },
+          {
+            "anchor": {
+              "after": " a bit too much for one small ",
+              "before": " is kinda awesome. It is really",
+              "end": 383,
+              "start": 378,
+              "text": " just"
+            },
+            "id": "g4"
+          },
+          {
+            "anchor": {
+              "after": " too much for one small team to ",
+              "before": "kinda awesome. It is really just",
+              "end": 389,
+              "start": 383,
+              "text": " a bit"
+            },
+            "id": "g5"
+          },
+          {
+            "anchor": {
+              "after": " met on Tuesday and it seems to ",
+              "before": " team to read.\n\nThe committee",
+              "end": 450,
+              "start": 441,
+              "text": " probably"
+            },
+            "id": "g6"
+          },
+          {
+            "anchor": {
+              "after": "the weather will change soon ",
+              "before": " water every day in summer. ",
+              "end": 709,
+              "start": 701,
+              "text": "Perhaps "
+            },
+            "id": "g7"
+          },
+          {
+            "anchor": {
+              "after": " simple to read.\n",
+              "before": "\n```\n\n- A list item that is",
+              "end": 868,
+              "start": 862,
+              "text": " quite"
+            },
+            "id": "g8"
+          }
+        ],
+        "kg": [],
+        "overflow": "",
+        "preservedBlock": false,
+        "setAside": {
+          "ghosts": [],
+          "spans": []
+        },
+        "spans": [],
+        "synonymGroups": []
+      },
+      "status": "PASS",
+      "requirements": [
+        "R-9.1",
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 121.245,
+      "name": "Visible export dialog matches independent output",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-9.3"
+      ]
+    },
+    {
+      "seconds": 121.245,
+      "name": "Export drops ghost ranges exactly",
+      "actual": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+      "expected": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nthe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. the weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+      "status": "PASS",
+      "requirements": [
+        "R-9.3"
+      ]
+    },
+    {
+      "seconds": 121.245,
+      "name": "Export excludes annotation block",
+      "actual": false,
+      "expected": false,
+      "status": "PASS",
+      "requirements": [
+        "R-9.3"
+      ]
+    },
+    {
+      "seconds": 123.642,
+      "name": "Selection precondition: exact tail",
+      "actual": "paperclip",
+      "expected": "paperclip",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 124.088,
+      "name": "Combined fixture choice is actual typed output",
+      "actual": "Keep this. Pass me an eraser",
+      "expected": "Keep this. Pass me an eraser",
+      "status": "PASS",
+      "requirements": [
+        "R-2.2",
+        "R-2.6"
+      ]
+    },
+    {
+      "seconds": 124.19,
+      "name": "Selection precondition: exact tail",
+      "actual": "Pass me an eraser",
+      "expected": "Pass me an eraser",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 126.203,
+      "name": "Ghost covers the sentence containing the alternative",
+      "actual": [
+        [
+          11,
+          28
+        ]
+      ],
+      "expected": [
+        [
+          11,
+          28
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 126.265,
+      "name": "Selection precondition: exact tail",
+      "actual": "eraser",
+      "expected": "eraser",
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 128.33,
+      "name": "Swap within ghost restores original wording",
+      "actual": "Keep this. Pass me a paperclip",
+      "expected": "Keep this. Pass me a paperclip",
+      "status": "PASS",
+      "requirements": [
+        "R-5.3",
+        "R-2.6"
+      ]
+    },
+    {
+      "seconds": 128.334,
+      "name": "Ghost expands with longer original",
+      "actual": [
+        [
+          11,
+          30
+        ]
+      ],
+      "expected": [
+        [
+          11,
+          30
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 130.354,
+      "name": "Swap within ghost restores active choice",
+      "actual": "Keep this. Pass me an eraser",
+      "expected": "Keep this. Pass me an eraser",
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 130.359,
+      "name": "Ghost contracts with shorter choice",
+      "actual": [
+        [
+          11,
+          28
+        ]
+      ],
+      "expected": [
+        [
+          11,
+          28
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 133.62,
+      "name": "Typed Overflow reaches document model",
+      "actual": "A saved public note.",
+      "expected": "A saved public note.",
+      "status": "PASS",
+      "requirements": [
+        "R-6.2",
+        "R-6.5"
+      ]
+    },
+    {
+      "seconds": 133.62,
+      "name": "Active choice persisted in model",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS",
+      "requirements": [
+        "R-2.5",
+        "R-9.2"
+      ]
+    },
+    {
+      "seconds": 133.633,
+      "name": "Reopen preserves chosen body",
+      "actual": "Keep this. Pass me an eraser",
+      "expected": "Keep this. Pass me an eraser",
+      "status": "PASS",
+      "requirements": [
+        "R-2.5",
+        "R-9.1"
+      ]
+    },
+    {
+      "seconds": 133.636,
+      "name": "Reopen preserves full choice, ghost and Overflow state",
+      "actual": {
+        "ghosts": [
+          {
+            "anchor": {
+              "after": "",
+              "before": "Keep this. ",
+              "end": 28,
+              "start": 11,
+              "text": "Pass me an eraser"
+            },
+            "id": "g1"
+          }
+        ],
+        "kg": [],
+        "overflow": "A saved public note.",
+        "preservedBlock": false,
+        "setAside": {
+          "ghosts": [],
+          "spans": []
+        },
+        "spans": [
+          {
+            "active": 1,
+            "alts": [
+              {
+                "source": "original",
+                "text": "paperclip"
+              },
+              {
+                "source": "human",
+                "text": "eraser"
+              }
+            ],
+            "anchor": {
+              "after": "",
+              "before": "Keep this. Pass me an ",
+              "end": 28,
+              "start": 22,
+              "text": "eraser"
+            },
+            "id": "s1",
+            "kind": "word"
+          }
+        ],
+        "synonymGroups": [
+          {
+            "alternatives": [
+              {
+                "source": "original",
+                "text": "paperclip"
+              },
+              {
+                "source": "human",
+                "text": "eraser"
+              }
+            ],
+            "attached": true,
+            "markdown": "synonyms:: paperclip, eraser\n",
+            "spanId": "s1",
+            "synonyms": [
+              "paperclip",
+              "eraser"
+            ],
+            "thesaurus": {
+              "data": {
+                "eraser": {
+                  "display_value": "paperclip",
+                  "id": 1,
+                  "nterm": "paperclip",
+                  "pinned": false
+                },
+                "paperclip": {
+                  "display_value": "paperclip",
+                  "id": 1,
+                  "nterm": "paperclip",
+                  "pinned": false
+                }
+              },
+              "name": "alternative:s1"
+            },
+            "typedSynonyms": []
+          }
+        ]
+      },
+      "expected": {
+        "ghosts": [
+          {
+            "anchor": {
+              "after": "",
+              "before": "Keep this. ",
+              "end": 28,
+              "start": 11,
+              "text": "Pass me an eraser"
+            },
+            "id": "g1"
+          }
+        ],
+        "kg": [],
+        "overflow": "A saved public note.",
+        "preservedBlock": false,
+        "setAside": {
+          "ghosts": [],
+          "spans": []
+        },
+        "spans": [
+          {
+            "active": 1,
+            "alts": [
+              {
+                "source": "original",
+                "text": "paperclip"
+              },
+              {
+                "source": "human",
+                "text": "eraser"
+              }
+            ],
+            "anchor": {
+              "after": "",
+              "before": "Keep this. Pass me an ",
+              "end": 28,
+              "start": 22,
+              "text": "eraser"
+            },
+            "id": "s1",
+            "kind": "word"
+          }
+        ],
+        "synonymGroups": [
+          {
+            "alternatives": [
+              {
+                "source": "original",
+                "text": "paperclip"
+              },
+              {
+                "source": "human",
+                "text": "eraser"
+              }
+            ],
+            "attached": true,
+            "markdown": "synonyms:: paperclip, eraser\n",
+            "spanId": "s1",
+            "synonyms": [
+              "paperclip",
+              "eraser"
+            ],
+            "thesaurus": {
+              "data": {
+                "eraser": {
+                  "display_value": "paperclip",
+                  "id": 1,
+                  "nterm": "paperclip",
+                  "pinned": false
+                },
+                "paperclip": {
+                  "display_value": "paperclip",
+                  "id": 1,
+                  "nterm": "paperclip",
+                  "pinned": false
+                }
+              },
+              "name": "alternative:s1"
+            },
+            "typedSynonyms": []
+          }
+        ]
+      },
+      "status": "PASS",
+      "requirements": [
+        "R-2.5",
+        "R-5.3",
+        "R-6.5",
+        "R-9.2"
+      ]
+    },
+    {
+      "seconds": 133.64,
+      "name": "Fresh reopened authored KG query for paperclip",
+      "actual": [
+        "eraser",
+        "paperclip"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 133.642,
+      "name": "Fresh reopened authored KG query for eraser",
+      "actual": [
+        "eraser",
+        "paperclip"
+      ],
+      "expected": [
+        "eraser",
+        "paperclip"
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 134.649,
+      "name": "Combined clean export excludes ghost and Overflow",
+      "actual": "Keep this.",
+      "expected": "Keep this.",
+      "status": "PASS",
+      "requirements": [
+        "R-9.3"
+      ]
+    },
+    {
+      "seconds": 138.758,
+      "name": "Selection precondition: entire body",
+      "actual": [
+        0,
+        28
+      ],
+      "expected": [
+        0,
+        28
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 140.768,
+      "name": "Overlapping coverage merges into one whole-body ghost",
+      "actual": [
+        [
+          0,
+          28
+        ]
+      ],
+      "expected": [
+        [
+          0,
+          28
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 142.852,
+      "name": "Selection menu offers Revive",
+      "actual": "Revive",
+      "expected": "Revive",
+      "status": "PASS",
+      "requirements": [
+        "R-5.2",
+        "R-7.3"
+      ]
+    },
+    {
+      "seconds": 144.89,
+      "name": "Reviving interior text splits the ghost",
+      "actual": [
+        [
+          0,
+          11
+        ],
+        [
+          18,
+          28
+        ]
+      ],
+      "expected": [
+        [
+          0,
+          11
+        ],
+        [
+          18,
+          28
+        ]
+      ],
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 144.927,
+      "name": "Selection precondition: entire body",
+      "actual": [
+        0,
+        28
+      ],
+      "expected": [
+        0,
+        28
+      ],
+      "status": "PASS",
+      "requirements": []
+    },
+    {
+      "seconds": 146.942,
+      "name": "Deleting the entire body removes its text",
+      "actual": "",
+      "expected": "",
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    },
+    {
+      "seconds": 146.951,
+      "name": "Deleting all ghost text removes ghost ranges",
+      "actual": [],
+      "expected": [],
+      "status": "PASS",
+      "requirements": [
+        "R-5.3"
+      ]
+    }
+  ],
+  "coverage": {
+    "R-2.1": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        0,
+        1
+      ]
+    },
+    "R-2.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        4,
+        7,
+        118
+      ]
+    },
+    "R-2.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        25,
+        26,
+        31,
+        32
+      ]
+    },
+    "R-2.4": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        16,
+        23
+      ]
+    },
+    "R-2.5": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        127,
+        128,
+        129
+      ]
+    },
+    "R-2.6": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        4,
+        5,
+        6,
+        13,
+        14,
+        118,
+        122
+      ]
+    },
+    "R-2.7": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        41,
+        43
+      ]
+    },
+    "R-3.1": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        19
+      ]
+    },
+    "R-3.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        17,
+        20,
+        21,
+        27,
+        28,
+        29
+      ]
+    },
+    "R-3.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        18,
+        22,
+        27,
+        33
+      ]
+    },
+    "R-3.4": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        33,
+        34,
+        35,
+        36
+      ]
+    },
+    "R-3.5": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        2
+      ]
+    },
+    "R-3.6": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        16
+      ]
+    },
+    "R-4.1": {
+      "status": "NOT DEMONSTRATED",
+      "checks": []
+    },
+    "R-4.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        25,
+        31
+      ]
+    },
+    "R-4.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        4,
+        5,
+        7,
+        15
+      ]
+    },
+    "R-4.4": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        38,
+        39
+      ]
+    },
+    "R-4.5": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        13,
+        14
+      ]
+    },
+    "R-4.6": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        40,
+        41,
+        43
+      ]
+    },
+    "R-5.1": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        46,
+        47,
+        48
+      ]
+    },
+    "R-5.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        49,
+        135
+      ]
+    },
+    "R-5.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        110,
+        112,
+        113,
+        120,
+        122,
+        123,
+        124,
+        125,
+        129,
+        134,
+        136,
+        138,
+        139
+      ]
+    },
+    "R-6.1": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        52
+      ]
+    },
+    "R-6.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        55,
+        126
+      ]
+    },
+    "R-6.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        51,
+        52,
+        53,
+        54,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74
+      ]
+    },
+    "R-6.4": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        55,
+        56,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        69
+      ]
+    },
+    "R-6.5": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        126,
+        129
+      ]
+    },
+    "R-7.1": {
+      "status": "NOT DEMONSTRATED",
+      "checks": []
+    },
+    "R-7.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        1
+      ]
+    },
+    "R-7.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        135
+      ]
+    },
+    "R-7.4": {
+      "status": "NOT DEMONSTRATED",
+      "checks": []
+    },
+    "R-8.1": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        75,
+        78,
+        81,
+        84,
+        87,
+        90
+      ]
+    },
+    "R-8.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        75,
+        76,
+        78,
+        79,
+        81,
+        82,
+        84,
+        85,
+        87,
+        88,
+        90,
+        91
+      ]
+    },
+    "R-8.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        93,
+        94,
+        96,
+        98,
+        100
+      ]
+    },
+    "R-8.4": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101
+      ]
+    },
+    "R-8.5": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110
+      ]
+    },
+    "R-8.6": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        38,
+        39
+      ]
+    },
+    "R-8.7": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        38
+      ]
+    },
+    "R-9.1": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        111,
+        112,
+        113,
+        128
+      ]
+    },
+    "R-9.2": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        127,
+        129
+      ]
+    },
+    "R-9.3": {
+      "status": "OBSERVED CHECKS PASS; FULL CRITERIA REVIEW REQUIRED",
+      "checks": [
+        114,
+        115,
+        116,
+        132
+      ]
+    }
+  },
+  "timelineOrigin": "seconds since full storyboard began; capture lead-in recorded separately",
+  "setupDisclosure": "Public API opens plain text fixtures and local role before each chapter; subsequent actions use real controls. API reads inspect outputs. Save/reopen bridge explicitly labeled.",
+  "visualMeasurements": {
+    "width": 762,
+    "font": "\"JetBrains Mono\", \"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace",
+    "color": "rgb(232, 217, 196)",
+    "lineHeight": "29.75px",
+    "background": "rgb(10, 13, 28)",
+    "headline": true
+  },
+  "authoredSynonymRegistration": {
+    "group": {
+      "alternatives": [
+        {
+          "source": "original",
+          "text": "paperclip"
+        },
+        {
+          "source": "human",
+          "text": "eraser"
+        },
+        {
+          "source": "human",
+          "text": "thumbtack"
+        }
+      ],
+      "attached": true,
+      "markdown": "synonyms:: paperclip, eraser, thumbtack\n",
+      "spanId": "s1",
+      "synonyms": [
+        "paperclip",
+        "eraser",
+        "thumbtack"
+      ],
+      "thesaurus": {
+        "data": {
+          "eraser": {
+            "display_value": "paperclip",
+            "id": 1,
+            "nterm": "paperclip",
+            "pinned": false
+          },
+          "paperclip": {
+            "display_value": "paperclip",
+            "id": 1,
+            "nterm": "paperclip",
+            "pinned": false
+          },
+          "thumbtack": {
+            "display_value": "paperclip",
+            "id": 1,
+            "nterm": "paperclip",
+            "pinned": false
+          }
+        },
+        "name": "alternative:s1"
+      },
+      "typedSynonyms": []
+    },
+    "source": "real UI-created alternatives; actual shared WASM query outputs"
+  },
+  "createdWordIndicators": {
+    "alts": 3,
+    "active": 0,
+    "decorations": 1
+  },
+  "wordIndicatorMeasurements": {
+    "count": 3,
+    "active": [
+      1
+    ],
+    "colors": [
+      "rgba(140, 134, 230, 0.4)",
+      "rgb(140, 134, 230)",
+      "rgba(140, 134, 230, 0.4)"
+    ],
+    "dotVisible": true,
+    "alignment": 2.288818359375e-05,
+    "underline": "underline",
+    "thickness": "1px",
+    "visible": true
+  },
+  "granularityIndicatorMeasurements": {
+    "sentence": {
+      "dots": 2,
+      "active": 1,
+      "visible": true,
+      "rule": false,
+      "underline": "underline",
+      "height": 3,
+      "textHeight": 24,
+      "rightDifference": 0,
+      "dotVisible": true,
+      "gutter": null
+    },
+    "paragraph": {
+      "dots": 2,
+      "active": 1,
+      "visible": true,
+      "rule": true,
+      "underline": "none",
+      "height": 24,
+      "textHeight": 24,
+      "rightDifference": 377.4000244140625,
+      "dotVisible": true,
+      "gutter": {
+        "width": 1,
+        "height": 24,
+        "leftOfText": 20,
+        "dotsLeft": true
+      }
+    }
+  },
+  "generatedUndoRemainingIndicators": [
+    {
+      "spanId": "kg-1-0",
+      "source": "kg"
+    }
+  ],
+  "ghostComputedStyle": {
+    "color": "color(srgb 0.909804 0.85098 0.768627 / 0.1)",
+    "opacity": "1"
+  },
+  "nativePullDragReceipts": [
+    {
+      "type": "dragstart",
+      "trusted": true,
+      "target": "overflow",
+      "payload": null,
+      "offset": null
+    },
+    {
+      "type": "drop",
+      "trusted": true,
+      "target": "surface",
+      "payload": "Public note.",
+      "offset": 53
+    }
+  ],
+  "nativeStashDragReceipts": [
+    {
+      "type": "dragstart",
+      "trusted": true,
+      "target": "surface",
+      "payload": null,
+      "offset": null
+    },
+    {
+      "type": "drop",
+      "trusted": true,
+      "target": "overflow",
+      "payload": "Third paragraph.",
+      "offset": null
+    }
+  ],
+  "trimPreviews": [
+    {
+      "level": "slight",
+      "ranges": [
+        [
+          152,
+          179
+        ],
+        [
+          323,
+          331
+        ],
+        [
+          371,
+          378
+        ],
+        [
+          378,
+          383
+        ],
+        [
+          383,
+          389
+        ],
+        [
+          441,
+          450
+        ],
+        [
+          701,
+          709
+        ],
+        [
+          862,
+          868
+        ]
+      ],
+      "independentBefore": 160,
+      "independentAfter": 146,
+      "card": "160 \u2192 146 words \u00b7 \u22129%"
+    },
+    {
+      "level": "tighten",
+      "ranges": [
+        [
+          152,
+          179
+        ],
+        [
+          218,
+          247
+        ],
+        [
+          323,
+          331
+        ],
+        [
+          365,
+          426
+        ],
+        [
+          371,
+          378
+        ],
+        [
+          378,
+          383
+        ],
+        [
+          383,
+          389
+        ],
+        [
+          441,
+          450
+        ],
+        [
+          701,
+          709
+        ],
+        [
+          862,
+          868
+        ]
+      ],
+      "independentBefore": 160,
+      "independentAfter": 130,
+      "card": "160 \u2192 130 words \u00b7 \u221219%"
+    },
+    {
+      "level": "sharper",
+      "ranges": [
+        [
+          152,
+          179
+        ],
+        [
+          218,
+          247
+        ],
+        [
+          323,
+          331
+        ],
+        [
+          365,
+          426
+        ],
+        [
+          371,
+          378
+        ],
+        [
+          378,
+          383
+        ],
+        [
+          383,
+          389
+        ],
+        [
+          441,
+          450
+        ],
+        [
+          700,
+          752
+        ],
+        [
+          701,
+          709
+        ],
+        [
+          752,
+          801
+        ],
+        [
+          862,
+          868
+        ]
+      ],
+      "independentBefore": 160,
+      "independentAfter": 113,
+      "card": "160 \u2192 113 words \u00b7 \u221229%"
+    },
+    {
+      "level": "half",
+      "ranges": [
+        [
+          42,
+          71
+        ],
+        [
+          70,
+          142
+        ],
+        [
+          152,
+          179
+        ],
+        [
+          218,
+          247
+        ],
+        [
+          323,
+          331
+        ],
+        [
+          323,
+          366
+        ],
+        [
+          365,
+          426
+        ],
+        [
+          371,
+          378
+        ],
+        [
+          378,
+          383
+        ],
+        [
+          383,
+          389
+        ],
+        [
+          441,
+          450
+        ],
+        [
+          700,
+          752
+        ],
+        [
+          701,
+          709
+        ],
+        [
+          752,
+          801
+        ],
+        [
+          840,
+          885
+        ],
+        [
+          862,
+          868
+        ]
+      ],
+      "independentBefore": 160,
+      "independentAfter": 82,
+      "card": "160 \u2192 82 words \u00b7 \u221249%"
+    }
+  ],
+  "makeCutsObservedBody": "# Maybe a heading that is basically fine\n\nCaf\u00e9 notes, written quickly. We recieve the letters every morning , and we answer them before lunch.\n\nThe plan, which we drafted in March, and which, as you know, changed twice (once in April, once in May), because the budget, the staff and the timetable all moved, is now final.\n\nThe stuff we got is kinda awesome. It is too much for one small team to read.\n\nThe committee met on Tuesday and it seems to have agreed that the new library should open in the spring after the builders have finished the roof and the heating and the lifts and the ramps for everyone who needs them.\n\nThe garden needs water every day in summer. The weather will change soon enough for us. The roses are doing well against the south wall.\n\n```\nrecieve maybe stuff , really\n```\n\n- A list item that is simple to read.\n",
+  "makeCutsOracleLimit": "Independent count plus changed body; punctuation tidy and every character need additional literal review.",
+  "remainingCriteria": [
+    "Trusted drag/drop",
+    "OS file-picker save/open",
+    "Context reanchor and ambiguity GUI sequence",
+    "Full hover/dot geometry and \u00a710 visual review",
+    "Shortcut collision GUI sequence",
+    "Provider abstraction beyond built-in local provider",
+    "Independent semantic assessment of all Lab marks",
+    "Editing inside ghost beyond alternative swaps"
+  ],
+  "acceptanceStatus": "FINITE CHECKS PASS; FULL REQUIREMENTS NOT ACCEPTED",
+  "probe": {
+    "streams": [
+      {
+        "index": 0,
+        "codec_name": "h264",
+        "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+        "profile": "High",
+        "codec_type": "video",
+        "codec_tag_string": "avc1",
+        "codec_tag": "0x31637661",
+        "mime_codec_string": "avc1.64001f",
+        "width": 1140,
+        "height": 720,
+        "coded_width": 1140,
+        "coded_height": 720,
+        "has_b_frames": 2,
+        "sample_aspect_ratio": "1:1",
+        "display_aspect_ratio": "19:12",
+        "pix_fmt": "yuv420p",
+        "level": 31,
+        "color_range": "tv",
+        "color_space": "bt470bg",
+        "chroma_location": "left",
+        "field_order": "progressive",
+        "is_avc": "true",
+        "nal_length_size": "4",
+        "id": "0x1",
+        "r_frame_rate": "15/1",
+        "avg_frame_rate": "15/1",
+        "time_base": "1/15360",
+        "start_pts": 0,
+        "start_time": "0.000000",
+        "duration_ts": 2780160,
+        "duration": "181.000000",
+        "bit_rate": "64786",
+        "bits_per_raw_sample": "8",
+        "nb_frames": "2715",
+        "extradata_size": 50,
+        "disposition": {
+          "default": 1,
+          "dub": 0,
+          "original": 0,
+          "comment": 0,
+          "lyrics": 0,
+          "karaoke": 0,
+          "forced": 0,
+          "hearing_impaired": 0,
+          "visual_impaired": 0,
+          "clean_effects": 0,
+          "attached_pic": 0,
+          "timed_thumbnails": 0,
+          "non_diegetic": 0,
+          "captions": 0,
+          "descriptions": 0,
+          "metadata": 0,
+          "dependent": 0,
+          "still_image": 0,
+          "multilayer": 0
+        },
+        "tags": {
+          "language": "eng",
+          "handler_name": "VideoHandler",
+          "encoder": "Lavc63.1.102 libx264"
+        }
+      }
+    ],
+    "format": {
+      "filename": "/private/var/folders/rb/l4_6j2nx0lnfhysk974ldpg40000gn/T/opencode/demo-encode-9139h7c3/encoded.mp4",
+      "nb_streams": 1,
+      "nb_programs": 0,
+      "nb_stream_groups": 0,
+      "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+      "format_long_name": "QuickTime / MOV",
+      "start_time": "0.000000",
+      "duration": "181.000000",
+      "size": "1498955",
+      "bit_rate": "66252",
+      "probe_score": 100,
+      "tags": {
+        "major_brand": "isom",
+        "minor_version": "512",
+        "compatible_brands": "isomiso2avc1mp41",
+        "encoder": "Lavf63.1.102"
+      }
+    }
+  },
+  "bytes": 1498955,
+  "sha256": "bbf7b9e6b2a6e254f5067201ea77fca9243f7929650ea3d27f70e646de95d245",
+  "storageReviewRequired": false
+}

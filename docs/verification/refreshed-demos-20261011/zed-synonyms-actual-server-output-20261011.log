@@ -1,0 +1,30 @@
+   Compiling terraphim_lsp v1.22.0 (/private/tmp/terraphim-ai-output-fixes-20261011/crates/terraphim_lsp)
+    Finished `test` profile [optimized] target(s) in 6.29s
+     Running tests/hover_provenance_tests.rs (/Users/alex/.cargo/build/by-project/terraphim-terraphim-ai/debug/deps/hover_provenance_tests-173523d66972f941)
+
+running 1 test
+ACTUAL AUTHORED KG HOVER OUTPUT:
+**decision**
+
+decision
+
+**Alternatives** (word span)
+- decision (original, active)
+- Judgment (human)
+
+**Document KG synonyms** (span `s1`; local concept 1)
+
+```markdown
+synonyms:: decision, Judgment
+```
+
+- decision → concept 1
+- judgment → concept 1
+
+**KG synonyms**
+- choice (kg)
+- option (kg)
+test authored_kg_synonyms_follow_committed_changes_history_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s
+
