@@ -59,7 +59,10 @@ impl MatchingText {
                     if actual != expected && !(expected == 'σ' && actual == 'ς') {
                         return Err("invalid_protection_mapping: lowercase context".into());
                     }
-                    chunk.push(actual);
+                    // A term's end-of-word sigma and the same occurrence in
+                    // a wider case-ignorable context must share a matching key.
+                    // This one-to-one sigma equivalence preserves byte mapping.
+                    chunk.push(if actual == 'ς' { 'σ' } else { actual });
                 }
             }
             if grapheme.chars().all(char::is_whitespace) {

@@ -115,3 +115,23 @@ fn unicode_context_crosses_editor_word_boundaries() {
         assert_eq!(&body[hits[0].range.start..hits[0].range.end], body);
     }
 }
+
+#[test]
+fn sigma_equivalence_is_independent_of_context_outside_the_match() {
+    let p = protection(&["ος"]);
+    for body in ["ΟΣ", "ΟΣ·Α", "ΟΣ:Α", "ος·Α", "οσ·Α"] {
+        let hits = p.occurrences(body).unwrap();
+        assert_eq!(hits.len(), 1, "{body}");
+        assert_eq!(hits[0].range.start, 0);
+        assert_eq!(hits[0].range.end, "ΟΣ".len());
+    }
+}
+
+#[test]
+fn different_ids_with_equivalent_sigma_cannot_overwrite_each_other() {
+    let role: Thesaurus = serde_json::from_value(serde_json::json!({"name":"collision", "data":{
+        "ος":{"id":1,"nterm":"first"},"οσ":{"id":2,"nterm":"second"}
+    }}))
+    .unwrap();
+    assert!(ConceptProtection::from_thesaurus(&role).is_err());
+}

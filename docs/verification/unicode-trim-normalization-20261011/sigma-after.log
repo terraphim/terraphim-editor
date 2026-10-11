@@ -1,0 +1,16 @@
+   Compiling terraphim-editor v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor)
+    Finished `test` profile [optimized] target(s) in 1.24s
+     Running tests/trim_unicode_normalization.rs (/private/tmp/terraphim-editor-publication-build/debug/deps/trim_unicode_normalization-f2512068636baf52)
+
+running 8 tests
+test canonical_role_collisions_remain_rejected ... ok
+test different_ids_with_equivalent_sigma_cannot_overwrite_each_other ... ok
+test canonical_case_and_original_grapheme_ranges ... ok
+test contextual_lowercase_and_complete_emoji_clusters ... ok
+test sigma_equivalence_is_independent_of_context_outside_the_match ... ok
+test whitespace_original_ranges_and_partial_graphemes ... ok
+test unicode_context_crosses_editor_word_boundaries ... ok
+test actual_trim_preserves_unicode_at_every_level ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
