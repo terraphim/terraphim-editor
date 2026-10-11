@@ -1,0 +1,7 @@
+    Blocking waiting for file lock on build directory
+    Checking terraphim_alternatives v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011/crates/terraphim_alternatives)
+    Checking terraphim_rolegraph_browser v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011/crates/terraphim_rolegraph_browser)
+    Checking terraphim_lab v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011/crates/terraphim_lab)
+    Checking terraphim_lsp_core v1.23.0 (registry `terraphim`)
+    Checking terraphim-editor v0.1.0 (/private/tmp/terraphim-editor-synonyms-clean-20261011)
+    Finished `dev` profile [optimized] target(s) in 14.99s

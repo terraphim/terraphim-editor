@@ -1329,6 +1329,7 @@ dependencies = [
  "terraphim_alternatives",
  "terraphim_lab",
  "terraphim_lsp_core",
+ "terraphim_rolegraph_browser",
  "thiserror 2.0.21",
  "wasm-bindgen",
  "wasm-bindgen-futures",

@@ -682,7 +682,48 @@ impl DocumentSession {
             "overflow": annotations.overflow,
             "setAside": { "spans": self.set_aside.spans, "ghosts": self.set_aside.ghosts },
             "preservedBlock": self.raw_block.is_some(),
+            "synonymGroups": self.synonym_groups_json(),
         })
+    }
+
+    /// Current authored KG synonym registrations, including set-aside groups.
+    /// Exact annotations remain the durable source; no shared role is mutated.
+    pub fn synonym_groups_json(&self) -> Value {
+        let groups: Vec<_> = self
+            .doc
+            .annotations
+            .spans
+            .iter()
+            .map(|span| (span, true))
+            .chain(self.set_aside.spans.iter().map(|span| (span, false)))
+            .filter(|(span, _)| !span.is_inert())
+            .map(|(span, attached)| {
+                let group = terraphim_alternatives::SynonymGroup::from_span(span);
+                json!({"spanId":group.span_id,"attached":attached,
+                    "markdown":group.markdown,"typedSynonyms":group.typed_synonyms,
+                    "thesaurus":group.thesaurus,"synonyms":group.index.synonyms_of(1),
+                    "alternatives":group.alternatives})
+            })
+            .collect();
+        json!(groups)
+    }
+
+    /// Query a live authored concept using Terraphim's registered synonym index.
+    /// Scope is this document plus `span_id`; detached/unknown groups return [].
+    pub fn synonyms_for(&self, span_id: &str, text: &str) -> Vec<String> {
+        self.doc
+            .annotations
+            .spans
+            .iter()
+            .find(|span| span.id == span_id && !span.is_inert())
+            .map(|span| {
+                terraphim_alternatives::SynonymGroup::from_span(span)
+                    .synonyms_of(text)
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Ghosts `start..end` (R-5.1, R-5.3) and returns the id of the ghost now
@@ -1114,6 +1155,12 @@ pub fn document_annotations() -> JsValue {
         }
         value
     }))
+}
+
+/// Query the current browser document's scoped authored KG synonym concept.
+#[wasm_bindgen]
+pub fn document_synonyms(span_id: &str, text: &str) -> String {
+    with_session(|s| json!(s.synonyms_for(span_id, text)).to_string())
 }
 
 /// An error object for JavaScript: `{ ok: false, error, kind }`, where `kind`

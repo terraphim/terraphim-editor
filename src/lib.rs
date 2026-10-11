@@ -18,10 +18,10 @@ pub use document::{
     HistoryTransactionError, HISTORY_JSON_LIMIT, HISTORY_OPERATION_LIMIT,
 };
 pub use document::{
-    apply_edit, counts_json, document_annotations, document_body, document_counts, export_document,
-    ghost_json, ghost_range, move_document_range, open_document, revive_json, revive_range,
-    save_document, sync_document_body, sync_json, with_session, DocumentSession, Opened, SetAside,
-    Synced,
+    apply_edit, counts_json, document_annotations, document_body, document_counts,
+    document_synonyms, export_document, ghost_json, ghost_range, move_document_range,
+    open_document, revive_json, revive_range, save_document, sync_document_body, sync_json,
+    with_session, DocumentSession, Opened, SetAside, Synced,
 };
 // In-place cycling of alternatives (issue #9).
 pub use document::{set_active_alternative, SwapEdit, SwapOutcome};

@@ -1,0 +1,16 @@
+   Compiling terraphim_alternatives v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_alternatives)
+   Compiling terraphim_rolegraph_browser v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_rolegraph_browser)
+   Compiling terraphim_lab v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_lab)
+   Compiling terraphim_lsp_core v1.23.0 (registry `terraphim`)
+   Compiling terraphim-editor v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor)
+    Finished `test` profile [optimized] target(s) in 3.79s
+     Running tests/authored_synonyms.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/authored_synonyms-72b7e8132c1c53c6)
+
+running 4 tests
+test detached_groups_are_preserved_but_not_used_as_live_matches ... ok
+test rejection_external_edits_and_other_documents_cannot_leak_synonyms ... ok
+test host_ack_save_reopen_undo_redo_and_removal_track_exact_membership ... ok
+test newly_created_human_and_ai_alternatives_query_actual_rolegraph_and_checkpoint ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

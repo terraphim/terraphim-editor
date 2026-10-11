@@ -62,6 +62,10 @@ impl HostSession {
             "revision":self.revision,"sourceHash":source_hash(&self.source),
             "source":self.source,"projection":projection(&self.document)})
     }
+    /// Query only committed authored KG synonyms; proposals are not published.
+    pub fn synonyms_for(&self, span_id: &str, text: &str) -> Vec<String> {
+        self.document.synonyms_for(span_id, text)
+    }
     /// Stage one domain command against an exact host revision/source hash.
     ///
     /// # Errors
@@ -379,6 +383,10 @@ impl WasmHostSession {
     /// Current source and render projection, encoded as protocol JSON.
     pub fn snapshot(&self) -> String {
         self.inner.snapshot().to_string()
+    }
+    /// Query committed authored KG synonyms, encoded as JSON.
+    pub fn synonyms_for(&self, span_id: &str, text: &str) -> String {
+        json!(self.inner.synonyms_for(span_id, text)).to_string()
     }
     /// Stage a protocol command; committed source stays unchanged.
     pub fn propose(&mut self, message: &str) -> Result<String, String> {

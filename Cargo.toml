@@ -36,6 +36,7 @@ terraphim_lab = { path = "crates/terraphim_lab" }
 terraphim_lsp_core = { version = "=1.23.0", registry = "terraphim" }
 
 [dev-dependencies]
+terraphim_rolegraph_browser = { path = "crates/terraphim_rolegraph_browser" }
 wasm-bindgen-test = "0.3.39"
 wasm-bindgen-futures = "0.4"
 

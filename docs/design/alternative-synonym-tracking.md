@@ -2,11 +2,11 @@
 
 User requirement, 11 October 2026: reuse existing Terraphim crates and track alternatives as knowledge-graph synonyms. This supplements the existing 41 video requirements; it does not silently change their acceptance status.
 
-## Existing implementation and missing direction
+## Implementation
 
 `src/kg.rs` consumes the pinned `terraphim_lsp_core` engine. Its matcher and concept-to-synonym index already come from `terraphim_automata`. Known KG synonyms can be cycled and appended to a document span. `terraphim_alternatives` owns durable ordered alternatives, source/model provenance and anchors. `terraphim_lab` reexports the existing `terraphim_types` and automata types. `terraphim_rolegraph_browser` already wraps the actual `terraphim_rolegraph::RoleGraph`, including validated checkpoints and document indexing.
 
-The reverse direction is **not implemented or accepted**: creating a human/provider alternative currently persists an annotation but does not register that new synonym in the knowledge graph. The r10 VSIX therefore does not yet satisfy this additional requirement. An annotation array or a JSON field labelled synonyms is not evidence of KG registration.
+The reverse direction is now implemented in `terraphim_alternatives::SynonymGroup` and `Document::synonym_groups`. Browser document projections and host snapshots register current authored alternatives with the existing directive parser, `Thesaurus`, `NormalizedTerm` and `ConceptIndex`. Exact annotations remain authoritative; registrations are reconstructed after source/history changes. No active shared role is silently modified. The earlier r10 VSIX predates this feature; the new synonym package contains the tested engine.
 
 ## Required shared behavior
 
@@ -22,4 +22,4 @@ The reverse direction is **not implemented or accepted**: creating a human/provi
 
 Against real Terraphim crates, create an alternative through the document command, acknowledge the actual output, query the resulting KG and prove both forms resolve to the same scoped concept. Round-trip the graph and annotated Markdown, reopen and query again. Repeat for human and accepted provider alternatives, Unicode/case normalization, sentence/paragraph text, duplicates and two unrelated spans/documents sharing a phrase. Verify rejection, stale ACK and external conflicts publish nothing. Verify edit/remove and native undo/redo restore exact membership and preserve provenance. Keep input fixtures separate from resulting graph/checkpoint/query outputs.
 
-All these checks remain pending. Existing KG-read tests, compilation and the earlier 41-row ledger do not prove reverse registration.
+[Verification and actual outputs](../verification/synonym-registration-20261011.md) now prove scoped registration, real RoleGraph matching/checkpoint restoration, exact host acknowledgement rules, save/reopen and actual VS Code TextDocument native undo/redo. This does not promote the earlier41 visual requirements to acceptance. Standard `synonyms::` is comma/line delimited: comma-containing and multiline text is registered through the same existing typed thesaurus, preserving exact text rather than inventing lossy escapes. Blank normalized terms remain in provenance without creating searchable aliases.

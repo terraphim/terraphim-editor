@@ -1,0 +1,14 @@
+   Compiling terraphim_alternatives v0.1.0 (/Users/alex/projects/terraphim/terraphim-editor/crates/terraphim_alternatives)
+    Finished `test` profile [optimized] target(s) in 0.97s
+     Running tests/synonym_registration.rs (/private/tmp/terraphim-editor-clean-build/debug/deps/synonym_registration-29bfc754304ee5bc)
+
+running 6 tests
+test entirely_blank_group_keeps_provenance_without_fake_searchable_terms ... ok
+test whitespace_original_does_not_create_a_blank_concept_or_synonym ... ok
+test authored_alternatives_register_with_real_types_and_directive_parser ... ok
+test save_reopen_edit_remove_and_ghost_preserve_exact_current_membership ... ok
+test commas_newlines_unicode_and_directive_text_are_lossless_typed_synonyms ... ok
+test identical_terms_in_different_spans_do_not_merge_concepts ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

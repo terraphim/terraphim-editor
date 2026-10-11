@@ -1,0 +1,30 @@
+{
+  "project": "/Users/alex/projects/terraphim/terraphim-editor",
+  "timestamp": "2026-10-11 13:25:14",
+  "status": "ok",
+  "failed_modules": [],
+  "git": {
+    "repository": "https://github.com/terraphim/terraphim-editor",
+    "commit": "2d802a8b89e99a2a24149e251fd4ed99da57b05c",
+    "blob_base": "https://github.com/terraphim/terraphim-editor/blob/2d802a8b89e99a2a24149e251fd4ed99da57b05c"
+  },
+  "scanners": [
+    {
+      "project": "/Users/alex/projects/terraphim/terraphim-editor",
+      "files": 3,
+      "critical": 0,
+      "warning": 1017,
+      "info": 220,
+      "timestamp": "2026-10-11T12:25:14Z",
+      "format": "json",
+      "status": "ok",
+      "language": "rust"
+    }
+  ],
+  "totals": {
+    "critical": 0,
+    "warning": 1017,
+    "info": 220,
+    "files": 3
+  }
+}
