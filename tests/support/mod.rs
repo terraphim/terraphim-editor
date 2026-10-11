@@ -31,11 +31,17 @@ pub use terraphim_editor::{
     apply_edit, document_annotations, document_body, document_counts, export_document,
     flush_preview, ghost_range, lab_actions, lab_mark, move_document_range, open_document,
     preview_delay, preview_pending, preview_render_count, render_markdown, revive_range,
-    save_document, set_preview_delay, sync_document_body, trim_make_cuts, trim_plan_json,
-    trim_status, DEFAULT_PREVIEW_DELAY_MS,
+    save_document, set_preview_delay, sync_document_body, text_infer_kind, text_range_at,
+    trim_make_cuts, trim_plan_json, trim_status, DEFAULT_PREVIEW_DELAY_MS,
 };
 // In-place cycling of alternatives (issue #9).
 pub use terraphim_editor::set_active_alternative;
+// Cohort C: real native checkpoint wrappers, never receipt/model doubles.
+pub use terraphim_editor::{
+    abort_document_history_transaction, begin_document_history_replay,
+    begin_trim_ghost_transaction, finish_document_history_transaction,
+    recover_document_history_transaction,
+};
 // Overflow panel (issue #12).
 pub use terraphim_editor::{
     document_overflow, overflow_pull_back_text, replay_document_overflow, set_document_overflow,
@@ -454,6 +460,18 @@ pub fn install_document_bindings() {
         install_bindings(name, &closure);
     }
     install(
+        "text_range_at",
+        Closure::<dyn FnMut(String, u32, String) -> Result<JsValue, JsValue>>::new(
+            |text: String, offset: u32, kind: String| text_range_at(&text, offset, &kind),
+        )
+        .into_js_value(),
+    );
+    install(
+        "text_infer_kind",
+        Closure::<dyn FnMut(String) -> String>::new(|text: String| text_infer_kind(&text))
+            .into_js_value(),
+    );
+    install(
         "open_document",
         Closure::<dyn FnMut(String) -> JsValue>::new(|s: String| open_document(&s)).into_js_value(),
     );
@@ -488,6 +506,45 @@ pub fn install_document_bindings() {
     install(
         "document_body",
         Closure::<dyn FnMut() -> String>::new(document_body).into_js_value(),
+    );
+    install(
+        "begin_document_history_replay",
+        Closure::<dyn FnMut(String, String, String) -> Result<JsValue, JsValue>>::new(
+            |body: String, target: String, operations: String| {
+                begin_document_history_replay(&body, &target, &operations)
+            },
+        )
+        .into_js_value(),
+    );
+    install(
+        "begin_trim_ghost_transaction",
+        Closure::<dyn FnMut(String, String, String) -> Result<JsValue, JsValue>>::new(
+            |body: String, level: String, kept: String| {
+                begin_trim_ghost_transaction(&body, &level, &kept)
+            },
+        )
+        .into_js_value(),
+    );
+    install(
+        "finish_document_history_transaction",
+        Closure::<dyn FnMut(String) -> Result<JsValue, JsValue>>::new(|token: String| {
+            finish_document_history_transaction(&token)
+        })
+        .into_js_value(),
+    );
+    install(
+        "abort_document_history_transaction",
+        Closure::<dyn FnMut(String) -> Result<JsValue, JsValue>>::new(|token: String| {
+            abort_document_history_transaction(&token)
+        })
+        .into_js_value(),
+    );
+    install(
+        "recover_document_history_transaction",
+        Closure::<dyn FnMut(String, String) -> Result<JsValue, JsValue>>::new(
+            |token: String, source: String| recover_document_history_transaction(&token, &source),
+        )
+        .into_js_value(),
     );
     install(
         "sync_document_body",
@@ -576,6 +633,32 @@ pub fn install_document_bindings() {
     install(
         "kg_clear_thesaurus",
         Closure::<dyn FnMut()>::new(kg_clear_thesaurus).into_js_value(),
+    );
+    install(
+        "kg_role_snapshot_json",
+        Closure::<dyn FnMut() -> String>::new(terraphim_editor::kg_role_snapshot_json)
+            .into_js_value(),
+    );
+    install(
+        "kg_set_role_change_listener",
+        Closure::<dyn FnMut(Option<js_sys::Function>)>::new(
+            terraphim_editor::kg_set_role_change_listener,
+        )
+        .into_js_value(),
+    );
+    install(
+        "kg_prepare_role",
+        Closure::<dyn FnMut(String) -> Result<String, JsValue>>::new(|text: String| {
+            terraphim_editor::kg_prepare_role(&text)
+        })
+        .into_js_value(),
+    );
+    install(
+        "kg_commit_prepared_role",
+        Closure::<dyn FnMut(String) -> Result<String, JsValue>>::new(|token: String| {
+            terraphim_editor::kg_commit_prepared_role(&token)
+        })
+        .into_js_value(),
     );
     install(
         "kg_document_spans",
