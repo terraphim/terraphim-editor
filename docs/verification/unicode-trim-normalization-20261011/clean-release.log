@@ -1,0 +1,12 @@
+release-dist: isolated stage /private/tmp/terraphim-editor-publication-source-20261011/target/release-staging-3zhQy04M; metadata target/release-manifests/release-staging-3zhQy04M.json
+2026-10-11T20:36:27.189898Z  WARN The field `address` in the configuration is deprecated and will be removed in a future version. Migrate to the `addresses` field, which allows adding more than one.    
+    Finished `release` profile [optimized] target(s) in 0.08s
+runtime-assets: 107 files verified; module/font closure local
+runtime-assets: 107 files verified; module/font closure local
+    Finished `release` profile [optimized] target(s) in 0.07s
+rolegraph: Worker WASM and glue written to /private/tmp/terraphim-editor-publication-source-20261011/target/release-staging-3zhQy04M/.stage/rolegraph
+runtime-assets: 107 files verified; module/font closure local
+949b5252e89814ed294c1a238cef726663873a76
+runtime-assets: 107 files verified; module/font closure local
+runtime-assets: 107 files verified; module/font closure local
+release publication preflight-only: 132 assets -> dist, package/dist; metadata /private/tmp/terraphim-editor-publication-source-20261011/target/release-manifests/release-staging-3zhQy04M.json

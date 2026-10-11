@@ -1,0 +1,4 @@
+{
+  "baselineError": "unsupported_normalization: KG-protected trim supports ASCII case, whitespace folding, exact CJK ideographs and simple lowercase Latin-1/Greek/Cyrillic; combining marks, case expansion and other Unicode require normalization support",
+  "bodyUnchanged": true
+}
