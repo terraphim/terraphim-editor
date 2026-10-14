@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "repository": "terraphim/terraphim-editor",
+  "owner": "AlexMikhalev",
+  "toolchain": "1.96",
+  "prerequisites": [
+    {
+      "name": "terraphim_types",
+      "version": "1.22.3"
+    },
+    {
+      "name": "terraphim-markdown-parser",
+      "version": "1.20.5"
+    },
+    {
+      "name": "terraphim_automata",
+      "version": "2.1.0"
+    },
+    {
+      "name": "terraphim_rolegraph_core",
+      "version": "0.1.1"
+    },
+    {
+      "name": "terraphim_rolegraph",
+      "version": "2.0.1"
+    }
+  ],
+  "packages": [
+    {
+      "name": "terraphim_alternatives",
+      "version": "0.1.1",
+      "path": "crates/terraphim_alternatives/Cargo.toml",
+      "source": {
+        "commit": "a4f84e5f737b14a1824370046b2c4c90e586945f",
+        "tree": "b4b0d93c0cf548a30e26aa6881ca6e447a5d7f2a",
+        "lockSha256": "c71748ae9ea5598749699dc46c61f0fc7a4d6b3d8f7e384999a57488d3c9132d"
+      }
+    },
+    {
+      "name": "terraphim_lab",
+      "version": "0.1.1",
+      "path": "crates/terraphim_lab/Cargo.toml",
+      "source": {
+        "commit": "a4f84e5f737b14a1824370046b2c4c90e586945f",
+        "tree": "3314934f03e76387403e708f297b6b59297da11a",
+        "lockSha256": "2c3d11407702f6b72e3496a369257234865357b70c8595d3450d63d139a4f63b"
+      }
+    }
+  ]
+}

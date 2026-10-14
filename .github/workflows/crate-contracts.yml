@@ -1,0 +1,36 @@
+name: Editor crate publication contract
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/publish-crates.yml'
+      - '.github/workflows/crate-contracts.yml'
+      - 'scripts/crates_release.py'
+      - 'tests/test_crates_release.py'
+      - 'release/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-crates.yml'
+      - '.github/workflows/crate-contracts.yml'
+      - 'scripts/crates_release.py'
+      - 'tests/test_crates_release.py'
+      - 'release/**'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install pinned Cargo for real archive provenance test
+        run: rustup toolchain install 1.96 --profile minimal && rustup default 1.96
+      - name: Exercise actual Git histories, Cargo packages and release refusals
+        run: python3 -m unittest discover -s tests -p 'test_crates_release.py' -v
