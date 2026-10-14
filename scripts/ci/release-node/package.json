@@ -1,0 +1,7 @@
+{
+  "name": "terraphim-editor-release-browser-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned browser driver for qualification of actual prerelease outputs",
+  "dependencies": { "playwright": "1.57.0" }
+}
