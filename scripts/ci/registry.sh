@@ -5,3 +5,4 @@ set -euo pipefail
 source "$(dirname "$0")/env.sh"
 cd "$CI_ROOT"
 python3 scripts/check-public-dependencies.py
+python3 scripts/ci/prepare-public-cargo-home.py

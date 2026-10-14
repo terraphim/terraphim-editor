@@ -26,8 +26,9 @@
 # edits this file or the workflow, because the runner starts every step
 # with them (see .gitea/workflows/ci.yml).
 #
-# Cargo home. target/ci-cargo-home keeps the registry cache job-local,
-# without inheriting source replacements from the runner's ~/.cargo.
+# Cargo home. The admission step resets target/ci-cargo-home before each run.
+# It is shared only across that run's steps and never inherits old source
+# replacements or credentials from a prior run or the runner's ~/.cargo.
 # Rustup and its toolchains are unaffected.
 #
 # Tools. wasm-pack, wasm-bindgen, trunk, chromedriver, terser and
