@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "repository": "terraphim/terraphim-editor",
+  "owner": "AlexMikhalev",
+  "toolchain": "1.96",
+  "prerequisites": [
+    {
+      "name": "terraphim_types",
+      "version": "1.22.3"
+    },
+    {
+      "name": "terraphim-markdown-parser",
+      "version": "1.20.5"
+    },
+    {
+      "name": "terraphim_automata",
+      "version": "2.1.0"
+    },
+    {
+      "name": "terraphim_rolegraph_core",
+      "version": "0.1.1"
+    },
+    {
+      "name": "terraphim_rolegraph",
+      "version": "2.0.1"
+    }
+  ],
+  "packages": [
+    {
+      "name": "terraphim_alternatives",
+      "version": "0.1.1",
+      "path": "crates/terraphim_alternatives/Cargo.toml",
+      "source": null
+    },
+    {
+      "name": "terraphim_lab",
+      "version": "0.1.1",
+      "path": "crates/terraphim_lab/Cargo.toml",
+      "source": null
+    }
+  ]
+}
