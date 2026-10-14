@@ -131,7 +131,7 @@ impl HostSession {
     /// # Errors
     /// A missing or different pending operation is refused.
     pub fn reject(&mut self, id: u64) -> Result<(), String> {
-        if !self.pending.as_ref().is_some_and(|p| p.id == id) {
+        if self.pending.as_ref().is_none_or(|p| p.id != id) {
             return Err("unknown proposal".into());
         }
         self.pending = None;

@@ -119,15 +119,9 @@ cargo install trunk wasm-pack
 npm install -g terser clean-css-cli                               # used by Trunk's build hook
 ```
 
-**2. Access to the Terraphim crate registry**
+**2. Clone and serve**
 
-Some dependencies (`terraphim_automata`, `terraphim_types`, `terraphim_lsp_core` and the editor's own crates) come from the private Terraphim registry on `git.terraphim.cloud`. The repository already declares it in `.cargo/config.toml`; you only need a Gitea token with package read access:
-
-```bash
-export CARGO_REGISTRIES_TERRAPHIM_TOKEN="Bearer <your-gitea-token>"
-```
-
-**3. Clone and serve**
+The Rust dependencies are available on crates.io. No private-registry account or token is required.
 
 ```bash
 git clone https://github.com/terraphim/terraphim-editor.git
@@ -137,7 +131,7 @@ trunk serve
 
 Open <http://127.0.0.1:8080>. Trunk compiles the Rust to WebAssembly, serves the page and rebuilds on every change. The first build takes a few minutes; later ones take seconds.
 
-**4. Check everything works (optional)**
+**3. Check everything works (optional)**
 
 ```bash
 cargo test --workspace          # Rust tests

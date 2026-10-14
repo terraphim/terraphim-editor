@@ -6,7 +6,8 @@ import re
 import subprocess
 import sys
 
-REGISTRY = "sparse+https://git.terraphim.cloud/api/packages/terraphim/cargo/"
+REGISTRY = "registry+https://github.com/rust-lang/crates.io-index"
+REPOSITORY = "https://github.com/terraphim/terraphim-core"
 VERSIONS = {
     "terraphim_rolegraph": "2.0.1",
     "terraphim_types": "1.22.3",
@@ -19,8 +20,8 @@ VERSIONS = {
 def metadata(data):
     for name, version in VERSIONS.items():
         matches = [p for p in data["packages"] if p["name"] == name]
-        if len(matches) != 1 or matches[0]["version"] != version or matches[0]["source"] != REGISTRY:
-            raise ValueError(f"{name}: expected one published {version} from {REGISTRY}")
+        if len(matches) != 1 or matches[0]["version"] != version or matches[0]["source"] != REGISTRY or matches[0].get("repository") != REPOSITORY:
+            raise ValueError(f"{name}: expected one published {version} from {REGISTRY} with public GitHub source")
     bridge = next(p for p in data["packages"] if p["name"] == "terraphim_rolegraph_browser")
     if bridge["id"] not in data["workspace_members"]:
         raise ValueError("bridge is not a root workspace member")

@@ -146,7 +146,7 @@ fn markdown_openers_split_lowercase_code_emphasis_and_links() {
 
 #[test]
 fn shared_markdown_policy_preserves_exact_zed_fixture_positions() {
-    let text = include_str!("../../terraphim_lab/tests/fixtures/zed-plugin-fit.md");
+    let text = include_str!("fixtures/zed-plugin-fit.md");
     let ranges = sentence_ranges(text);
     for expected in [
         ByteRange {

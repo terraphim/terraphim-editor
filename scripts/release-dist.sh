@@ -23,6 +23,9 @@ mkdir -p target
 STAGE="$(mktemp -d "$PWD/target/release-staging-XXXXXXXX")"
 MANIFEST="target/release-manifests/${STAGE##*/}.json"
 echo "release-dist: isolated stage $STAGE; metadata $MANIFEST"
-trunk build --release --dist "$STAGE"
+export RUSTUP_TOOLCHAIN=1.96
+bash scripts/ci/registry.sh
+bash scripts/ci/run.sh --network cargo fetch --locked
+bash scripts/ci/run.sh trunk build --release --locked --dist "$STAGE"
 python3 scripts/check-release-source.py --expected-head "$SOURCE_HEAD"
 python3 scripts/publish-editor-dist.py --stage "$STAGE" --manifest "$MANIFEST" --source-head "$SOURCE_HEAD" ${ARGS[@]+"${ARGS[@]}"}

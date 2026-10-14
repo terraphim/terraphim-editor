@@ -17,10 +17,8 @@
 # passing them on (or a runner without them). What this workflow does is
 # need none of them, so a runner can serve it without credentials:
 #
-#   - The Terraphim Cargo registry asks for a token only for its
-#     config.json. scripts/ci/registry.sh fetches the locked Terraphim
-#     crates without one, checks them against Cargo.lock and serves them to
-#     Cargo as a local registry; Cargo never contacts that registry.
+#   - Cargo dependencies resolve from crates.io; scripts/ci/registry.sh
+#     admits the public lockfile without private credentials.
 #   - scripts/ci/env.sh, sourced by every step, removes every credential
 #     variable and runs Cargo offline except in `cargo fetch` (run.sh
 #     --network), which reaches crates.io only.

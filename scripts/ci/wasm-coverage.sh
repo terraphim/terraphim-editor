@@ -63,8 +63,7 @@
 #   CHROMEDRIVER         chromedriver for the installed Chrome (default: on
 #                        PATH, or the newest in wasm-pack's cache that
 #                        matches the Chrome major version)
-# The private registry needs CARGO_REGISTRIES_TERRAPHIM_TOKEN as for any
-# local build (CI serves it offline through scripts/ci/registry.sh).
+# Dependencies resolve from crates.io; no private-registry token is needed.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build the separate Worker WASM module; never writes committed dist/ by default.
-# Uses the published custom-registry packages and the root workspace lock.
+# Uses the published crates.io packages and the admitted public workspace lock.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -10,6 +10,7 @@ if [ -n "${TE_ROLEGRAPH_SOURCE:-}" ]; then
   exit 1
 fi
 
+python3 scripts/check-public-dependencies.py
 METADATA="$(cargo metadata --locked --format-version 1 --manifest-path "$ROOT/Cargo.toml")"
 python3 scripts/ci/rolegraph-production-check.py metadata <<< "$METADATA"
 VERSION="$(python3 -c 'import json,sys; m=json.load(sys.stdin); print(next(p["version"] for p in m["packages"] if p["name"]=="wasm-bindgen"))' <<< "$METADATA")"

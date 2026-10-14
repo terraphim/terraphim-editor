@@ -1,96 +1,127 @@
-name: Release candidate
+name: Release qualified editor prerelease
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: editor-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RUSTUP_TOOLCHAIN: '1.96'
+  PYTHONDONTWRITEBYTECODE: '1'
+  CARGO_TERM_COLOR: never
+  RELEASE_TAG: ${{ github.ref_name }}
+
 jobs:
   candidate:
+    if: github.repository == 'terraphim/terraphim-editor' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      artifact-id: ${{ steps.qualified.outputs.artifact-id }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Verify release source admission
-        run: |
-          python3 -m unittest discover -s tests -p 'test_release_*.py' -v
-          python3 scripts/check-release-source.py
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          targets: wasm32-unknown-unknown
-      - name: Install pinned bundle tools
-        uses: actions/setup-node@v4
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Prepare locked minifiers and matching bindgen CLI
+      - name: Verify clean public source, immutable RC tag and admission policy
+        run: |
+          python3 -m unittest discover -s tests -p 'test_release_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_editor_release.py' -v
+          python3 -m unittest discover -s tests -p 'test_public_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_rolegraph_public_provenance.py' -v
+          python3 scripts/publish-editor-release.py admit --tag "$RELEASE_TAG"
+          bash scripts/ci/registry.sh
+      - name: Install qualified Rust toolchain
+        run: |
+          rustup toolchain install 1.96 --profile minimal --component rustfmt --component clippy
+          rustup target add wasm32-unknown-unknown --toolchain 1.96
+      - name: Fetch public dependencies and qualify native Rust
+        run: |
+          bash scripts/ci/run.sh --network cargo fetch --locked
+          bash scripts/ci/run.sh cargo fmt --all --check
+          bash scripts/ci/run.sh cargo clippy --locked --workspace --all-targets -- -D warnings
+          bash scripts/ci/run.sh cargo test --locked --workspace --all-targets
+          bash scripts/ci/run.sh cargo test --locked --workspace --doc
+      - name: Install pinned bundlers and browser drivers
         run: |
           mkdir -p target/release-tools/node
           cp scripts/ci/node/package.json scripts/ci/node/package-lock.json target/release-tools/node/
           npm ci --prefix target/release-tools/node --ignore-scripts --no-audit --no-fund
+          npm ci --prefix scripts/ci/release-node --ignore-scripts --no-audit --no-fund
           echo "$PWD/target/release-tools/node/node_modules/.bin" >> "$GITHUB_PATH"
-          cargo install wasm-bindgen-cli --version 0.2.129 --locked
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.4.0
-        with:
-          version: v0.21.14
-      - name: Prepare locked registry dependencies
-        run: bash scripts/ci/registry.sh
-      - name: Build isolated candidate
+          echo "$PWD/target/release-tools/rust/bin" >> "$GITHUB_PATH"
+          bash scripts/ci/run.sh --network cargo install wasm-bindgen-cli --version 0.2.129 --locked --root "$PWD/target/release-tools/rust"
+          bash scripts/ci/run.sh --network cargo install trunk --version 0.21.14 --locked --root "$PWD/target/release-tools/rust"
+          python3 -m pip install 'playwright==1.57.0'
+          google-chrome --version
+      - name: Build one isolated browser candidate
         run: |
-          SOURCE_HEAD="$(python3 scripts/check-release-source.py)"
-          bash scripts/ci/run.sh --network cargo fetch --locked
+          SOURCE_HEAD="$(python3 scripts/publish-editor-release.py admit --tag "$RELEASE_TAG")"
           bash scripts/ci/run.sh trunk build --release --locked --dist "$PWD/target/release-staging-ci"
           python3 scripts/check-release-source.py --expected-head "$SOURCE_HEAD"
           python3 scripts/ci/rolegraph-production-check.py assets target/release-staging-ci
-          python3 scripts/ci/runtime-assets-check.py --check target/release-staging-ci/vendor
-      - name: Inventory and archive all admitted nested assets
+          python3 scripts/publish-editor-release.py package --stage target/release-staging-ci --output target/candidate --tag "$RELEASE_TAG"
+      - name: Verify actual WASM, Chrome synonym outputs and offline delivery
         run: |
-          python3 - <<'PY'
-          import hashlib, importlib.util, json, pathlib, subprocess, tarfile
-          spec = importlib.util.spec_from_file_location('publisher', 'scripts/publish-editor-dist.py')
-          module = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(module)
-          stage = pathlib.Path('target/release-staging-ci').resolve()
-          assets = module.inventory(stage)
-          head = subprocess.check_output(['python3', 'scripts/check-release-source.py'], text=True).strip()
-          manifest = {'schema': 1, 'sourceHead': head, 'assets': assets}
-          output = pathlib.Path('target/candidate')
-          output.mkdir()
-          raw = (json.dumps(manifest, indent=2, sort_keys=True) + '\n').encode()
-          (output / 'assets-manifest.json').write_bytes(raw)
-          with tarfile.open(output / 'editor-candidate.tar.gz', 'w:gz') as archive:
-              for name in sorted(assets):
-                  archive.add(stage / name, arcname=name, recursive=False)
-          (output / 'qualification.json').write_text(json.dumps({
-              'status': 'candidate-only', 'fullParityAccepted': False,
-              'manifestSha256': hashlib.sha256(raw).hexdigest(),
-              'archiveSha256': hashlib.sha256((output / 'editor-candidate.tar.gz').read_bytes()).hexdigest(),
-              'sourceHead': head,
-          }, indent=2) + '\n')
-          archive = output / 'editor-candidate.tar.gz'
-          qualification = output / 'qualification.json'
-          archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
-          release = {
-              'schema': 1, 'releaseId': 'editor-' + head, 'channel': 'candidate',
-              'artifacts': [{'host': 'browser', 'version': 'candidate-' + head[:12],
-                  'sourceCommit': head, 'path': archive.name, 'bytes': archive.stat().st_size,
-                  'sha256': archive_sha}],
-              'evidence': [{'host': 'browser', 'kind': 'receipt', 'artifactSha256': archive_sha,
-                  'path': qualification.name, 'bytes': qualification.stat().st_size,
-                  'sha256': hashlib.sha256(qualification.read_bytes()).hexdigest()}],
-              'limitations': [{'host': 'browser', 'requirement': 'all41', 'status': 'OPEN',
-                  'issue': 'https://git.terraphim.cloud/terraphim/terraphim-editor/issues/122'}],
-          }
-          (output / 'release-manifest.json').write_text(json.dumps(release, indent=2) + '\n')
-          PY
-          python3 scripts/check-release-readiness.py target/candidate/release-manifest.json --root target/candidate --claim integrity
-      - name: Retain candidate for qualification
-        uses: actions/upload-artifact@v4
+          python3 scripts/publish-editor-release.py qualify --folder target/candidate --evidence "$RUNNER_TEMP/editor-evidence" --tag "$RELEASE_TAG"
+          python3 scripts/publish-editor-release.py verify --folder target/candidate --tag "$RELEASE_TAG"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: qualified
         with:
-          name: editor-candidate-${{ github.sha }}
+          name: editor-qualified-${{ github.sha }}-${{ github.run_attempt }}
           path: target/candidate/
+          if-no-files-found: error
+      - name: Retain actual outputs even when qualification fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: editor-observed-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/editor-evidence/
+          if-no-files-found: ignore
+  publish:
+    needs: candidate
+    if: github.repository == 'terraphim/terraphim-editor' && github.ref_type == 'tag'
+    environment: editor-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.candidate.outputs.artifact-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/editor-qualified
+      - name: Revalidate exact candidate before protected publication
+        run: python3 scripts/publish-editor-release.py verify --folder "$RUNNER_TEMP/editor-qualified" --tag "$RELEASE_TAG"
+      - name: Publish immutable prerelease and verify anonymous downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-editor-release.py publish --folder "$RUNNER_TEMP/editor-qualified" --tag "$RELEASE_TAG" --receipt "$RUNNER_TEMP/editor-published.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: editor-published-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/editor-published.json
           if-no-files-found: error

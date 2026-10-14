@@ -1,0 +1,51 @@
+name: Public editor workspace
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  RUSTUP_TOOLCHAIN: '1.96'
+  PYTHONDONTWRITEBYTECODE: '1'
+  CARGO_TERM_COLOR: never
+
+jobs:
+  public-workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Exercise source and public dependency admission
+        run: |
+          python3 -m unittest discover -s tests -p 'test_release_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_public_dependencies.py' -v
+          python3 -m unittest discover -s tests -p 'test_public_cargo_home.py' -v
+          python3 -m unittest discover -s tests -p 'test_rolegraph_public_provenance.py' -v
+          python3 scripts/check-release-source.py
+          bash scripts/ci/registry.sh
+      - name: Install qualified Rust toolchain
+        run: |
+          rustup toolchain install 1.96 --profile minimal --component rustfmt --component clippy
+          rustup target add wasm32-unknown-unknown --toolchain 1.96
+      - name: Fetch locked public packages and verify graph provenance
+        run: |
+          set -euo pipefail
+          bash scripts/ci/run.sh --network cargo fetch --locked
+          bash scripts/ci/run.sh cargo metadata --locked --format-version 1 > "$RUNNER_TEMP/editor-metadata.json"
+          python3 scripts/ci/rolegraph-production-check.py metadata < "$RUNNER_TEMP/editor-metadata.json"
+      - name: Check formatting, lint, native behaviour and Wasm compilation
+        run: |
+          bash scripts/ci/run.sh cargo fmt --all --check
+          bash scripts/ci/run.sh cargo clippy --locked --workspace --all-targets -- -D warnings
+          bash scripts/ci/run.sh cargo test --locked --workspace --all-targets
+          bash scripts/ci/run.sh cargo test --locked --workspace --doc
+          bash scripts/ci/run.sh cargo check --locked --workspace --target wasm32-unknown-unknown --lib

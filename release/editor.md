@@ -1,0 +1,13 @@
+# Publishing an editor prerelease
+
+The `Release qualified editor prerelease` workflow builds and publishes an immutable browser package. It runs on an editor tag such as `v0.1.0-rc.2`, or a manual run selecting that existing tag. The version must match the root package, the tag must resolve to the checked-out clean public source, and that commit must already belong to `origin/main`.
+
+Before creating a new tag, merge the reviewed source and verify the public-workspace CI. Check that the intended tag and release do not already exist. The repository's `editor-release` GitHub environment must restrict deployment to approved editor RC tags. The protected publish job needs only the repository-provided `GITHUB_TOKEN` with `contents: write`; pull requests and candidate qualification receive no publication credential.
+
+The workflow fetches only the admitted public Cargo lock in a fresh Cargo home. It builds one browser archive, then tests that exact archive with 15 actual WASM host tests, the Chrome synonym-sharing flow and the offline full-page/embed probe. The UI flow saves annotated Markdown, reopens it, checks native undo/redo and downloads the actual synonym graph and clean document. Logs, returned files and screenshots are retained with their checksums. These are targeted prerelease checks; they do not qualify all 41 requirements or native Safari, Firefox and Zed.
+
+Publication downloads the successful qualification job's immutable Actions artifact ID and revalidates every asset, receipt, source and lock identity. It creates or resumes a draft prerelease, uploads only absent files, downloads and compares them, then publishes. Every public asset is downloaded anonymously and compared again. Neither release assets nor tags are replaced.
+
+If publication fails after qualification, rerun **only failed jobs** in the same workflow run. The publisher consumes the original qualification artifact even when the run-attempt number changes. An identical existing draft can resume; a different asset or an incomplete already-public release is refused. Do not rebuild or overwrite a partially published immutable package to make a retry pass.
+
+The browser archive and assets manifest retain their existing consumer names and asset map. `sourceRepository` and `cargoLockSha256` provide additional public provenance. `host-session.js` stays outside the browser archive; VS Code pins it separately from the exact source commit. After publication, consumers must use the verified public archive/manifest hashes, then run their own installed-host checks before their next marketplace release.

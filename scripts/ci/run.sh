@@ -21,5 +21,5 @@ while [ "$#" -gt 0 ]; do
 done
 source "$(dirname "$0")/env.sh"
 cd "$CI_ROOT"
-echo "+ $*"
+echo "+ $*" >&2
 exec "$@"

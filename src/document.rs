@@ -3208,7 +3208,7 @@ pub fn recover_history_transaction_json(
     history_bytes(source)?;
     HISTORY_BRIDGE.with(|cell| {
         let mut bridge = cell.borrow_mut();
-        if !bridge.pending.as_ref().is_some_and(|p| p.token == token) { return Err(history_error("unknown-token", "unknown recovery token")); }
+        if bridge.pending.as_ref().is_none_or(|p| p.token != token) { return Err(history_error("unknown-token", "unknown recovery token")); }
         let mut trial = DocumentSession::new();
         let opened = trial.open(source);
         let response = json!({"ok":true,"recovered":true,"rolledBack":false,"token":token,"opened":opened.to_json(),"annotations":trial.annotations_json()});
