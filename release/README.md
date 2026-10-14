@@ -19,15 +19,19 @@ before merging the root's public dependency migration:
    source, manifest and lockfile.
 2. Publish and verify the five core prerequisite versions in the release plan.
 3. Prepare the public alternatives/Lab source on its reviewed source branch. Use
-   a separate standalone Cargo workspace to generate the alternatives lock from
-   crates.io, without local patches or private registries. Commit that lock and
-   review the source tree. Add its exact commit/tree/lock binding to the main plan.
+   an external standalone layout and a fresh Cargo home to generate both locks
+   from crates.io, without local patches or private registries. Lab uses its exact
+   reviewed alternatives path dependency. Qualify both sources, commit both locks
+   and freeze both package trees in one source commit. Add the reviewed exact
+   commit/tree/lock bindings to the main plan.
 4. Create `terraphim_alternatives-v0.1.1` at the approved source commit, then dispatch
    its first publication from main using `bootstrap`.
-5. After actual crates.io readback, generate and commit Lab's standalone public
-   lock. The alternatives tree must remain byte-identical to its earlier approved
-   tree. Review and bind Lab's source on main; create `terraphim_lab-v0.1.1` and
-   dispatch its first publication.
+5. After actual alternatives crates.io readback, create `terraphim_lab-v0.1.1` at
+   that same approved source commit and dispatch its first publication. Cargo
+   normalizes Lab's versioned alternatives path to the published registry
+   dependency in the archive; the committed source lock and package tree remain
+   unchanged. Qualification still verifies that real extracted archive before
+   publishing Lab.
 6. Publish and verify the downstream LSP core. Finish the editor root migration,
    generate its actual public lock and qualify the full editor before merging it.
 
