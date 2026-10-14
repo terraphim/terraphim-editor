@@ -1,23 +1,22 @@
 [package]
 name = "terraphim_lab"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Deterministic Lab mark engine: typos and punctuation, weakest, long and convoluted sentences, off-tone words, hedges and filler. No DOM; builds native and wasm32."
 license = "MIT"
-repository = "https://git.terraphim.cloud/terraphim/terraphim-editor"
-readme = false
+repository = "https://github.com/terraphim/terraphim-editor"
+readme = "README.md"
 keywords = ["markdown", "writing", "lab", "editor"]
-# Published to the private registry so terraphim_lsp_core (terraphim-ai) can
-# produce Lab-mark diagnostics with this engine (issue #68).
-publish = ["terraphim"]
+# Shared by the browser editor and language server.
+publish = ["crates-io"]
 
 [dependencies]
 # KG matching (Aho-Corasick, LeftmostLongest, ASCII case-insensitive,
 # word-boundary filtered) and KG markdown parsing. Default features only:
 # no tokio, no reqwest, builds for wasm32-unknown-unknown.
-terraphim_automata = { version = "2.1", registry = "terraphim" }
+terraphim_automata = { version = "2.1.0" }
 # Thesaurus, NormalizedTerm and the rolegraph Node/Edge data structures.
-terraphim_types = { version = "1.22.2", registry = "terraphim" }
+terraphim_types = { version = "1.22.3" }
 ahash = { version = "0.8", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -27,7 +26,7 @@ thiserror = "2"
 markdown = "1.0.0-alpha.21"
 # The editor's one word definition (issue #59), shared with the Write_On
 # counter. Its dependencies are a subset of this crate's, so it adds nothing.
-terraphim_alternatives = { version = "0.1", path = "../terraphim_alternatives", registry = "terraphim" }
+terraphim_alternatives = { version = "0.1.1", path = "../terraphim_alternatives" }
 
 # criterion pulls in rayon, and terraphim_rolegraph pulls in tokio "full";
 # neither compiles for wasm32, so both are native-only dev-dependencies.
@@ -35,7 +34,7 @@ terraphim_alternatives = { version = "0.1", path = "../terraphim_alternatives", 
 criterion = "0.5"
 # Conformance only: rebuilds the fixture rolegraph with the real RoleGraph and
 # checks the committed JSON the engine consumes is what upstream produces.
-terraphim_rolegraph = { version = "2.0", registry = "terraphim" }
+terraphim_rolegraph = { version = "2.0.1" }
 
 [[bench]]
 name = "lab_bench"

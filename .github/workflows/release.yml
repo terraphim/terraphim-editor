@@ -18,6 +18,8 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_release_*.py' -v
           python3 scripts/check-release-source.py
+          python3 -m unittest discover -s tests -p 'test_public_dependencies.py' -v
+          python3 scripts/check-public-dependencies.py
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -37,8 +39,6 @@ jobs:
         uses: jetli/trunk-action@v0.4.0
         with:
           version: v0.21.14
-      - name: Prepare locked registry dependencies
-        run: bash scripts/ci/registry.sh
       - name: Build isolated candidate
         run: |
           SOURCE_HEAD="$(python3 scripts/check-release-source.py)"

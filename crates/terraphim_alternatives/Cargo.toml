@@ -1,21 +1,20 @@
 [package]
 name = "terraphim_alternatives"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Span model for non-KG alternative-control state: human alternatives, ghosting, overflow and the trailing annotation block."
 license = "MIT"
-repository = "https://git.terraphim.cloud/terraphim/terraphim-editor"
-readme = false
+repository = "https://github.com/terraphim/terraphim-editor"
+readme = "README.md"
 keywords = ["markdown", "alternatives", "editor"]
-# Published to the private registry so terraphim_lsp_core (terraphim-ai) can
-# share the annotation-block parser and a/an rules (issue #66).
-publish = ["terraphim"]
+# Shared by the browser editor and language server.
+publish = ["crates-io"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-terraphim_automata = { version = "2.1", registry = "terraphim" }
-terraphim_types = { version = "1.22", registry = "terraphim" }
+terraphim_automata = { version = "2.1.0" }
+terraphim_types = { version = "1.22.3" }
 thiserror = "2"
 unicode-segmentation = "=1.13.3"
 

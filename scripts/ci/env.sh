@@ -18,19 +18,17 @@
 # and CARGO_INCREMENTAL are inherited unchanged: only kache writes here.
 #
 # Secrets. The runner hands its own environment to every step, tokens
-# included. No step needs any of them: the Terraphim registry crates come
-# from a token-free local registry (scripts/ci/registry.sh), crates.io needs
-# no credentials and the runner reports status itself. So every variable
+# included. Public crate downloads need no credentials and the runner
+# reports status itself. So every variable
 # whose name marks it as a credential is removed for every step, and Cargo
 # runs offline except in the fetch step. This keeps the credentials out of
 # what the build is given; it cannot keep them from a pull request that
 # edits this file or the workflow, because the runner starts every step
 # with them (see .gitea/workflows/ci.yml).
 #
-# Cargo home. target/ci-cargo-home, so that its config.toml (written by
-# scripts/ci/registry.sh) can replace the Terraphim registry without
-# touching the runner's own ~/.cargo, and so that its registry cache, like
-# target/, persists per runner. Rustup and its toolchains are unaffected.
+# Cargo home. target/ci-cargo-home keeps the registry cache job-local,
+# without inheriting source replacements from the runner's ~/.cargo.
+# Rustup and its toolchains are unaffected.
 #
 # Tools. wasm-pack, wasm-bindgen, trunk, chromedriver, terser and
 # clean-css-cli are installed by scripts/ci/tools.sh under target/ci-tools,
@@ -44,8 +42,6 @@ export CARGO_BUILD_BUILD_DIR="$CI_ROOT/target"
 export CARGO_NET_RETRY=5
 
 export CARGO_HOME="$CI_ROOT/target/ci-cargo-home"
-export CI_TERRAPHIM_INDEX="https://git.terraphim.cloud/api/packages/terraphim/cargo/"
-export CI_REGISTRY_DIR="$CI_ROOT/target/ci-registry"
 
 # Names (upper-cased) that mark a credential: one of these words as a whole
 # `_`-separated part of the name. scripts/ci/secrets-audit.sh checks that

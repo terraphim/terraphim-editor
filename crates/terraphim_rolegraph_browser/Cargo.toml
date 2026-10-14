@@ -9,9 +9,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ahash = "0.8"
-terraphim_rolegraph = { version = "=2.0.1", registry = "terraphim", default-features = false, features = ["kg-integration"] }
-terraphim_automata = { version = "=2.1.0", registry = "terraphim", default-features = false }
-terraphim_types = { version = "=1.22.3", registry = "terraphim", default-features = false }
+terraphim_rolegraph = { version = "=2.0.1", default-features = false, features = ["kg-integration"] }
+terraphim_automata = { version = "=2.1.0", default-features = false }
+terraphim_types = { version = "=1.22.3", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 thiserror = "2"

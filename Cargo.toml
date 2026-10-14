@@ -31,11 +31,10 @@ sha2 = "0.10.9"
 unicode-normalization = "0.1.25"
 unicode-segmentation = "1.12"
 thiserror = "2"
-terraphim_alternatives = { path = "crates/terraphim_alternatives" }
-terraphim_lab = { path = "crates/terraphim_lab" }
-# KG alternatives (issue #13): the pure terraphim_lsp core, pinned to an exact
-# released version from the private registry (no sibling path).
-terraphim_lsp_core = { version = "=1.23.0", registry = "terraphim" }
+terraphim_alternatives = { version = "0.1.1", path = "crates/terraphim_alternatives" }
+terraphim_lab = { version = "0.1.1", path = "crates/terraphim_lab" }
+# Pure KG analysis shared with the language server, from crates.io.
+terraphim_lsp_core = "=1.23.1"
 
 [dev-dependencies]
 terraphim_rolegraph_browser = { path = "crates/terraphim_rolegraph_browser" }
@@ -61,10 +60,8 @@ harness = false
 [workspace]
 members = [".", "crates/terraphim_alternatives", "crates/terraphim_lab", "crates/terraphim_rolegraph_browser"]
 resolver = "2"
-# terraphim_lsp_core depends on terraphim_alternatives 0.1 and terraphim_lab
-# 0.1 from the registry. Point those dependencies at the workspace members
-# (the published 0.1.0 releases are built from them) so the build has
-# exactly one copy of the span model, the a/an rules and the Lab engine.
-[patch.terraphim]
-terraphim_alternatives = { path = "crates/terraphim_alternatives" }
-terraphim_lab = { path = "crates/terraphim_lab" }
+# Keep the language server core and browser on the same workspace span
+# model and Lab engine. Published dependants resolve these versions on crates.io.
+[patch.crates-io]
+terraphim_alternatives = { version = "0.1.1", path = "crates/terraphim_alternatives" }
+terraphim_lab = { version = "0.1.1", path = "crates/terraphim_lab" }

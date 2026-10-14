@@ -1,7 +1,1 @@
-# The private Terraphim Cargo registry (Gitea packages). terraphim_automata,
-# terraphim_types, terraphim_lsp_core and the editor's own published crates
-# resolve from here. Reading needs a Gitea token with package read access:
-#   export CARGO_REGISTRIES_TERRAPHIM_TOKEN="Bearer <token>"
-# See README.md, "Run it locally".
-[registries.terraphim]
-index = "sparse+https://git.terraphim.cloud/api/packages/terraphim/cargo/"
+# All dependencies resolve from crates.io; no private registry credentials are needed.
