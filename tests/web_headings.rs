@@ -2,7 +2,7 @@
 //! headline in Write_On mode (bold, same face and colour, larger) with its
 //! `#` marker hidden, while the document text, caret, selection and export
 //! keep the marker. Run with
-//! `wasm-pack test --headless --chrome --test web_headings`. Real scripts,
+//! `scripts/browser-tests.sh web_headings`. Real scripts,
 //! real DOM and real stylesheets; nothing is mocked. See `tests/web.rs` for
 //! why the browser tests are split across binaries.
 #![cfg(target_arch = "wasm32")]
@@ -16,7 +16,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 const DOC: &str = "# Plain heading\n\nA paragraph of body text.\n\n## Second level\n\n```\n# not a heading\n```\n\nLast line.\n";
 
-/// Fresh editor with `DOC` open in Write_On mode and `window.teHead` helpers.
+/// Fresh editor with `DOC` open in the requested mode and `window.teHead` helpers.
 fn setup_doc(write_on: bool) {
     let _document = fresh_full_editor();
     let script = format!(
@@ -68,7 +68,12 @@ async fn frames() {
 
 #[wasm_bindgen_test]
 async fn test_plain_heading_is_styled_as_headline_with_marker_hidden() {
-    setup_doc(true);
+    styled_heading(true).await;
+    styled_heading(false).await;
+}
+
+async fn styled_heading(write_on: bool) {
+    setup_doc(write_on);
     // Park the caret in the body paragraph, away from both headings.
     js_eval(
         "teHead.s.focus(); teHead.s.setSelectionOffsets(teHead.s.getText().indexOf('paragraph'));",
@@ -123,7 +128,12 @@ async fn test_plain_heading_is_styled_as_headline_with_marker_hidden() {
 
 #[wasm_bindgen_test]
 async fn test_marker_is_shown_while_the_caret_is_on_the_heading_line() {
-    setup_doc(true);
+    caret_marker(true).await;
+    caret_marker(false).await;
+}
+
+async fn caret_marker(write_on: bool) {
+    setup_doc(write_on);
     js_eval(
         "teHead.s.focus(); teHead.s.setSelectionOffsets(teHead.s.getText().indexOf('paragraph'));",
     );
@@ -201,7 +211,12 @@ async fn test_marker_is_shown_while_the_caret_is_on_the_heading_line() {
 
 #[wasm_bindgen_test]
 async fn test_typing_keeps_headings_styled_without_extra_renders() {
-    setup_doc(true);
+    typing_headings(true).await;
+    typing_headings(false).await;
+}
+
+async fn typing_headings(write_on: bool) {
+    setup_doc(write_on);
     let typed = js_string(
         r##"(() => {
           const s = teHead.s;
@@ -302,12 +317,53 @@ async fn test_plain_headings_are_styled_and_tools_show_raw_markdown() {
           styled('plain restored');
           if (!s.getText().startsWith('# Plain heading\n') || !s.getText().includes('xbody text')) out.push('canonical text changed');
           if (ed.exportDocument() !== s.getText()) out.push('export dropped markup');
+          if (ed.indicators.active || s.root.querySelector('.te-ind')) out.push('plain indicators active after tools restoration');
+          if (s.getText() !== s.root.textContent || s.getText() !== window.wasmBindings.export_document()) out.push('text changed');
           ed.destroy();
           if (!ed.headings.destroyed) out.push('layer not destroyed');
           return out.join('; ');
         })()"##,
     );
     assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_plain_heading_composition_defers_decorations_and_preserves_history() {
+    setup_doc(false);
+    assert_eq!(
+        js_string(
+            r##"(() => {
+      const {ed, s} = teHead;
+      s.focus(); s.setSelectionOffsets(2);
+      window.__headBefore = s.getText();
+      window.__headCounts = JSON.stringify(ed.counts());
+      s.root.dispatchEvent(new CompositionEvent('compositionstart', {bubbles:true}));
+      window.__headNode = s.root.firstChild;
+      ed.chrome.setTools(true);
+      ed.headings.flush();
+      if (s.root.firstChild !== window.__headNode) return 'composition DOM rebuilt';
+      ed.chrome.setTools(false);
+      s.root.dispatchEvent(new CompositionEvent('compositionend', {bubbles:true, data:''}));
+      s.replaceRange(2, 2, '新');
+      ed.headings.flush();
+      if (s.getText() !== window.__headBefore.slice(0, 2) + '新' + window.__headBefore.slice(2)) return 'insert text';
+      s.undo(); ed.headings.flush();
+      if (s.getText() !== window.__headBefore) return 'undo';
+      if (JSON.stringify(ed.counts()) !== window.__headCounts) return 'counts';
+      s.redo(); ed.headings.flush();
+      if (s.root.textContent !== s.getText() || !teTest.canonical()) return 'canonical';
+      if (s.root.querySelector('h1,h2,h3,[role="heading"]')) return 'invented heading semantics';
+      s.setSelectionOffsets(s.getText().indexOf('paragraph'));
+      return '';
+    })()"##
+        ),
+        ""
+    );
+    frames().await;
+    assert_eq!(
+        js_string("teHead.width(teHead.marker(0)) === 0 ? '' : 'marker visible'"),
+        ""
+    );
 }
 
 #[wasm_bindgen_test]
@@ -334,4 +390,36 @@ fn test_headline_span_with_alternatives_keeps_one_size() {
         })()"##,
     );
     assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_heading_modes_preserve_ghost_export_counts_and_markdown_structure() {
+    setup_doc(false);
+    assert_eq!(
+        js_string(
+            r##"(() => {
+              const {ed, s} = teHead;
+              const start = s.getText().indexOf('Plain heading');
+              const ghost = window.wasmBindings.ghost_range(start, start + 'Plain heading'.length);
+              if (!ghost.ok) return 'ghost refused';
+              const before = {
+                text: s.getText(), saved: ed.saveDocument(), exported: ed.exportDocument(),
+                counts: JSON.stringify(ed.counts()), ghosts: JSON.stringify(ed.annotations().ghosts)
+              };
+              if (before.exported.includes('Plain heading')) return 'ghost not excluded';
+              for (const [mode, tools] of [['plain',true],['write-on',true],['plain',false]]) {
+                ed.chrome.setMode(mode); ed.chrome.setTools(tools); ed.headings.flush();
+                if (s.getText() !== before.text || s.root.textContent !== before.text) return 'canonical text changed';
+                if (ed.saveDocument() !== before.saved || ed.exportDocument() !== before.exported) return 'persistence changed';
+                if (JSON.stringify(ed.counts()) !== before.counts || JSON.stringify(ed.annotations().ghosts) !== before.ghosts) return 'model changed';
+              }
+              ed.openDocument('# Title\nwrapped body\n\n| key | value |\n| --- | --- |\n| # cell | text |\n\nSetext\n======\n\n~~~\n# fenced\n~~~', 'heading-structure');
+              ed.headings.flush();
+              if (ed.headings.ranges().length !== 1) return 'non-ATX prose/table/fence styled';
+              if (s.root.querySelector('h1,h2,h3,[role="heading"]')) return 'invented semantics';
+              return teTest.canonical() ? '' : 'noncanonical structure';
+            })()"##
+        ),
+        ""
+    );
 }

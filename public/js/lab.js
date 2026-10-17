@@ -507,7 +507,8 @@ class TeLabPopover {
     if (this.surface.getText().slice(mark.start, mark.end) !== mark.data.text) return false;
     const index = Array.from(this.proposals.querySelectorAll('[data-mark]'))
       .findIndex((b) => b.dataset.mark === mark.id);
-    this.surface.replaceRange(mark.start, mark.end, mark.data.proposal, { source: 'lab' });
+    const applied=this.surface.replaceRange(mark.start, mark.end, mark.data.proposal, { source: 'lab' });
+    const accepted=()=> {
     // The change listener has refreshed the list; keep focus in it.
     if (keepFocus && this.isOpen) {
       const buttons = this.proposals.querySelectorAll('[data-mark]');
@@ -518,6 +519,11 @@ class TeLabPopover {
       start: mark.start, end: mark.end, text: mark.data.text, proposal: mark.data.proposal,
     });
     return true;
+    };
+    if(applied&&typeof applied.then==='function')return applied.then(value=>value?accepted():false).catch(error=>{
+      this.renderResults();this.editor.ghostHistoryNotice(error);return false;
+    });
+    return accepted();
   }
 
   /** Refresh the legend, proposals and the closed-state chip. */

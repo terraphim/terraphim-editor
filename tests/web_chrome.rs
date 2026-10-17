@@ -324,45 +324,59 @@ fn test_write_on_mode_persists_per_document() {
     let result = js_string(
         r##"(() => {
           const out = [];
-          const reinit = (config, source) => {
+          const input = () => document.querySelector('.markdown-input');
+          const reinit = (config, text) => {
             window.__teEditor.destroy();
-            // Stage a host's replacement after teardown. Teardown may render
-            // the old canonical surface while removing its decoration layers.
-            if (source !== undefined) document.querySelector('.markdown-input').textContent = source;
+            // Install the next document only after the live surface has
+            // cleared its decorations; teardown may re-render its old text.
+            if (text !== undefined) input().textContent = text;
             const ed = new MarkdownEditor(config || window.EditorConfig);
             ed.initialize();
             window.__teEditor = ed;
             return ed;
           };
           const counter = () => document.querySelector('.te-chrome-counter');
-          const docA = 'Document A\n\nsome words';
-          const docB = 'Document B\n\nother words';
-          let ed = reinit(undefined, docA);
-          if (ed.surface.getText() !== docA) out.push('A source not mounted');
+          const docA = '# Document A\n\nsome words';
+          const docB = '## Document B\n\nother words';
+          const checkBody = (text, label) => {
+            if (ed.headings) ed.headings.flush();
+            if (ed.surface.getText() !== text) out.push(label + ' surface text changed');
+            if (input().textContent !== text) out.push(label + ' DOM text changed');
+            if (window.wasmBindings.document_body() !== text) out.push(label + ' model body changed');
+          };
+          let ed = reinit(null, docA);
+          checkBody(docA, 'A initial');
           if (ed.chrome.isWriteOn()) out.push('A started in write-on');
           const keyA = ed.chrome.storageKey();
           if (!keyA.startsWith(window.WRITE_ON_STORAGE_PREFIX + 'h:')) out.push('hash key ' + keyA);
           counter().click();
+          checkBody(docA, 'A write-on');
           if (localStorage.getItem(keyA) !== '1') out.push('not stored ' + localStorage.getItem(keyA));
           // Same document after a re-init: Write_On is restored.
-          ed = reinit(undefined, docA);
+          ed = reinit(null, docA);
+          checkBody(docA, 'A restored');
           if (!ed.chrome.isWriteOn()) out.push('A not restored after re-init');
           if (document.body.dataset.mode !== 'write-on') out.push('body mode not restored');
           if (ed.chrome.storageKey() !== keyA) out.push('A key changed');
           // Another document is not affected.
-          ed = reinit(undefined, docB);
-          if (ed.surface.getText() !== docB) out.push('B source not mounted');
+          ed = reinit(null, docB);
+          checkBody(docB, 'B initial');
           if (ed.chrome.isWriteOn()) out.push('B inherited write-on');
           if (document.body.dataset.mode !== undefined) out.push('B body mode ' + document.body.dataset.mode);
           if (ed.chrome.storageKey() === keyA) out.push('B shares the A key');
           // Loading a different document re-keys via documentChanged().
           ed.surface.setText(docA);
+          checkBody(docA, 'A loaded');
           ed.chrome.documentChanged();
+          if (ed.chrome.storageKey() !== keyA) out.push('documentChanged changed A key');
+          checkBody(docA, 'A re-keyed');
           if (!ed.chrome.isWriteOn()) out.push('documentChanged did not apply A');
           // Toggling A back to plain is stored too.
           counter().click();
+          checkBody(docA, 'A plain');
           if (localStorage.getItem(keyA) !== '0') out.push('plain not stored');
-          ed = reinit(undefined, docA);
+          ed = reinit(null, docA);
+          checkBody(docA, 'A plain restored');
           if (ed.chrome.isWriteOn()) out.push('A plain not restored');
           // A save key or file name takes precedence over the content hash.
           const named = Object.assign({}, window.EditorConfig, { documentKey: 'notes.md' });

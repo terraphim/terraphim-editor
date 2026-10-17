@@ -1,0 +1,276 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>RoleGraph provisional synthetic performance qualification</title>
+<pre id="result">Running bounded real Worker qualification…</pre>
+<script src="./terraphim-editor.min.js"></script>
+<script type="module">
+const assert = (value, message) => { if (!value) throw Error(message); };
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const encoder = new TextEncoder();
+const result = { ok: false, fixtureStatus: 'provisional synthetic; not stakeholder-agreed production corpus',
+  userAgent: navigator.userAgent, hardwareConcurrency: navigator.hardwareConcurrency,
+  memorySamples: [], longTasks: [], phases: {}, timings: {} };
+let client, observer;
+let phase = 'fixture';
+// Test-only visibility metadata: ordinals/states only, no query or corpus values.
+const visibilityOrigin = performance.now();
+const observeVisibility = () => ({elapsedMs: performance.now() - visibilityOrigin,
+  visibilityState: document.visibilityState, hasFocus: document.hasFocus()});
+result.visibility = {invocation: null, initial: observeVisibility(), checkpoints: {},
+  samples: [], changes: [], droppedChanges: 0};
+const visibilityChange = event => {
+  if (result.visibility.changes.length < 512)
+    result.visibility.changes.push({event: event.type, phase, ...observeVisibility()});
+  else result.visibility.droppedChanges++;
+};
+document.addEventListener('visibilitychange', visibilityChange);
+window.addEventListener('focus', visibilityChange);
+window.addEventListener('blur', visibilityChange);
+const mark = name => { phase = name; result.phases[name] = { start: performance.now() }; };
+const end = name => { result.phases[name].end = performance.now(); };
+function fixture() {
+  const canonical = Array.from({length: 64}, (_, i) => `concept${String(i).padStart(3, '0')}z`);
+  const synonym = canonical.map((_, i) => `alias${String(i).padStart(3, '0')}z`);
+  const unicode = canonical.map((_, i) => `知識${String(i).padStart(3, '0')}語`);
+  const data = {};
+  for (let i = 0; i < 64; i++) {
+    for (const term of [canonical[i], synonym[i], unicode[i]]) data[term] = {id: i + 1, nterm: canonical[i]};
+  }
+  let seed = 0x524f4c45;
+  const random = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
+  const documents = Array.from({length: 1000}, (_, d) => {
+    const terms = [];
+    const pool = Array.from({length:64}, (_, i) => i);
+    // 8–16 varied concepts per document, 1–4 repeats, interleaved synonyms/Unicode.
+    for (let j = 0; j < 8 + d % 9; j++) {
+      const i = pool.splice(random() % pool.length, 1)[0];
+      for (let r = 0; r < 1 + (d + j) % 4; r++) terms.push([canonical, synonym, unicode][(d + j + r) % 3][i]);
+    }
+    return { id: `doc-${String(d).padStart(4, '0')}`, title: `Synthetic note ${d}`, body: terms.join(' ') };
+  });
+  const thesaurusText = JSON.stringify({name: 'provisional-perf-64-v1', data});
+  const sourceBytes = encoder.encode(JSON.stringify(documents)).length;
+  assert(sourceBytes < 16 * 1024 ** 2, 'Fixture corpus exceeds bound');
+  assert(documents.every(d => encoder.encode(JSON.stringify(d)).length < 1024 ** 2), 'Document exceeds bound');
+  return { canonical, synonym, unicode, documents, thesaurusText, sourceBytes };
+}
+const decimal = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
+const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const descendingRanks = ranks => ranks.every((rank, i) => decimal(rank) && (i === 0 || BigInt(ranks[i-1]) >= BigInt(rank)));
+function queryOracle(node, edges, canonical) {
+  // Reference projection of the real graph contract, NOT a replacement graph engine:
+  // each incident edge contributes node.rank + edge.rank + per-document edge rank.
+  // Eligibility is edge.doc_hash, never a direct-text-only source search.
+  const candidates = new Map();
+  for (const id of node.connected_with) {
+    const edge = edges.get(id);
+    assert(edge, 'Unknown graph edge');
+    for (const [documentId, rank] of Object.entries(edge.doc_hash)) {
+      const doc = candidates.get(documentId) || {rank:0n, edges:[]};
+      doc.rank += BigInt(node.rank) + BigInt(edge.rank) + BigInt(rank);
+      doc.edges.push(id); candidates.set(documentId, doc);
+    }
+  }
+  for (const doc of candidates.values()) doc.edges.sort((a,b) => BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
+  return {node, edges, canonical, candidates,
+    ranks:Array.from(candidates.values(), d => d.rank).sort((a,b) => a > b ? -1 : a < b ? 1 : 0)};
+}
+function validateQuery(documents, oracle, corpus) {
+  assert(Array.isArray(documents) && documents.length === Math.min(10, oracle.candidates.size) && documents.length > 0, 'Query result count');
+  assert(descendingRanks(documents.map(doc => doc?.rank)), 'Query descending ranks');
+  const ids = new Set();
+  return documents.map((doc, index) => {
+    assert(object(doc) && typeof doc.id === 'string' && corpus.has(doc.id) && !ids.has(doc.id), 'Query DTO identity');
+    ids.add(doc.id);
+    assert(same(Object.keys(doc).sort(), ['id','matched_edges','nodes','rank','tags']), 'Query DTO fields');
+    assert(decimal(doc.rank) && Array.isArray(doc.nodes) && doc.nodes.every(decimal), 'Query DTO exact decimal strings');
+    assert(same(doc.nodes, [oracle.node.id]) && same(doc.tags, [oracle.canonical]), 'Query node/tag semantics');
+    const expected = oracle.candidates.get(doc.id);
+    assert(expected && doc.rank === expected.rank.toString(), 'Query edge-derived rank/eligibility');
+    // Equal ranks may be returned in any order, including at the pagination cutoff.
+    assert(BigInt(doc.rank) === oracle.ranks[index], 'Query descending top-k rank ordering');
+    assert(Array.isArray(doc.matched_edges) && same(doc.matched_edges.map(e => e?.id), expected.edges), 'Query matched edge identity/order');
+    for (const edge of doc.matched_edges) {
+      assert(object(edge) && same(Object.keys(edge).sort(), ['doc_hash','id','rank']) && decimal(edge.id) && decimal(edge.rank) && object(edge.doc_hash), 'Query edge DTO');
+      const original = oracle.edges.get(edge.id);
+      assert(edge.rank === original.rank && same(Object.keys(edge.doc_hash).sort(), Object.keys(original.doc_hash).sort()), 'Query edge metadata');
+      for (const [id, rank] of Object.entries(edge.doc_hash)) assert(decimal(rank) && rank === original.doc_hash[id], 'Query document edge rank');
+    }
+    return {id:doc.id, rank:doc.rank, nodes:doc.nodes, tags:doc.tags, matchedEdgeIds:expected.edges};
+  });
+}
+function oracleRegressions(documents, oracle, corpus) {
+  const checks = [];
+  const rejects = (name, alter) => {
+    const value = structuredClone(documents); alter(value);
+    let rejected = false; try { validateQuery(value, oracle, corpus); } catch (_) { rejected = true; }
+    assert(rejected, `Oracle regression accepted ${name}`); checks.push(name);
+  };
+  rejects('null DTO', d => { d[0] = null; });
+  rejects('duplicate identity', d => { d[1] = d[0]; });
+  rejects('out-of-corpus identity', d => { d[0].id = 'not-in-fixture'; });
+  rejects('numeric instead of exact rank string', d => { d[0].rank = Number(d[0].rank); });
+  rejects('numeric instead of exact node string', d => { d[0].nodes[0] = Number(d[0].nodes[0]); });
+  rejects('fabricated rank', d => { d[0].rank = String(BigInt(d[0].rank) + 1n); });
+  rejects('wrong query node', d => { d[0].nodes = ['999']; });
+  rejects('wrong canonical tag', d => { d[0].tags = ['fabricated']; });
+  rejects('missing matched edge', d => { d[0].matched_edges.pop(); });
+  rejects('fabricated edge rank', d => { d[0].matched_edges[0].rank = '999999'; });
+  rejects('numeric per-document edge rank', d => { d[0].matched_edges[0].doc_hash[d[0].id] = 1; });
+  const different = documents.findIndex(d => d.rank !== documents[0].rank);
+  if (different > 0) rejects('inverted unequal ranks', d => { [d[0], d[different]] = [d[different], d[0]]; });
+  // Tie-order behavior is tested on a copy of actual metadata, not a fake engine.
+  const tied = structuredClone(documents);
+  const groups = new Map();
+  for (const doc of tied) { const group = groups.get(doc.rank) || []; group.push(doc); groups.set(doc.rank, group); }
+  validateQuery(Array.from(groups.values()).flatMap(group => group.reverse()), oracle, corpus);
+  checks.push('tie permutation accepted');
+  // This fixture's top-k can be entirely tied. Exercise the actual rank guard
+  // with unequal exact-string ranks too, without replacing any graph/engine.
+  assert(descendingRanks(['100','100','99']) && !descendingRanks(['99','100']), 'Rank-order guard regression');
+  checks.push('unequal rank inversion rejected', 'equal rank order accepted');
+  return checks;
+}
+let invoked = false;
+window.startPerformance = async (invocation = 'automatic') => {
+if (invoked) throw Error('Performance harness already invoked');
+if (!['automatic', 'visible-request', 'hidden-request'].includes(invocation)) throw Error('Invalid visibility invocation');
+invoked = true;
+result.visibility.invocation = invocation;
+result.visibility.checkpoints.invoked = observeVisibility();
+try {
+  const input = fixture();
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(JSON.stringify({thesaurusText: input.thesaurusText, documents: input.documents})));
+  result.fixture = { version: 'provisional-perf-64-v1', concepts: 64, documents: 1000,
+    sourceBytes: input.sourceBytes, thesaurusBytes: encoder.encode(input.thesaurusText).length,
+    sha256: Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('') };
+  result.longTaskSupported = PerformanceObserver.supportedEntryTypes?.includes('longtask') === true;
+  if (result.longTaskSupported) {
+    observer = new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) result.longTasks.push({start: entry.startTime,
+        duration: entry.duration, name: entry.name, attribution: Array.from(entry.attribution || [], a => ({name:a.name, containerType:a.containerType}))});
+    });
+    observer.observe({type: 'longtask', buffered: false});
+  }
+  mark('baseline'); result.visibility.checkpoints.baselineBegin = observeVisibility();
+  await delay(1000); end('baseline'); result.visibility.checkpoints.baselineEnd = observeVisibility();
+  mark('graph');
+  let started = performance.now();
+  client = new TeRoleGraphClient({assetBase: new URL('./', location.href).href,
+    workerUrl: new URL('./performance-rolegraph-worker.js', location.href).href,
+    workerFactory: (url, options) => {
+      const worker = new Worker(url, options);
+      // Telemetry cannot reach the client protocol listener or satisfy requests.
+      worker.addEventListener('message', event => {
+        if (event.data?.type === 'performance_memory') {
+          result.memorySamples.push(event.data); event.stopImmediatePropagation();
+        }
+      });
+      return worker;
+    }});
+  await client.ready; result.timings.startupMs = performance.now() - started;
+  started = performance.now();
+  await client.syncRole({generation:'1', thesaurusText:input.thesaurusText, name:'provisional-perf-64-v1'});
+  result.timings.prepareActivateMs = performance.now() - started;
+  started = performance.now();
+  const indexed = await client.indexDocuments(input.documents);
+  result.timings.indexMs = performance.now() - started;
+  assert(indexed.indexed === 1000, 'Not all documents indexed');
+  result.stats = await client.command('stats');
+  assert(result.stats.document_count === 1000 && result.stats.node_count === 64, 'Incorrect real graph fixture stats');
+  assert(result.stats.edge_count > 0 && result.stats.edge_count <= 100000, 'Fixture edge bound');
+  const corpus = new Set(input.documents.map(d => d.id));
+  const nodes = await client.command('nodes', {offset:0, limit:100});
+  const edges = [];
+  for (let offset = 0; offset < result.stats.edge_count; offset += 100) {
+    const page = await client.command('edges', {offset, limit:100});
+    assert(page.length === Math.min(100, result.stats.edge_count - offset), 'Graph edge page coverage');
+    edges.push(...page);
+  }
+  assert(nodes.length === 64 && new Set(nodes.map(n => n.id)).size === 64, 'Graph node coverage');
+  const edgeMap = new Map(edges.map(e => [e.id, e]));
+  assert(edgeMap.size === result.stats.edge_count, 'Graph edge uniqueness');
+  for (const edge of edges) {
+    assert(decimal(edge.id) && decimal(edge.rank) && object(edge.doc_hash), 'Oracle graph edge DTO');
+    for (const [id, rank] of Object.entries(edge.doc_hash)) assert(corpus.has(id) && decimal(rank), 'Oracle edge corpus identity/rank');
+  }
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  for (const node of nodes) assert(decimal(node.id) && BigInt(node.id) >= 1n && BigInt(node.id) <= 64n && decimal(node.rank)
+    && Array.isArray(node.connected_with) && node.connected_with.every(id => decimal(id) && edgeMap.has(id)), 'Oracle graph node DTO');
+  result.oracleGraph = {nodes, edges}; // Enough metadata to independently reconstruct expected ranks/top-k.
+  result.matchChecks = [];
+  for (const term of [input.canonical[0], input.synonym[0], input.unicode[0]]) {
+    const matches = await client.command('match', {text:term});
+    result.matchChecks.push({term, matches});
+    assert(matches.length === 1 && matches[0] === '1', 'Synonym/Unicode do not resolve to same real concept');
+  }
+  const samples = [];
+  const oracles = new Map();
+  result.queryPlan = {warmup:10, measured:100, mode:'graph', limit:10, offset:0,
+    order:'i*17 modulo 64, rotating canonical/synonym/Unicode', timing:'client call to response resolution; includes messaging and wire validation'};
+  mark('queries'); result.visibility.checkpoints.queriesBegin = observeVisibility();
+  for (let i = 0; i < 110; i++) {
+    const term = [input.canonical, input.synonym, input.unicode][i % 3][(i * 17) % 64];
+    const visibilityBefore = observeVisibility();
+    started = performance.now();
+    const documents = await client.query(term, {limit:10, offset:0});
+    const ms = performance.now() - started;
+    const visibilityAfter = observeVisibility();
+    result.visibility.samples.push({index: i, before: visibilityBefore, after: visibilityAfter});
+    // Stop timer BEFORE reference validation and regression mutation checks.
+    const nodeId = String((i * 17) % 64 + 1);
+    if (!oracles.has(nodeId)) oracles.set(nodeId, queryOracle(nodeMap.get(nodeId), edgeMap, input.canonical[Number(nodeId) - 1]));
+    const oracle = oracles.get(nodeId);
+    const identities = validateQuery(documents, oracle, corpus);
+    if (i === 0) result.oracleRegressionChecks = oracleRegressions(documents, oracle, corpus);
+    if (i >= 10) samples.push({term, ms, returned:documents.length, queryNodeId:nodeId,
+      candidateCount:oracle.candidates.size, cutoffRank:oracle.ranks[Math.min(10, oracle.ranks.length)-1].toString(), identities});
+  }
+  end('queries'); result.visibility.checkpoints.queriesEnd = observeVisibility();
+  phase = 'graph';
+  result.querySamples = samples;
+  const sorted = samples.map(s => s.ms).sort((a,b) => a-b);
+  result.timings.queryP95Ms = sorted[Math.ceil(sorted.length * .95) - 1];
+  result.timings.queryMaxMs = sorted.at(-1);
+  // Drain observer delivery; classify by start timestamp, not callback scheduling.
+  end('graph'); await delay(200);
+  const within = (task, window) => task.start < window.end && task.start + task.duration > window.start;
+  result.baselineLongTasks = result.longTasks.filter(t => within(t, result.phases.baseline));
+  result.graphWindowLongTasks = result.longTasks.filter(t => within(t, result.phases.graph));
+  const dispatches = result.memorySamples.filter(s => s.operationCompleted);
+  const expectedDispatches = 118 + Math.ceil(result.stats.edge_count / 100);
+  assert(dispatches.length === expectedDispatches && dispatches.every((s,i) => s.requestId === String(i+1)), 'Missing actual dispatch memory telemetry');
+  result.peakWorkerWasmBytes = Math.max(...result.memorySamples.map(s => s.highwater));
+  const visible = state => state?.visibilityState === 'visible';
+  result.visibility.qualifiedForeground = invocation !== 'hidden-request'
+    && result.visibility.samples.length === 110
+    && visible(result.visibility.checkpoints.queriesBegin) && visible(result.visibility.checkpoints.queriesEnd)
+    && result.visibility.samples.every(s => visible(s.before) && visible(s.after))
+    && result.visibility.changes.filter(s => s.phase === 'queries').every(visible)
+    && result.visibility.droppedChanges === 0;
+  // A foreground latency budget cannot pass using hidden-page samples. Raw
+  // timings remain available for the explicitly requested hidden comparison.
+  result.budgets = {query:result.timings.queryP95Ms <= 100 && result.visibility.qualifiedForeground,
+    foreground:result.visibility.qualifiedForeground,
+    workerWasm:result.peakWorkerWasmBytes <= 128 * 1024 ** 2,
+    mainThread:result.longTaskSupported ? result.graphWindowLongTasks.length === 0 : null};
+  // A graph-window task is a conservative failure/pending attribution, never baseline-subtracted.
+  result.ok = result.budgets.query && result.budgets.foreground && result.budgets.workerWasm && result.budgets.mainThread === true;
+  result.completed = true;
+} catch (error) { result.error = String(error); result.errorCode = error.code ?? null; }
+finally {
+  if (client) client.destroy(); if (observer) observer.disconnect();
+  result.visibility.checkpoints.finished = observeVisibility();
+  document.removeEventListener('visibilitychange', visibilityChange);
+  window.removeEventListener('focus', visibilityChange);
+  window.removeEventListener('blur', visibilityChange);
+  result.lastPhase = phase;
+  window.performanceResult = result;
+  document.querySelector('#result').textContent = JSON.stringify(result, null, 2);
+}
+};
+// Existing Chrome/Firefox runners auto-start unchanged; native diagnostics can
+// select the automation window explicitly before requesting this single run.
+if (new URLSearchParams(location.search).get('controlled') !== '1') window.startPerformance();
+</script>

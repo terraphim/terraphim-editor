@@ -150,6 +150,7 @@ class EditorSurface {
    * source (a label passed to change listeners and used for undo grouping).
    */
   replaceRange(start, end, insert, options = {}) {
+    if (this.authorityEditor && !this.authorityEditor.authorityPainting) return this.authorityEditor.authorityReplaceRange(start, end, insert, options);
     const source = options.source || 'api';
     const old = this.text;
     let s = this.snap(this.clamp(Math.min(start, end)), old);
@@ -208,6 +209,7 @@ class EditorSurface {
    * edit). Returns the applied edits, or [] when nothing changed.
    */
   replaceRanges(edits, options = {}) {
+    if (this.authorityEditor && !this.authorityEditor.authorityPainting) return this.authorityEditor.authorityReplaceRanges(edits, options);
     const source = options.source || 'api';
     const sorted = (edits || [])
       .map((e) => ({ start: Math.min(e.start, e.end), end: Math.max(e.start, e.end), insert: String(e.insert || '') }))
@@ -249,6 +251,24 @@ class EditorSurface {
 
   /** Replace the current selection with `insert`. */
   replaceSelection(insert, source = 'api') {
+    if (this.authorityEditor && !this.authorityEditor.authorityPainting) {
+      // Enter/paste act on the visible raw input, which may be ahead of the
+      // accepted native projection. Keep that input visible and queue its
+      // exact text through the same guarded path as browser typing.
+      const before = this.serialise().text;
+      const selection = this.getSelectionOffsets();
+      const at = offset => this.snap(Math.max(0, Math.min(before.length, offset)), before);
+      const start = at(selection.start), end = at(selection.end);
+      const text = EditorSurface.normaliseNewlines(String(insert));
+      const after = before.slice(0, start) + text + before.slice(end);
+      const caret = start + text.length;
+      this.root.textContent = after;
+      this.pendingSelection = null;
+      this.lastSelection = { start: caret, end: caret, direction: 'none' };
+      const node = this.root.firstChild, live = document.getSelection();
+      if (node && live && document.activeElement === this.root) live.setBaseAndExtent(node, caret, node, caret);
+      return this.authorityEditor.authorityInput(after, this.lastSelection, source, { start, end, exact: true });
+    }
     const { start, end } = this.getSelectionOffsets();
     return this.replaceRange(start, end, insert, { source });
   }
@@ -508,6 +528,7 @@ class EditorSurface {
   }
 
   undo() {
+    if (this.authorityEditor && !this.authorityEditor.authorityPainting) return this.authorityEditor.authorityHistory('undo');
     if (this.historyOwner) { this.historyOwner.undo(); return true; }
     if (!this.canUndo()) return false;
     const undone = this.history[this.historyIndex];
@@ -521,6 +542,7 @@ class EditorSurface {
   }
 
   redo() {
+    if (this.authorityEditor && !this.authorityEditor.authorityPainting) return this.authorityEditor.authorityHistory('redo');
     if (this.historyOwner) { this.historyOwner.redo(); return true; }
     if (!this.canRedo()) return false;
     const next = this.history[this.historyIndex + 1];
@@ -723,6 +745,13 @@ class EditorSurface {
    *    external DOM mutation with the selection elsewhere.
    */
   sync(source, hint = null, inputType = '') {
+    if (this.authorityEditor && !this.authorityEditor.authorityPainting) {
+      const selection = document.getSelection();
+      const anchor = selection && this.root.contains(selection.anchorNode) ? this.pointToOffset(selection.anchorNode, selection.anchorOffset) : this.text.length;
+      const focus = selection && this.root.contains(selection.focusNode) ? this.pointToOffset(selection.focusNode, selection.focusOffset) : anchor;
+      this.authorityEditor.authorityInput(this.serialise().text, {start:Math.min(anchor,focus),end:Math.max(anchor,focus),direction:anchor>focus?'backward':'forward'}, source, hint);
+      return;
+    }
     const shape = this.isCanonical();
     const text = shape.ok ? this.root.textContent : this.serialise().text;
     const old = this.text;
@@ -1464,9 +1493,9 @@ class MarkdownEditor {
     if (this.decorations) this.decorations.destroy();
     if (this.surface) this.surface.destroy();
     // Host providers (#83) belong to this editor; the registry is the page's.
-    for (const id of Array.from((this.alternativeProviders || new Map()).keys())) {
-      this.unregisterAlternativesProvider(id);
-    }
+    this.authorityControlPainting=true;
+    try {for (const id of Array.from((this.alternativeProviders || new Map()).keys())) this.unregisterAlternativesProvider(id);}
+    finally {this.authorityControlPainting=false;}
     this.warningListeners.clear();
     return drafts;
   }
@@ -1574,7 +1603,7 @@ class MarkdownEditor {
     const wrappedText = selection ? selection : 'text';
 
     this.surface.focus();
-    this.surface.replaceRange(start, end, prefix + wrappedText + suffix, {
+    return this.surface.replaceRange(start, end, prefix + wrappedText + suffix, {
       source: 'format',
       selectStart: start + prefix.length,
       selectEnd: selection ? end + prefix.length : start + prefix.length + 4,
@@ -1656,11 +1685,11 @@ class MarkdownEditor {
       item.append(teConfigIcon(cmd.icon), teTextElement('span', cmd.name));
 
       item.addEventListener('click', () => {
-        if (slashPosition !== null && this.surface.getText().charAt(slashPosition) === '/') {
-          this.surface.replaceRange(slashPosition, slashPosition + 1, '', { source: 'command' });
-        }
-        cmd.action();
-        hideCommandMenu();
+        const removed=slashPosition !== null && this.surface.getText().charAt(slashPosition) === '/'
+          ? this.surface.replaceRange(slashPosition,slashPosition+1,'',{source:'command'}) : null;
+        const invoke=()=>{cmd.action();hideCommandMenu();};
+        if(removed&&typeof removed.then==='function')void removed.then(invoke).catch(error=>this.ghostHistoryNotice(error));
+        else invoke();
       }, { signal });
 
       commandList.appendChild(item);
@@ -1797,6 +1826,243 @@ class MarkdownEditor {
    * null when the module does not expose it, in which case the editor still
    * works as a plain Markdown editor.
    */
+  /** Opt-in host authority. Standalone callers keep their synchronous API. */
+  setAuthority(adapter) {
+    if (!adapter || typeof adapter.transact !== 'function') throw new Error('An asynchronous native authority adapter is required');
+    if (this.authority && this.authority !== adapter) throw new Error('Explicitly reopen before replacing native authority');
+    this.authority = adapter;
+    if(this.graphClient?.options?.roleCoordinator)this.graphClient.options.roleCoordinator.allowAsyncCommit=true;
+    this.authorityQueue = Promise.resolve();
+    this.authorityQueueGeneration = 0;
+    this.authorityDraftSequence = 0;
+    this.authorityDrafts = new Map();
+    this.surface.authorityEditor = this;
+    this.surface.ghostHistoryAdapter = this;
+    const status = document.createElement('div');
+    status.className = 'te-authority-status'; status.setAttribute('role','status'); status.setAttribute('aria-live','polite');
+    this.surface.root.before(status); this.createdNodes.push(status); this.authorityStatus = status;
+    return this;
+  }
+
+  /** Only the host's verified explicit fresh-authority recovery may reset this view. */
+  resetAuthorityAfterRecovery() {
+    const retained=this.pendingAuthorityDraft();
+    this.authorityQueueGeneration=(this.authorityQueueGeneration||0)+1;
+    this.authorityQueue=Promise.resolve();this.authorityFault=null;this.authorityDrafts.clear();
+    this.authorityStatus.textContent='';this.surface.root.removeAttribute('aria-readonly');
+    if(this.altPanel) {
+      this.altPanel.authorityCancelGeneration=(this.altPanel.authorityCancelGeneration||0)+1;
+      if(this.altPanel.live)this.altPanel.endLive();
+      this.altPanel.authorityLiveStarting=false;this.altPanel.authorityLineQueue=Promise.resolve();
+      this.altPanel.authorityInputGroup=(this.altPanel.authorityInputGroup||0)+1;
+    }
+    return retained;
+  }
+
+  pendingAuthorityDraft() {
+    return this.authority ? {sequence:this.authorityDraftSequence, intents:Array.from(this.authorityDrafts.values(), value => structuredClone(value))} : null;
+  }
+
+  authorityReportDraft(key, input) {
+    const sequence = ++this.authorityDraftSequence;
+    this.authorityDrafts.set(key, {key,sequence,input:structuredClone(input)});
+    if (this.authority.reportDraft) this.authority.reportDraft(this.pendingAuthorityDraft());
+    return sequence;
+  }
+
+  authorityClearDraft(key, sequence) {
+    if (this.authorityDrafts.get(key)?.sequence === sequence) this.authorityDrafts.delete(key);
+    if (this.authority.reportDraft) this.authority.reportDraft(this.pendingAuthorityDraft());
+  }
+
+  async authoritySettled() {
+    if (!this.authority) return;
+    if (this.overflow?.pending()) await this.overflow.flush();
+    if (this.blocks?.settledAuthority) await this.blocks.settledAuthority();
+    if (this.altPanel?.flushAuthorityInputs) await this.altPanel.flushAuthorityInputs();
+    let queued;
+    do { queued = this.authorityQueue; await queued; } while (queued !== this.authorityQueue);
+    if (this.authorityFault) throw this.authorityFault;
+    if (this.authorityDrafts.size) throw new Error('Unaccepted raw input remains available for recovery');
+  }
+
+  authorityHistoryChanged() {
+    if (!this.authority) return;
+    if (typeof this.authority.historyChanged !== 'function') throw new Error('Native history synchronization is unavailable');
+    return this.authority.historyChanged();
+  }
+
+  authorityRenderDraft() {
+    const draft=this.authorityDrafts.get('body');
+    if (!draft || draft.input.text===this.surface.getText()) return;
+    this.surface.root.textContent=draft.input.text;
+    const node=this.surface.root.firstChild, sel=document.getSelection(), selection=draft.input.selection;
+    if(node && sel && document.activeElement===this.surface.root) sel.setBaseAndExtent(node,Math.min(selection.start,node.length),node,Math.min(selection.end,node.length));
+  }
+
+  authorityEnqueue(work) {
+    const generation=this.authorityQueueGeneration;
+    const queued = this.authorityQueue.then(async () => {
+      if(generation!==this.authorityQueueGeneration)throw new Error('Pending operation belongs to a recovered authority');
+      if (this.destroyed) throw new Error('Editor disposed; pending draft retained by host');
+      if (this.authorityFault) throw this.authorityFault;
+      this.authorityStatus.textContent = 'Applying pending changes…';
+      try { return await work(); }
+      finally { if (generation===this.authorityQueueGeneration && !this.authorityFault) this.authorityStatus.textContent = ''; }
+    });
+    // Keep the queue usable after a confirmed refusal; callers still receive it.
+    this.authorityQueue = queued.catch(error => {
+      if(generation!==this.authorityQueueGeneration)return;
+      if (error?.authorityUncertain) this.authorityFault = error;
+      this.authorityStatus.textContent = `Not accepted: ${error?.message || error}`;
+      if (this.authorityFault) this.surface.root.setAttribute('aria-readonly','true');
+    });
+    return queued;
+  }
+
+  async authorityTransaction(request, paint) {
+    const generation=this.authorityQueueGeneration;
+    const api = this.requireDocumentApi();
+    const saved = this.ghostHistoryCheckpoint(api);
+    // Keep object identities used by alternatives.live.base across rollback.
+    const references = this.surface.history.slice();
+    const source = api.save_document();
+    let painted = false;
+    try {
+      const accepted = await this.authority.transact(request, async started => {
+        if(generation!==this.authorityQueueGeneration)throw new Error('Prepared outcome belongs to a recovered authority');
+        if (!started || started.ok !== true || typeof started.token !== 'string' || typeof started.source !== 'string') throw new Error('Invalid prepared native outcome');
+        const focus=document.activeElement;
+        const focusCaret=focus instanceof HTMLInputElement||focus instanceof HTMLTextAreaElement ? [focus.selectionStart,focus.selectionEnd] : null;
+        this.authorityPainting = true;
+        try {
+          // This is ONLY the disposable view projection, never the native owner.
+          api.open_document(started.source);
+          await paint(started, saved);
+          if(generation!==this.authorityQueueGeneration)throw new Error('Painted outcome belongs to a recovered authority');
+          if (api.document_body() !== this.surface.getText()) throw new Error('Prepared native body differs from tentative surface');
+          painted = true;
+          if (typeof window.TerraphimHistoryCheckpoint?.capture === 'function') return window.TerraphimHistoryCheckpoint.capture(this.surface,started.presentationSource || api.save_document(),this.altPanel);
+        } finally {
+          if(generation===this.authorityQueueGeneration && focus?.isConnected && focus!==this.surface.root && typeof focus.focus==='function') {
+            focus.focus();if(focusCaret)focus.setSelectionRange(...focusCaret);
+          }
+          this.authorityPainting = false; this.authorityRenderDraft();
+        }
+      });
+      if(generation!==this.authorityQueueGeneration)throw new Error('Accepted outcome belongs to a recovered authority');
+      if (accepted) {
+        this.surface.root.dispatchEvent(new CustomEvent('te:authority-accepted',{bubbles:true,detail:{editor:this}}));
+      }
+      return accepted;
+    } catch (error) {
+      if(generation!==this.authorityQueueGeneration)throw error;
+      if (error?.authorityRolledBack || error?.authorityUnchanged) {
+        this.authorityPainting = true;
+        try {
+          api.open_document(source);
+          this.restoreGhostHistoryCheckpoint(saved, api);
+          for (let index=0;index<references.length;index++) Object.assign(references[index],saved.history[index]);
+          this.surface.history = references;
+        } finally { this.authorityPainting = false; this.authorityRenderDraft(); }
+      } else if (painted || error?.authorityUncertain) {
+        this.authorityFault = error;
+        this.authorityStatus.textContent = 'Native outcome is uncertain. Preserve drafts and recover explicitly.';
+      }
+      throw error;
+    }
+  }
+
+  authorityAction(meta, textArgs, paint) {
+    return this.authorityEnqueue(() => this.authorityTransaction({route:'action',expectedBody:this.surface.getText(),meta,textArgs},paint));
+  }
+
+  static async authorityHash(text) {
+    const digest = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(digest), value=>value.toString(16).padStart(2,'0')).join('');
+  }
+
+  async authorityEditMeta(body, start, end, inserted, insertedRef) {
+    return {start,deleteUtf16:end-start,insertedRef,beforeBodyHash:await MarkdownEditor.authorityHash(body),afterBodyHash:await MarkdownEditor.authorityHash(body.slice(0,start)+inserted+body.slice(end))};
+  }
+
+  authorityReplaceRange(start, end, insert, options = {}) {
+    const before = this.surface.getText();
+    return this.authorityEnqueue(async () => {
+      if (before !== this.surface.getText()) throw new Error('Text action base changed; input retained');
+      const text = EditorSurface.normaliseNewlines(String(insert));
+      const a = this.surface.snap(this.surface.clamp(Math.min(start,end))), b=this.surface.snap(this.surface.clamp(Math.max(start,end)));
+      const meta = {kind:'text_edit',...await this.authorityEditMeta(before,a,b,text,0)};
+      let edit;
+      const accepted=await this.authorityTransaction({route:'action',expectedBody:before,meta,textArgs:[text]}, () => { edit=this.surface.replaceRange(a,b,text,options); });
+      return accepted ? edit : null;
+    });
+  }
+
+  authorityReplaceRanges(edits, options = {}) {
+    const before = this.surface.getText();
+    return this.authorityEnqueue(async () => {
+      if(before!==this.surface.getText()) throw new Error('Batch action base changed; input retained');
+      const ordered=edits.map(edit=>({start:Math.min(edit.start,edit.end),end:Math.max(edit.start,edit.end),insert:EditorSurface.normaliseNewlines(String(edit.insert||''))})).sort((a,b)=>b.start-a.start);
+      let body=before; const batch=[], args=[];
+      for(const edit of ordered) { batch.push(await this.authorityEditMeta(body,edit.start,edit.end,edit.insert,args.length));args.push(edit.insert);body=body.slice(0,edit.start)+edit.insert+body.slice(edit.end); }
+      if(!batch.length)return [];
+      let applied;
+      const accepted=await this.authorityTransaction({route:'action',expectedBody:before,meta:{kind:'text_edits',edits:batch},textArgs:args},()=>{applied=this.surface.replaceRanges(edits,options);});
+      return accepted ? applied : [];
+    });
+  }
+
+  authorityInput(text, selection, source, hint) {
+    if (this.authorityPainting || (text === this.surface.getText() && !this.authorityDrafts.has('body'))) return;
+    const sequence=this.authorityReportDraft('body',{text,selection,source});
+    this.authorityEnqueue(async () => {
+      const before=this.surface.getText(), edit=EditorSurface.diff(before,text,hint);
+      if(!edit) {this.authorityClearDraft('body',sequence);return;}
+      const meta={kind:'text_edit',...await this.authorityEditMeta(before,edit.start,edit.start+edit.deletedLength,edit.insertedText,0)};
+      await this.authorityTransaction({route:'action',expectedBody:before,meta,textArgs:[edit.insertedText]},()=> {
+        this.surface.replaceRange(edit.start,edit.start+edit.deletedLength,edit.insertedText,{source,selectStart:selection.start,selectEnd:selection.end});
+      });
+      this.authorityClearDraft('body',sequence);
+      const later=this.authorityDrafts.get('body');
+      if(later && later.sequence>sequence) {
+        this.surface.root.textContent=later.input.text;
+        const node=this.surface.root.firstChild, sel=document.getSelection();
+        if(node && sel && document.activeElement===this.surface.root) sel.setBaseAndExtent(node,Math.min(later.input.selection.start,node.length),node,Math.min(later.input.selection.end,node.length));
+      }
+    }).catch(error=>this.ghostHistoryNotice(error));
+  }
+
+  authorityHistory(direction) {
+    return this.authorityEnqueue(async () => {
+      const surface=this.surface;
+      const index=direction==='undo'?surface.historyIndex-1:surface.historyIndex+1;
+      if(index<0 || index>=surface.history.length)return false;
+      const entry=direction==='undo'?surface.history[surface.historyIndex]:surface.history[index];
+      let steps=entry.edits;
+      if(!Array.isArray(steps))throw new Error('Exact existing history steps are unavailable');
+      if(direction==='undo')steps=steps.slice().reverse().map(EditorSurface.invertStep);
+      const body=surface.getText(), target=surface.history[index];
+      const applied=EditorSurface.replaySteps(body,steps,target.text);
+      if(!applied)throw new Error('Existing history steps do not reproduce the target');
+      const operations=applied.map(({edit,text})=> {
+        if(edit.ghost)return {kind:'ghost',body:text,...edit.ghost};
+        const base={body:text,start:edit.start,deletedText:edit.deletedText,insertedText:edit.insertedText};
+        if(edit.alt)return {...base,kind:'alt',span:edit.alt.span,target:edit.alt.after};
+        if(edit.move)return {...base,kind:'move',move:edit.move};
+        if(edit.swap)return {...base,kind:'swap',...edit.swap};
+        if(edit.overflow)return {...base,kind:'overflow',...edit.overflow};
+        return {...base,kind:'edit'};
+      });
+      const accepted=await this.authorityTransaction({route:'history',expectedBody:body,targetBody:target.text,operationsJson:JSON.stringify(operations)},started=> {
+        surface.historyIndex=index;this.paintGhostHistory(started.annotations,applied);
+        surface.setSelectionOffsets(target.start,target.end);
+      });
+      if(accepted)this.notifyGhostHistory(direction==='undo'?'historyUndo':'historyRedo',accepted.annotations);
+      return !!accepted;
+    });
+  }
+
   documentApi() {
     const api = (this.config && this.config.bindings) || window.wasmBindings;
     return api && typeof api.open_document === 'function' && typeof api.apply_edit === 'function'
@@ -1928,6 +2194,11 @@ class MarkdownEditor {
   }
 
   commitTrimGhosts(level, kept) {
+    if(this.authority) return this.authorityEnqueue(()=>this.authorityTransaction({route:'trim',expectedBody:this.surface.getText(),level,kept},(started,saved)=>{
+      if(!started.change||!started.annotations)throw new Error('Native Trim receipt is missing');
+      const surface=this.surface;surface.record('trim-ghost',surface.lastSelection,{start:0,deletedText:'',insertedText:'',ghost:{change:structuredClone(started.change),undo:false}});
+      this.paintGhostHistory(started.annotations);surface.setSelectionOffsets(saved.selection.start,saved.selection.end,saved.selection.direction);
+    })).then(started=>{if(started)this.notifyGhostHistory('insertReplacementText',started.annotations);return started;});
     const s = this.surface;
     if (!Number.isInteger(s.historyLimit) || s.historyLimit < 2 || s.historyIndex < 0) {
       throw new Error('History capacity must retain a base state and one ghost operation');
@@ -2051,6 +2322,7 @@ class MarkdownEditor {
   }
 
   mirrorEdit(change) {
+    if (this.authority) return; // Host authority, local WASM is a read-only projection.
     if (this.suppressModelSync) return;
     if (this.ghostHistoryConflict) {
       this.ghostHistoryNotice(new Error('Explicitly reopen before mirroring edits after a ghost history conflict'));
@@ -2112,6 +2384,13 @@ class MarkdownEditor {
    * model outcome ({ detached, reattached, setAside, warning, notice }).
    */
   moveRange(start, end, to) {
+    if(this.authority) return this.authorityEnqueue(async()=> {
+      const body=this.surface.getText(),lo=Math.min(start,to),hi=Math.max(end,to),piece=body.slice(start,end);
+      const insert=to>end?body.slice(end,to)+piece:piece+body.slice(to,start);
+      const target=body.slice(0,lo)+insert+body.slice(hi);
+      const operationsJson=JSON.stringify([{kind:'move',body:target,start:lo,deletedText:body.slice(lo,hi),insertedText:insert,move:{start,end,to}}]);
+      let outcome;await this.authorityTransaction({route:'history',expectedBody:body,targetBody:target,operationsJson},started=>{outcome=this.paintMoveRange(started.result||{},start,end,to);});return outcome;
+    });
     const api = this.requireDocumentApi();
     if (typeof api.move_document_range !== 'function') {
       throw new Error('The WASM document API cannot move text');
@@ -2120,6 +2399,10 @@ class MarkdownEditor {
     // Throws, changing nothing, if the model refuses the move (invalid range
     // or destination, or an item it would split).
     const outcome = api.move_document_range(start, end, to);
+    return this.paintMoveRange(outcome,start,end,to);
+  }
+
+  paintMoveRange(outcome,start,end,to) {
     if (to === start || to === end) return { ...outcome, moved: false, start, end };
     const text = this.surface.getText();
     const len = end - start;
@@ -2176,6 +2459,11 @@ class MarkdownEditor {
    * through `apply_edit`, and the KG spans re-derive from the text.
    */
   swapAlternative(spanId, index) {
+    if(this.authority) {
+      const isKg=TeKg.isKgSpan(spanId);let outcome;
+      const meta=isKg?{kind:'kg_swap',spanId:String(spanId),index,roleGeneration:this.authority.roleGeneration}:{kind:'alt_active',spanId:String(spanId),index};
+      return this.authorityAction(meta,[],started=>{outcome=started.result;this.paintAlternativeSwap(outcome,isKg);}).then(accepted=>accepted?outcome:null);
+    }
     const api = this.requireDocumentApi();
     const isKg = TeKg.isKgSpan(spanId);
     const swapFn = isKg ? api.kg_swap_alternative : api.set_active_alternative;
@@ -2185,6 +2473,10 @@ class MarkdownEditor {
     this.alignDocumentModel(api);
     // Throws, changing nothing, if the model refuses the swap.
     const outcome = swapFn(String(spanId), index);
+    return this.paintAlternativeSwap(outcome,isKg);
+  }
+
+  paintAlternativeSwap(outcome,isKg=false) {
     const edit = outcome && outcome.edit;
     if (!edit) return outcome;
     const editEnd = edit.start + edit.deletedLength;
@@ -2251,6 +2543,11 @@ class MarkdownEditor {
    * thesaurus, if it cannot be read.
    */
   loadThesaurus(json) {
+    if(this.authority && !this.authorityControlPainting)return this.authorityEnqueue(async()=> {
+      const text=typeof json==='string'?json:JSON.stringify(json);
+      await this.authority.control({kind:'role-load',json:text});
+      this.authorityControlPainting=true;try{return this.loadThesaurus(text);}finally{this.authorityControlPainting=false;}
+    });
     const api = this.requireDocumentApi();
     if (typeof api.kg_load_thesaurus !== 'function') {
       throw new Error('The WASM document API has no knowledge-graph support');
@@ -2263,6 +2560,10 @@ class MarkdownEditor {
 
   /** Forget the thesaurus: no KG spans until the next load. */
   clearThesaurus() {
+    if(this.authority && !this.authorityControlPainting)return this.authorityEnqueue(async()=> {
+      await this.authority.control({kind:'role-clear'});
+      this.authorityControlPainting=true;try{return this.clearThesaurus();}finally{this.authorityControlPainting=false;}
+    });
     const api = this.documentApi();
     if (api && typeof api.kg_clear_thesaurus === 'function') api.kg_clear_thesaurus();
     if (!this.graphRoleListenerApi) this.syncGraphRole();
@@ -2282,8 +2583,23 @@ class MarkdownEditor {
     const options = Object.assign({}, this.config.rolegraph || {}, {
       assetBase: this.config.rolegraphAssetBase || new URL('.', document.baseURI).href,
       roleCoordinator: {
-        prepare: (text) => api.kg_prepare_role(text),
+        allowAsyncCommit:!!this.authority,
+        prepare: (text) => {
+          if(!this.authority)return api.kg_prepare_role(text);
+          return this.authorityEnqueue(async()=> {
+            const token=await this.authority.control({kind:'role-prepare',json:text});
+            if(!this.authorityRoleTokens)this.authorityRoleTokens=new Map();
+            this.authorityRoleTokens.set(token,api.kg_prepare_role(text));return token;
+          });
+        },
         commit: (token) => {
+          if(this.authority) return this.authorityEnqueue(async()=> {
+            const local=this.authorityRoleTokens?.get(token);if(!local)throw new Error('Unknown prepared role token');
+            const result=await this.authority.control({kind:'role-commit',token});
+            this.graphRoleCommitInProgress=true;
+            try {api.kg_commit_prepared_role(local);}finally{this.graphRoleCommitInProgress=false;}
+            this.authorityRoleTokens.delete(token);this.redrawRoleIndicators();return typeof result==='string'?JSON.parse(result):result;
+          });
           // Check before publishing: activation must follow the authoritative generation.
           const current = JSON.parse(api.kg_role_snapshot_json());
           if (String(BigInt(current.generation) + 1n) !== this.graphClient.generation) {
@@ -2298,7 +2614,13 @@ class MarkdownEditor {
           this.redrawRoleIndicators();
           return result;
         },
-        discard: (token) => api.kg_discard_prepared_role(token),
+        discard: (token) => {
+          if(!this.authority)return api.kg_discard_prepared_role(token);
+          return this.authorityEnqueue(async()=> {
+            await this.authority.control({kind:'role-discard',token});
+            const local=this.authorityRoleTokens?.get(token);if(local)api.kg_discard_prepared_role(local);this.authorityRoleTokens?.delete(token);
+          });
+        },
       },
       onStateChange: (state) => this.graphStateChanged(state),
     });
@@ -2450,6 +2772,7 @@ class MarkdownEditor {
 
   /** Open the panel (Write_On) on the span the append touched. */
   showAlternativesFor(sel, change) {
+    if(change && typeof change.then==='function')return change.then(result=>this.showAlternativesFor(sel,result));
     const term = this.kgLookup(sel.start, sel.end);
     const spanId = change ? change.span : term && term.span;
     if (spanId && this.altPanel && typeof this.altPanel.open === 'function' && this.altPanel.isWriteOn()) {
@@ -2484,6 +2807,12 @@ class MarkdownEditor {
    * Returns a function that unregisters it.
    */
   registerAlternativesProvider(provider) {
+    if(this.authority && !this.authorityControlPainting)return this.authorityEnqueue(async()=> {
+      if(!provider||typeof provider.id!=='string'||!provider.id||provider.id==='thesaurus'||typeof provider.alternatives!=='function')throw new Error('Invalid alternatives provider');
+      const model=typeof provider.model==='string'&&provider.model?provider.model:provider.id;
+      await this.authority.control({kind:'provider-register',id:provider.id,model});
+      this.authorityControlPainting=true;try{return this.registerAlternativesProvider(provider);}finally{this.authorityControlPainting=false;}
+    });
     if (!provider || typeof provider.id !== 'string' || !provider.id) {
       throw new Error('An alternatives provider needs an id');
     }
@@ -2513,6 +2842,11 @@ class MarkdownEditor {
 
   /** Remove a provider registered here; false when there was none. */
   unregisterAlternativesProvider(id, entry = null) {
+    if(this.authority && !this.authorityControlPainting)return this.authorityEnqueue(async()=> {
+      if(!this.alternativeProviders?.has(id)||(entry&&this.alternativeProviders.get(id)!==entry))return false;
+      await this.authority.control({kind:'provider-unregister',id});
+      this.authorityControlPainting=true;try{return this.unregisterAlternativesProvider(id,entry);}finally{this.authorityControlPainting=false;}
+    });
     if (!this.alternativeProviders || !this.alternativeProviders.has(id)) return false;
     if (entry && this.alternativeProviders.get(id) !== entry) return false;
     const held = this.alternativeProviders.get(id);
@@ -2554,6 +2888,7 @@ class MarkdownEditor {
    * appended. Resolves to the change, or null.
    */
   async alternativesForSelection(ctx = null) {
+    const authorityRole=this.authority?.roleGeneration, authorityProviders=this.authority?.providerGeneration;
     if (!this.hasAlternativesProviders()) return this.kgAlternativesForSelection(ctx);
     const sel = ctx ? { start: ctx.start, end: ctx.end } : this.surface.getSelectionOffsets();
     const body = this.surface.getText();
@@ -2577,7 +2912,7 @@ class MarkdownEditor {
         }
       }),
     );
-    if (this.destroyed || this.surface.getText() !== body) {
+    if (this.destroyed || this.surface.getText() !== body || (this.authority && (authorityRole!==this.authority.roleGeneration || authorityProviders!==this.authority.providerGeneration))) {
       console.warn('The text changed while alternatives were being fetched; nothing appended');
       return null;
     }
@@ -2589,7 +2924,7 @@ class MarkdownEditor {
     });
     let change = null;
     try {
-      change = this.alternativeOp('append_alternatives', start, end, JSON.stringify(supplied));
+      change = await this.alternativeOp('append_alternatives', start, end, JSON.stringify(supplied));
     } catch (err) {
       console.warn('No alternatives for the selection', err);
       return null;
@@ -2621,6 +2956,7 @@ class MarkdownEditor {
    * ({ edit, overflow: { before, after }, detached, setAside, ... }).
    */
   stashRange(start, end) {
+    if(this.authority) {let outcome;return this.authorityAction({kind:'stash',start:Math.min(start,end),end:Math.max(start,end)},[],started=>{outcome=started.result;this.paintStash(outcome);}).then(accepted=>accepted?outcome:null);}
     const api = this.requireDocumentApi();
     if (typeof api.stash_document_range !== 'function') {
       throw new Error('The WASM document API cannot stash text');
@@ -2628,6 +2964,10 @@ class MarkdownEditor {
     this.alignDocumentModel(api);
     // Throws, changing nothing, if the model refuses the stash.
     const outcome = api.stash_document_range(Math.min(start, end), Math.max(start, end));
+    return this.paintStash(outcome);
+  }
+
+  paintStash(outcome) {
     const edit = outcome.edit;
     this.suppressModelSync = true;
     try {
@@ -2690,6 +3030,7 @@ class MarkdownEditor {
 
   /** Make sure the model body is exactly the surface text before reading it. */
   alignDocumentModel(api) {
+    if (this.authority) return; // Never reopen/sync the authoritative native session.
     if (this.ghostHistoryConflict) throw new Error('Ghost history conflict: explicitly reopen before model alignment');
     if (this.ghostHistoryActive) {
       if (api.document_body() !== this.surface.getText()) throw new Error('Ghost transaction body conflict; implicit resync is forbidden');
@@ -2863,6 +3204,19 @@ class MarkdownEditor {
    * Making an alternative active is swapAlternative (issue #9).
    */
   alternativeOp(name, ...args) {
+    if (this.authority) {
+      let meta, textArgs=[];
+      if(name==='create_span') {meta={kind:'alt_create',spanKind:args[0],start:args[1],end:args[2],textRef:0,source:args[4]};textArgs=[String(args[3])];}
+      else if(name==='add') {meta={kind:'alt_add',spanId:args[0],textRef:0,source:args[2]};textArgs=[String(args[1])];}
+      else if(name==='edit') {meta={kind:'alt_edit',spanId:args[0],index:args[1],textRef:0};textArgs=[String(args[2])];}
+      else if(name==='remove') meta={kind:'alt_remove',spanId:args[0],index:args[1]};
+      else if(name==='move') meta={kind:'alt_move',spanId:args[0],from:args[1],to:args[2]};
+      else if(name==='kg_append') {meta={kind:'append_alternatives',start:args[0],end:args[1],suppliedJsonRef:0,roleGeneration:this.authority.roleGeneration,providerGeneration:this.authority.providerGeneration};textArgs=['{}'];}
+      else if(name==='append_alternatives') {meta={kind:'append_alternatives',start:args[0],end:args[1],suppliedJsonRef:0,roleGeneration:this.authority.roleGeneration,providerGeneration:this.authority.providerGeneration};textArgs=[args[2]];}
+      else return Promise.reject(new Error('Unsupported authoritative alternative operation'));
+      let change;
+      return this.authorityAction(meta,textArgs,started=>{change=started.result;if(change)this.applyAltChange(change);}).then(accepted=>accepted?change:null);
+    }
     const api = this.requireDocumentApi();
     const fn = api[`alt_${name}`];
     if (typeof fn !== 'function') throw new Error(`The WASM document API has no alt_${name}`);

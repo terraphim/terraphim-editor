@@ -343,7 +343,7 @@ class TeAlternativesPanel {
   ensureWriteOn() {
     if (this.isWriteOn()) return;
     const chrome = this.editor.chrome;
-    if (chrome && typeof chrome.setMode === 'function') chrome.setMode('write-on');
+    if (chrome && typeof chrome.setMode === 'function') return chrome.setMode('write-on');
   }
 
   toggle(options = {}) {
@@ -362,7 +362,13 @@ class TeAlternativesPanel {
    */
   open(where, options = {}) {
     if (this.destroyed || !this.modelAvailable()) return false;
-    this.ensureWriteOn();
+    const beforeMode=this.surface.getText(),entering=this.ensureWriteOn();
+    if(this.editor.authority && entering && typeof entering.then==='function')return entering.then(()=>{
+      if(where && Number.isInteger(where.start) && beforeMode!==this.surface.getText()) {
+        this.setStatus('Text changed while saving the block; select the range again.',true);return false;
+      }
+      return this.open(where,options);
+    }).catch(error=>{this.setStatus(`Alternatives not opened: ${error?.message||error}`,true);return false;});
     const wasOpen = this.opened;
     if (!wasOpen) this.savedSelection = this.surface.getSelectionOffsets();
     if (!options.fromControl) {
@@ -394,6 +400,7 @@ class TeAlternativesPanel {
   }
 
   close({ restoreFocus = true } = {}) {
+    if(this.editor.authority && !this.authorityLocal) return this.authorityClose({restoreFocus});
     if (!this.opened) return;
     // Typed text is never silently lost: the focused line is committed
     // (Escape, Ctrl+Shift+A, the chrome control, leaving Write_On mode), and
@@ -802,7 +809,12 @@ class TeAlternativesPanel {
   /** Run `fn`, reporting a refusal in the status line instead of throwing. */
   attempt(fn) {
     try {
-      return fn();
+      const result = fn();
+      if (result && typeof result.then === 'function') return result.catch(err => {
+        this.setStatus(`Not changed: ${err && err.message ? err.message : err}`,true);
+        this.render(); return null;
+      });
+      return result;
     } catch (err) {
       this.setStatus(`Not changed: ${err && err.message ? err.message : err}`, true);
       this.render();
@@ -816,6 +828,7 @@ class TeAlternativesPanel {
    * operation removed, or no change, falls back to a refresh.
    */
   after(change) {
+    if (change && typeof change.then === 'function') return change.then(value => this.after(value));
     if (this.frame) {
       cancelAnimationFrame(this.frame);
       this.frame = 0;
@@ -842,6 +855,7 @@ class TeAlternativesPanel {
     if (!t.spanId) return null;
     return this.attempt(() => {
       const change = this.editor.alternativeOp('add', t.spanId, value, source);
+      if(change && typeof change.then==='function') return change.then(result=>{if(!result)this.setStatus(`“${value}” is already in the list.`,true);return this.after(result);});
       if (!change) this.setStatus(`“${value}” is already in the list.`, true);
       return this.after(change);
     });
@@ -874,6 +888,7 @@ class TeAlternativesPanel {
     if (index === this.span.active) return null;
     return this.attempt(() => {
       const change = this.activate(t.spanId, index);
+      if(change && typeof change.then==='function') return change.then(result=>{this.refresh();return result;});
       this.refresh();
       return change;
     });
@@ -968,6 +983,10 @@ class TeAlternativesPanel {
   }
 
   onLineInput(e) {
+    if(this.editor.authority) {
+      if(this.destroyed||!this.opened||this.rendering||e.isComposing||!(e.target instanceof HTMLInputElement)||e.target.readOnly)return;
+      this.authorityInput(e.target);return;
+    }
     if (this.destroyed || !this.opened || this.rendering || e.isComposing) return;
     const input = e.target;
     if (!(input instanceof HTMLInputElement) || input.readOnly) return;
@@ -976,6 +995,118 @@ class TeAlternativesPanel {
       return;
     }
     if (this.live && this.lineIndexOf(input) === this.live.index) this.updateLive(input);
+  }
+
+  authorityLineTask(work) {
+    const authorityGeneration=this.editor.authorityQueueGeneration;
+    const pending=(this.authorityLineQueue||Promise.resolve()).then(()=> {
+      if(authorityGeneration!==this.editor.authorityQueueGeneration)throw new Error('Alternative intent belongs to a recovered authority');
+      if(this.destroyed)throw new Error('Alternative panel disposed; draft retained');
+      return work();
+    });
+    this.authorityLineQueue=pending.catch(error=>this.setStatus(`Not changed: ${error?.message||error}`,true));
+    return pending;
+  }
+
+  authorityInput(input) {
+    const value=input.value,caret=[input.selectionStart,input.selectionEnd];
+    const isNew=input.classList.contains('te-alt-input--new');
+    const index=this.lineIndexOf(input);
+    const liveInput=isNew||this.authorityLiveStarting||(this.live&&index===this.live.index);
+    const group=this.authorityInputGroup||0;
+    const key=liveInput?`alternative-live-${group}`:`alternative-${index}`;
+    const sequence=this.editor.authorityReportDraft(key,{text:value,index,isNew,caret});
+    if(!liveInput)return;
+    if(!this.live)this.authorityLiveStarting=true;
+    this.authorityLineTask(async()=> {
+      if(this.authorityCancelledGroups?.has(group)) {this.editor.authorityClearDraft(key,sequence);return;}
+      if(!this.live) {
+        if(!value.trim()){this.authorityLiveStarting=false;this.editor.authorityClearDraft(key,sequence);return;}
+        const limit=this.liftLimit(),base=this.historyTop();
+        this.live={spanId:null,index:-1,base,refused:null,limit,group};
+        try {
+          const change=await this.addAlternative(value);
+          if(!change||!this.span) {this.endLive();return;}
+          const actualIndex=Number.isInteger(change.index)?change.index:this.span.alts.findIndex((alt,i)=>i>0&&alt.text===value);
+          if(actualIndex<1)throw new Error('Native alternative index is unavailable');
+          this.live.spanId=this.span.id;this.live.index=actualIndex;
+          await this.activate(this.span.id,actualIndex);
+        } catch(error) {if(this.live&&this.stepsSince(base)===0)this.endLive();throw error;}
+        finally {this.authorityLiveStarting=false;}
+      } else if(!value.trim()) {
+        await this.authorityCancelAccepted({keep:value,caret});
+      } else {
+        const unchanged=this.lines()[this.live.index]?.text===value;
+        const change=unchanged?true:await this.editAlternative(this.live.index,value);
+        this.live.refused=change?null:value;
+      }
+      if(!this.live || this.live.refused===null)this.editor.authorityClearDraft(key,sequence);
+      const currentGroup=this.authorityInputGroup||0;
+      const later=this.editor.authorityDrafts.get(`alternative-live-${currentGroup}`);
+      const display=later?.input.text??(group===currentGroup?null:'');
+      this.whileBusy(()=>this.restoreLine(group===currentGroup&&this.live?this.live.index:this.lines().length,display,later?.input.caret||caret));
+    }).catch(error=>this.setStatus(`Not accepted: ${error?.message||error}`,true));
+  }
+
+  async flushAuthorityInputs() {
+    await (this.authorityLineQueue||Promise.resolve());
+    const input=document.activeElement;
+    if(input instanceof HTMLInputElement && this.list?.contains(input) && !input.readOnly && !this.live && input.value!==(input.dataset.committed||'')) {
+      await this.authorityCommitInput(input);
+    }
+    await (this.authorityLineQueue||Promise.resolve());
+  }
+
+  authorityCommitInput(input) {
+    if(!input||input.readOnly)return Promise.resolve(false);
+    if(input.classList.contains('te-alt-input--new')) {this.authorityInput(input);return this.authorityLineQueue.then(()=>true);}
+    const index=this.lineIndexOf(input),value=input.value,key=`alternative-${index}`;
+    const sequence=this.editor.authorityReportDraft(key,{text:value,index,isNew:false});
+    return this.authorityLineTask(async()=> {
+      if(value===(this.lines()[index]?.text||'')){this.editor.authorityClearDraft(key,sequence);return false;}
+      const result=await this.editAlternative(index,value);
+      if(result)this.editor.authorityClearDraft(key,sequence);
+      return !!result;
+    });
+  }
+
+  async authorityCancelAccepted({keep='',caret=null}={}) {
+    if(!this.live)return;
+    const busy=this.liveBusy;this.liveBusy=true;
+    try {
+      const {base}=this.live;this.endLive();
+      const steps=this.foldSince(base);
+      if(steps>=1) {await this.surface.undo();this.surface.forgetRedo();}
+      this.surface.trimHistory();await this.editor.authorityHistoryChanged();
+      if(this.opened){this.refresh();this.restoreLine(this.lines().length,keep,caret);}
+    } finally {this.liveBusy=busy;}
+  }
+
+  authorityCancelLive(options={}) {
+    const group=this.authorityInputGroup||0;
+    this.authorityInputGroup=group+1;
+    if(!this.authorityCancelledGroups)this.authorityCancelledGroups=new Set();
+    this.authorityCancelledGroups.add(group);
+    return this.authorityLineTask(async()=> {
+      if(this.live?.group===group)await this.authorityCancelAccepted(options);
+      else if(this.opened)this.whileBusy(()=>this.restoreLine(this.lines().length,options.keep||'',options.caret||null));
+      this.authorityLiveStarting=false;
+      const key=`alternative-live-${group}`,draft=this.editor.authorityDrafts.get(key);
+      if(draft)this.editor.authorityClearDraft(key,draft.sequence);
+      this.authorityCancelledGroups.delete(group);
+    });
+  }
+
+  async authorityClose(options) {
+    await this.flushAuthorityInputs();await this.finishLive();
+    this.authorityLocal=true;
+    try {return this.close(options);}finally{this.authorityLocal=false;}
+  }
+
+  async authoritySetTab(kind,options) {
+    await this.flushAuthorityInputs();await this.finishLive();
+    this.authorityLocal=true;
+    try {return this.setTab(kind,options);}finally{this.authorityLocal=false;}
   }
 
   startLive(input) {
@@ -1032,6 +1163,11 @@ class TeAlternativesPanel {
    * the status line says so.
    */
   finishLive() {
+    if(this.editor.authority && !this.authorityLocal) return this.authorityLineTask(async()=> {
+      if(this.live?.refused!==null && this.live)throw new Error('Alternative text was refused; correct it or press Escape');
+      this.authorityLocal=true;try {this.finishLive();}finally{this.authorityLocal=false;}
+      await this.editor.authorityHistoryChanged();
+    });
     if (!this.live) return;
     const { base, index, refused } = this.live;
     this.endLive();
@@ -1069,6 +1205,7 @@ class TeAlternativesPanel {
    * in the add line, which gets focus with `caret`.
    */
   cancelLive({ keep = '', caret = null } = {}) {
+    if(this.editor.authority && !this.authorityLocal) return this.authorityCancelLive({keep,caret});
     if (!this.live) return;
     const { base } = this.live;
     this.endLive();
@@ -1134,6 +1271,13 @@ class TeAlternativesPanel {
   // ---------------------------------------------------------------------
 
   onLineBlur(e) {
+    if(this.editor.authority) {
+      if(this.destroyed||!this.opened||this.rendering||this.liveBusy||this.editor.authorityPainting||!(e.target instanceof HTMLInputElement)||!e.target.isConnected)return;
+      const input=e.target;
+      if(this.live||this.authorityLiveStarting)void this.finishLive().catch(error=>this.setStatus(String(error),true));
+      else if(input.value!==(input.dataset.committed||''))void this.authorityCommitInput(input).catch(error=>this.setStatus(String(error),true));
+      return;
+    }
     if (this.destroyed || !this.opened || this.rendering) return;
     const input = e.target;
     if (!(input instanceof HTMLInputElement) || !input.isConnected) return;
@@ -1157,11 +1301,13 @@ class TeAlternativesPanel {
     const del = e.target.closest && e.target.closest('.te-alt-delete');
     if (!del) return;
     const index = Number(del.closest('.te-alt-line').dataset.index);
+    if(this.editor.authority){void this.removeAlternative(index).then(()=>this.focusLine(Math.min(index,this.lineInputs().length-1)));return;}
     this.removeAlternative(index);
     this.focusLine(Math.min(index, this.lineInputs().length - 1));
   }
 
   onLineKeyDown(e) {
+    if(this.editor.authority) {this.authorityLineKeyDown(e);return;}
     const input = e.target;
     if (!(input instanceof HTMLInputElement) || e.isComposing) return;
     const isNew = input.classList.contains('te-alt-input--new');
@@ -1214,6 +1360,7 @@ class TeAlternativesPanel {
   }
 
   onPanelKeyDown(e) {
+    if(this.editor.authority) {this.authorityPanelKeyDown(e);return;}
     if (this.destroyed || e.isComposing) return;
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -1249,6 +1396,51 @@ class TeAlternativesPanel {
     this.focusLine(index === -1 ? this.activeLineIndex() : Math.min(index, this.lines().length));
   }
 
+  authorityLineKeyDown(e) {
+    const input=e.target;
+    if(!(input instanceof HTMLInputElement)||e.isComposing)return;
+    const plain=!e.ctrlKey&&!e.metaKey&&!e.shiftKey;
+    if(!plain||!['Enter','ArrowUp','ArrowDown'].includes(e.key))return;
+    e.preventDefault();
+    if(e.key==='Enter' && this.live && this.live.refused!==null){this.setStatus('Alternative text was refused; correct it or press Escape.',true);return;}
+    const index=this.lineIndexOf(input),isNew=input.classList.contains('te-alt-input--new');
+    const finishing=(this.live||this.authorityLiveStarting)?this.finishLive():input.value!==(input.dataset.committed||'')?this.authorityCommitInput(input):Promise.resolve();
+    if(e.key==='Enter') {
+      this.authorityInputGroup=(this.authorityInputGroup||0)+1;
+      this.whileBusy(()=>{const fresh=this.lineInputs().at(-1);if(fresh?.classList.contains('te-alt-input--new')){fresh.value='';fresh.focus();}});
+    }
+    const run=async()=> {
+      await finishing;
+      if(e.key==='Enter'){
+        const pending=this.editor.authorityDrafts.get(`alternative-live-${this.authorityInputGroup||0}`);
+        this.whileBusy(()=>this.restoreLine(this.lines().length,pending?.input.text??null,pending?.input.caret));return;
+      }
+      const next=index+(e.key==='ArrowUp'?-1:1);
+      if(e.altKey) {if(!isNew&&index>0&&next>0&&next<this.lines().length)await this.moveAlternative(index,next);}
+      else if(next>=0&&next<this.lines().length)await this.setActiveIndex(next);
+      this.focusLine(Math.max(0,Math.min(next,this.lines().length)));
+    };
+    void run().catch(error=>this.setStatus(`Not accepted: ${error?.message||error}`,true));
+  }
+
+  authorityPanelKeyDown(e) {
+    if(this.destroyed||e.isComposing)return;
+    const key=(e.key||'').toLowerCase(),mod=e.ctrlKey||e.metaKey;
+    if(e.key==='Escape') {
+      e.preventDefault();e.stopPropagation();
+      const pending=this.editor.authorityDrafts.has(`alternative-live-${this.authorityInputGroup||0}`);
+      const cancel=(this.live||this.authorityLiveStarting||pending)?this.authorityCancelLive():Promise.resolve();
+      void cancel.then(()=>this.authorityClose({restoreFocus:true})).catch(error=>this.setStatus(String(error),true));return;
+    }
+    if(mod&&typeof teShortcutMatches==='function'&&teShortcutMatches(e,'ctrl+shift+a')){e.preventDefault();void this.authorityClose({restoreFocus:true});return;}
+    const undo=mod&&key==='z'&&!e.shiftKey&&!e.altKey,redo=mod&&((key==='z'&&e.shiftKey&&!e.altKey)||(key==='y'&&!e.shiftKey&&!e.altKey));
+    if(!undo&&!redo)return;
+    const input=e.target instanceof HTMLInputElement?e.target:null;
+    if(input&&!this.live&&!this.authorityLiveStarting&&input.value!==(input.dataset.committed||''))return;
+    e.preventDefault();e.stopPropagation();
+    void this.finishLive().then(()=>undo?this.surface.undo():this.surface.redo()).then(()=>this.flush()).catch(error=>this.setStatus(String(error),true));
+  }
+
   onTabKeyDown(e) {
     const order = TE_ALT_KINDS;
     let i = order.indexOf(this.tab);
@@ -1267,6 +1459,7 @@ class TeAlternativesPanel {
 
   /** Switch granularity (R-4.2) around the reference point. */
   setTab(kind, { focusTab = false } = {}) {
+    if(this.editor.authority && !this.authorityLocal) return this.authoritySetTab(kind,{focusTab});
     if (!TE_ALT_KINDS.includes(kind)) throw new Error(`Unknown tab ${kind}`);
     this.finishLive();
     this.commitFocused();
@@ -1291,8 +1484,9 @@ class TeAlternativesPanel {
    */
   destroy() {
     if (this.destroyed) return [];
-    // A live addition is already in the document: keep it as one step.
-    this.finishLive();
+    // Native close/backup settles the opt-in authority before teardown.
+    // Teardown itself only reports drafts and never starts a new writer.
+    if(!this.editor.authority)this.finishLive();
     const drafts = this.pendingDrafts();
     if (drafts.length && this.surface.root) {
       this.surface.root.dispatchEvent(new CustomEvent('te:alt-drafts', {

@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Real RoleGraph Worker conformance</title>
+<pre id="result">Running shared native/WASM fixture through actual Worker…</pre>
+<script type="module">
+let worker;
+try {
+  const fixture=new URLSearchParams(location.search).get('fixture') || 'scenario.json';
+  if (!['scenario.json','review_scenario.json'].includes(fixture)) throw Error('Unknown fixture');
+  const steps = await (await fetch('./'+fixture)).json();
+  worker = new Worker('./js/rolegraph-worker.js', {type:'module'});
+  const exchange = request => new Promise((resolve,reject) => {
+    const timer = setTimeout(()=>reject(Error('Worker timeout')),30000);
+    worker.onmessage = ({data}) => {clearTimeout(timer);resolve(data);};
+    worker.onerror = () => {clearTimeout(timer);reject(Error('Worker failed'));};
+    worker.postMessage(request);
+  });
+  const ready = await exchange({type:'init',
+    glueUrl:new URL('./rolegraph/terraphim_rolegraph_browser.js',location.href).href,
+    wasmUrl:new URL('./rolegraph/terraphim_rolegraph_browser_bg.wasm',location.href).href});
+  if (ready.type !== 'ready') throw Error('WASM initialization failed');
+  const times = []; let snapshot; let commands=0;
+  for (const step of steps) for (let i=0;i<(step.repeat ?? 1);i++) {
+    const payload = structuredClone(step.payload);
+    if (payload.documents==='$documents101') payload.documents=Array.from({length:101},(_,j)=>({id:`d${String(j).padStart(3,'0')}`,title:'',body:'alpha beta'}));
+    if (payload.documents==='$escapedNine') payload.documents=Array.from({length:9},(_,j)=>({id:`escaped${j}`,title:'',body:'\\'.repeat(1048576)}));
+    if (payload.document?.id==='$learningId') payload.document.id=`l${String(i).padStart(3,'0')}`;
+    if (payload.text==='$match101') payload.text='alpha '.repeat(101);
+    if (payload.snapshotText === '$snapshot') payload.snapshotText=snapshot;
+    if (payload.snapshotText === '$corruptSnapshot') {
+      const wrapper=JSON.parse(snapshot); // opaque graph text, not numeric JS data
+      wrapper.graphJson=wrapper.graphJson.replace('"rank":1,','"rank":999,');
+      payload.snapshotText=JSON.stringify(wrapper);
+    }
+    const start=performance.now();
+    const response=await exchange({version:1,requestId:String(commands),generation:step.generation,
+      expectedRevision:step.expectedRevision ?? null,op:step.op,payload});
+    times.push({op:step.op,milliseconds:performance.now()-start});
+    for (const [pointer,expected] of Object.entries(step.expect)) {
+      const actual=pointer.slice(1).split('/').reduce((v,key)=>v?.[key],response);
+      if (JSON.stringify(actual)!==JSON.stringify(expected)) throw Error(`step ${commands} ${step.op} ${pointer}`);
+    }
+    if (step.resultLength!==undefined && response.result.length!==step.resultLength) throw Error('Page length');
+    if (step.op==='export_snapshot') snapshot=response.result.snapshotText;
+    commands++;
+  }
+  window.workerResult={ok:true,steps:commands,fixture,times,userAgent:navigator.userAgent};
+} catch(error) {window.workerResult={ok:false,error:String(error)};}
+finally {
+  if(worker) worker.terminate();
+  document.querySelector('#result').textContent=JSON.stringify(window.workerResult,null,2);
+}
+</script>

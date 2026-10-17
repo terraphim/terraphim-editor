@@ -380,11 +380,12 @@ class TeOverflowPanel {
   }
 
   schedule() {
+    if(this.editor.authority&&!this.destroyed&&!this.readOnly)this.editor.authorityReportDraft('overflow',{text:this.area.value});
     if (this.destroyed || this.readOnly) return;
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = null;
-      this.write();
+      const written=this.write();if(written&&typeof written.catch==='function')written.catch(()=>undefined);
     }, this.delay);
   }
 
@@ -398,10 +399,23 @@ class TeOverflowPanel {
     if (this.timer === null) return;
     clearTimeout(this.timer);
     this.timer = null;
-    this.write();
+    return this.write();
   }
 
   write() {
+    if(this.editor.authority) {
+      if(this.readOnly)return;
+      const text=this.area.value,sequence=this.editor.authorityReportDraft('overflow',{text});let result;
+      return this.editor.authorityAction({kind:'overflow_set',textRef:0},[text],started=>{result=started.result;}).then(accepted=>{
+        // A real native no-change result also represents this exact input.
+        // Clear only its sequence: a later keystroke still owns its raw draft.
+        if(accepted||this.api()?.document_overflow()===text){
+          this.editor.authorityClearDraft('overflow',sequence);
+          if(accepted)this.changed('edit');
+        }
+        return accepted?result:null;
+      }).catch(error=>{this.editor.ghostHistoryNotice(error);throw error;});
+    }
     const api = this.api();
     if (!api || this.readOnly) return;
     const result = api.set_document_overflow(this.area.value);
@@ -412,12 +426,13 @@ class TeOverflowPanel {
   refresh() {
     if (this.destroyed) return;
     this.pointerDrag = null;
-    if (this.timer !== null) {
+    const draft=this.editor.authority && this.editor.authorityDrafts?.get('overflow');
+    if (!draft && this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
     const api = this.api();
-    const value = api ? api.document_overflow() : '';
+    const value = draft ? draft.input.text : api ? api.document_overflow() : '';
     if (this.area.value !== value) this.area.value = value;
     this.readOnly = this.preservedBlock();
     this.area.readOnly = this.readOnly;
@@ -525,6 +540,7 @@ class TeOverflowPanel {
    * { ok: false, error } when refused (nothing changes).
    */
   stash(start, end) {
+    if(this.editor.authority)return this.authorityStash(start,end);
     if (!this.canStash()) return { ok: false, error: 'Stashing is not available here' };
     let outcome;
     try {
@@ -572,6 +588,7 @@ class TeOverflowPanel {
 
   /** Copy `picked` ({ text, start, end } of the panel) into the page at `at`. */
   pullBackAt(at, picked) {
+    if(this.editor.authority)return this.authorityPull(at,picked);
     const { selectionStart, selectionEnd, selectionDirection } = this.area;
     const focused = document.activeElement === this.area;
     let start = at;
@@ -593,6 +610,28 @@ class TeOverflowPanel {
       this.area.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
     }
     return { start: edit.start, end: edit.start + edit.insertedText.length };
+  }
+
+  async authorityStash(start,end) {
+    try {
+      await this.flush();
+      const outcome=await this.editor.stashRange(start,end);
+      if(!outcome)return {ok:false,error:'No native stash change'};
+      this.refresh();this.open({focus:false});this.area.scrollTop=this.area.scrollHeight;this.changed('stash');
+      return {ok:true,...outcome};
+    } catch(error){this.editor.ghostHistoryNotice(error);return {ok:false,error:String(error?.message||error)};}
+  }
+
+  async authorityPull(at,picked) {
+    const {selectionStart,selectionEnd,selectionDirection}=this.area,focused=document.activeElement===this.area;
+    await this.flush();let result;
+    const accepted=await this.editor.authorityAction({kind:'pull',at,from:picked.start,to:picked.end},[],started=>{
+      result=started.result;
+      if(!result||typeof result.text!=='string'||!Number.isSafeInteger(result.start))throw new Error('Native pull insertion is missing');
+      this.surface.replaceRange(result.start,result.start,result.text,{source:'overflow'});
+    });
+    if(focused){this.area.focus({preventScroll:true});this.area.setSelectionRange(selectionStart,selectionEnd,selectionDirection);}
+    return accepted?{start:result.start,end:result.start+result.text.length}:null;
   }
 
   /** Selected panel text dropped in the page: pulled back at the drop point. */

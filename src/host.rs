@@ -248,6 +248,18 @@ pub fn host_presentation_source(source: &str) -> Result<String, String> {
     bounded(source)?;
     source_eol(source, false)
 }
+/// Materialize persisted EOLs without opening or mutating any native session.
+///
+/// # Errors
+/// Refuses oversized sources, overflowing anchors and unsafe malformed-block conversions.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn host_persistence_source(presentation_source: &str, crlf: bool) -> Result<String, String> {
+    bounded(presentation_source)?;
+    let source = source_eol(presentation_source, crlf)?;
+    bounded(&source)?;
+    Ok(source)
+}
+
 fn bounded(source: &str) -> Result<(), String> {
     if source.len() > HOST_SOURCE_LIMIT {
         Err("host source/message exceeds size limit".into())
