@@ -470,11 +470,28 @@ class WriteOnChrome {
   }
 
   toggle() {
-    this.setMode(this.isWriteOn() ? 'plain' : 'write-on');
+    const current=this.authorityModePending?this.authorityRequestedMode:this.mode;
+    return this.setMode(current==='write-on'?'plain':'write-on');
   }
 
   setMode(mode, { persist = true } = {}) {
     if (this.destroyed) return;
+    const blocks=this.editor.blocks;
+    if(this.editor.authority&&!this.authorityModePainting&&blocks&&
+       (blocks.editing||blocks.authorityApplying||blocks.authorityPendingActions||this.authorityModePending)) {
+      this.authorityRequestedMode=mode==='write-on'?'write-on':'plain';
+      this.authorityModePending=(this.authorityModePending||0)+1;
+      const pending=(this.authorityModeQueue||Promise.resolve()).then(async()=> {
+        try {
+          await blocks.settledAuthority();
+          if(this.destroyed)return;
+          this.authorityModePainting=true;
+          try{return this.setMode(mode,{persist});}finally{this.authorityModePainting=false;}
+        } finally {this.authorityModePending-=1;}
+      });
+      this.authorityModeQueue=pending.catch(error=>blocks.showNotice(`Mode not changed: ${error?.message||error}`));
+      return pending;
+    }
     const next = mode === 'write-on' ? 'write-on' : 'plain';
     const changed = next !== this.mode;
     this.mode = next;

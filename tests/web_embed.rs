@@ -25,6 +25,47 @@ use support::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
+#[wasm_bindgen_test]
+async fn test_embed_plain_headings_follow_local_tools_without_touching_host() {
+    fresh_embed("# Embedded title\n\nBody text.").await;
+    assert_eq!(
+        js_string(
+            r##"(() => {
+      const ed = window.__teEditor, s = ed.surface;
+      const body = document.body.getAttribute('data-mode');
+      const lang = document.documentElement.getAttribute('lang');
+      const mains = document.querySelectorAll('main,[role="main"]').length;
+      const decoy = document.getElementById('te-decoy').outerHTML;
+      const text = s.getText(), counts = JSON.stringify(ed.counts());
+      ed.chrome.setMode('plain'); ed.chrome.setTools(false); ed.headings.flush();
+      s.focus(); s.setSelectionOffsets(text.indexOf('Body'));
+      ed.headings.applyShown(true);
+      const title = s.root.querySelector('.te-heading:not(.te-heading-marker)');
+      const marker = s.root.querySelector('.te-heading-marker');
+      if (!title || !marker) return 'plain embed headings missing';
+      if (getComputedStyle(marker).fontSize !== '0px') return 'marker visible';
+      const ratio = parseFloat(getComputedStyle(title).fontSize) / parseFloat(getComputedStyle(s.root).fontSize);
+      if (Math.abs(ratio - 1.15) > 0.01) return 'title size ' + ratio;
+      if (ed.indicators.active) return 'plain alternatives visible';
+      ed.chrome.setTools(true);
+      if (s.root.querySelector('.te-heading')) return 'tools heading styled';
+      ed.chrome.setMode('write-on');
+      if (!s.root.querySelector('.te-heading')) return 'write-on heading missing';
+      ed.chrome.setMode('plain'); ed.chrome.setTools(false);
+      if (!s.root.querySelector('.te-heading')) return 'plain heading not restored';
+      if (s.getText() !== text || s.root.textContent !== text || ed.exportDocument() !== text) return 'text/export changed';
+      if (JSON.stringify(ed.counts()) !== counts) return 'counts changed';
+      if (s.root.querySelector('h1,h2,h3,[role="heading"]')) return 'invented heading semantics';
+      if (document.body.getAttribute('data-mode') !== body || document.documentElement.getAttribute('lang') !== lang) return 'host attributes changed';
+      if (document.querySelectorAll('main,[role="main"]').length !== mains) return 'host landmarks changed';
+      if (document.getElementById('te-decoy').outerHTML !== decoy) return 'decoy changed';
+      return '';
+    })()"##
+        ),
+        ""
+    );
+}
+
 /// The decoy: template look-alike markup that the editor must never touch.
 const DECOY_HTML: &str = r##"<div class="editor-container"><div class="toolbar"><div id="formatting-toolbar"></div><div id="show-help"></div></div><div class="markdown-input te-surface">decoy text</div><div class="markdown-preview"><p>decoy preview</p></div></div><div class="shortcuts-dialog"><div id="shortcuts-list"></div></div>"##;
 

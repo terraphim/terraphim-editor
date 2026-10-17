@@ -9,13 +9,13 @@ mod document;
 pub mod host;
 // Cohort C: native mixed-history/checkpoint bridge; no serialized session clones.
 pub use document::{
-    abort_document_history_transaction, abort_history_transaction_json,
-    begin_document_history_replay, begin_history_replay_json, begin_trim_ghost_transaction,
-    begin_trim_ghost_transaction_json, finish_document_history_transaction,
-    finish_history_transaction_json, parse_history_operations, preflight_document_ghost_change,
-    recover_document_history_transaction, recover_history_transaction_json,
-    replay_document_ghost_change, GhostChange, GhostSnapshot, HistoryOperation,
-    HistoryTransactionError, HISTORY_JSON_LIMIT, HISTORY_OPERATION_LIMIT,
+    abort_document_history_transaction, abort_history_transaction_json, begin_document_action,
+    begin_document_action_json, begin_document_history_replay, begin_history_replay_json,
+    begin_trim_ghost_transaction, begin_trim_ghost_transaction_json,
+    finish_document_history_transaction, finish_history_transaction_json, parse_history_operations,
+    preflight_document_ghost_change, recover_document_history_transaction,
+    recover_history_transaction_json, replay_document_ghost_change, GhostChange, GhostSnapshot,
+    HistoryOperation, HistoryTransactionError, HISTORY_JSON_LIMIT, HISTORY_OPERATION_LIMIT,
 };
 pub use document::{
     apply_edit, counts_json, document_annotations, document_body, document_counts,

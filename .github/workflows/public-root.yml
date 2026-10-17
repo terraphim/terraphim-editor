@@ -49,3 +49,82 @@ jobs:
           bash scripts/ci/run.sh cargo test --locked --workspace --all-targets
           bash scripts/ci/run.sh cargo test --locked --workspace --doc
           bash scripts/ci/run.sh cargo check --locked --workspace --target wasm32-unknown-unknown --lib
+
+  browser-workspace:
+    # Source verification only: no self-hosted runners, secrets or publication.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RUSTFLAGS: '-D warnings'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install qualified Rust and fetch locked public dependencies
+        run: |
+          rustup toolchain install 1.96 --profile minimal
+          rustup target add wasm32-unknown-unknown --toolchain 1.96
+          bash scripts/ci/registry.sh
+          bash scripts/ci/run.sh --network cargo fetch --locked
+      - name: Install matching pinned browser and existing qualified tools
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/editor-browser-evidence" "$RUNNER_TEMP/editor-browser"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/editor-chrome.zip" \
+            https://storage.googleapis.com/chrome-for-testing-public/145.0.7632.75/linux64/chrome-linux64.zip
+          printf '%s  %s\n' 9a8e09c96152ff1f98d1fcf855eff750424adbd355cedd2493adb86a642042cd "$RUNNER_TEMP/editor-chrome.zip" | sha256sum --check --strict
+          unzip -q "$RUNNER_TEMP/editor-chrome.zip" -d "$RUNNER_TEMP/editor-browser"
+          export CHROME="$RUNNER_TEMP/editor-browser/chrome-linux64/chrome"
+          bash scripts/ci/tools.sh
+          export CI_TOOLS_PATH=1
+          source scripts/ci/env.sh
+          export CHROMEDRIVER="$CI_TOOLS/bin/chromedriver"
+          export WASM_BINDGEN_TEST_WEBDRIVER_JSON="$RUNNER_TEMP/editor-browser-evidence/webdriver.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          caps = json.loads(Path('webdriver.json').read_text())
+          caps['goog:chromeOptions']['binary'] = os.environ['CHROME']
+          Path(os.environ['WASM_BINDGEN_TEST_WEBDRIVER_JSON']).write_text(json.dumps(caps, indent=2) + '\n')
+          PY
+          {
+            git rev-parse HEAD
+            "$CHROME" --version
+            "$CHROMEDRIVER" --version
+            wasm-pack --version
+            wasm-bindgen --version
+            rustc --version
+            sha256sum "$RUNNER_TEMP/editor-chrome.zip" "$WASM_BINDGEN_TEST_WEBDRIVER_JSON"
+          } > "$RUNNER_TEMP/editor-browser-evidence/tool-identities.txt"
+          # Do not use the legacy wrapper that permits benchmark skips.
+          python3 tests/browser/verify-wasm-binaries.py --browser chrome \
+            --output "$RUNNER_TEMP/editor-browser-evidence/audit"
+          python3 - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path
+          folder = Path(os.environ['RUNNER_TEMP']) / 'editor-browser-evidence/audit'
+          receipt = json.loads((folder / 'receipt.json').read_text())
+          expected = sorted(p.stem for p in Path('tests').glob('*.rs') if 'run_in_browser' in p.read_text())
+          assert expected and receipt['binaries'] == expected
+          assert receipt['status'] == 'PASS' and len(receipt['runs']) == len(expected)
+          assert [row['binary'] for row in receipt['runs']] == expected
+          for row in receipt['runs']:
+              assert row['status'] == 'PASS' and row['exitCode'] == 0
+              source = Path('tests', row['binary'] + '.rs').read_text()
+              count = len(re.findall(r'^#\[wasm_bindgen_test(?:\([^\]]*\))?\]', source, re.M))
+              assert count > 0 and row['reportedCounts'] == [[str(count), '0', '0']], row
+              assert hashlib.sha256((folder / (row['binary'] + '.log')).read_bytes()).hexdigest() == row['logSha256']
+          PY
+      - name: Retain every browser result, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: editor-browser-source-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/editor-browser-evidence
+          if-no-files-found: error

@@ -274,6 +274,16 @@ class TeGhostLayer {
   }
 
   change(action, start, end) {
+    if(this.editor.authority) {
+      const s=Math.max(0,Math.min(start,end)),e=Math.max(0,Math.max(start,end));let result;
+      return this.editor.authorityAction({kind:action==='ghost'?'ghost_range':'revive_range',start:s,end:e},[],started=>{
+        result=started.result;if(!result||!result.ok)throw new Error(result?.error||'Native Ghost action refused');
+        this.refresh(started.annotations||result.annotations);
+      }).then(accepted=>{
+        if(accepted)this.surface.root.dispatchEvent(new CustomEvent('te:ghosts-change',{bubbles:true,detail:{editor:this.editor,action,start:s,end:e,id:result.id??null,changed:result.changed??true,ghosts:this.ghosts.map(g=>({...g}))}}));
+        return accepted?result:null;
+      });
+    }
     const api = this.destroyed ? null : this.api();
     if (!api) return { ok: false, error: 'The WASM document API does not offer ghosting', kind: 'unavailable' };
     const s = Math.max(0, Math.min(start, end) | 0);
@@ -687,7 +697,9 @@ class TeSelectionMenu {
 
   run(item, ctx) {
     try {
-      return item.run(ctx);
+      const result=item.run(ctx);
+      if(result&&typeof result.then==='function')return result.catch(err=>{console.error(`Selection menu item "${item.id}" failed`,err);return undefined;});
+      return result;
     } catch (err) {
       console.error(`Selection menu item "${item.id}" failed`, err);
       return undefined;
