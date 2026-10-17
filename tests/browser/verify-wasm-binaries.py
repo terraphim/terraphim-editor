@@ -47,6 +47,7 @@ def main():
                    '--', '--locked', '--test', binary]
         log = output / (binary + '.log')
         started = time.monotonic()
+        cleanup_warning = None
         with log.open('w') as stream:
             child = subprocess.Popen(command, cwd=root, env=env, stdout=stream,
                                      stderr=subprocess.STDOUT, start_new_session=True)
@@ -69,6 +70,12 @@ def main():
                     os.killpg(child.pid, signal.SIGTERM)
                 except ProcessLookupError:
                     pass
+                except PermissionError as error:
+                    # macOS may deny a group signal after the runner exits.
+                    # Preserve the domain result and disclose cleanup instead
+                    # of aborting before this completed test is recorded.
+                    cleanup_warning = {'status':'DENIED','processGroup':child.pid,
+                                       'error':str(error)}
         text = log.read_text()
         counts = re.findall(r'test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored', text)
         if not counts and status == 'PASS':
@@ -77,6 +84,8 @@ def main():
                'status': status, 'exitCode': code,
                'seconds': round(time.monotonic() - started, 3), 'reportedCounts': counts,
                'logSha256': hashlib.sha256(log.read_bytes()).hexdigest()}
+        if cleanup_warning:
+            run['cleanupWarning'] = cleanup_warning
         receipt['runs'].append(run)
         (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
         print(json.dumps(run), flush=True)
