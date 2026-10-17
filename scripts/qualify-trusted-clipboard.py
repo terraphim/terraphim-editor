@@ -262,6 +262,17 @@ def run_owned(command, cwd, environment, log, evidence, driver_path=None, timeou
                 raise ValueError('Owned process cleanup failed: ' + '; '.join(errors))
 
 
+def observe_families(observe):
+    """Collect both real family outcomes; any failure still denies admission."""
+    failures = []
+    for family in FAMILIES:
+        try:
+            observe(family)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            failures.append({'family': family, 'error': str(error)})
+    return failures
+
+
 def run(folder, output, source):
     folder, output = Path(folder).resolve(), Path(output).resolve()
     actual_context = context(os.environ)
@@ -275,7 +286,7 @@ def run(folder, output, source):
             target = assets / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(raw)
-        for family in FAMILIES:
+        def observe(family):
             evidence = output / family
             env = dict(os.environ)
             executable = '/Applications/Firefox.app/Contents/MacOS/firefox' if family == 'firefox' else '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -299,6 +310,11 @@ def run(folder, output, source):
                                       log, evidence, driver, timeout=120)
             if exit_code:
                 raise ValueError(f'Actual {family} clipboard failed; retained outputs')
+            validate_browser(evidence, family, manifest, digest(manifest_path))
+        failures = observe_families(observe)
+        if failures:
+            (output / 'family-failures.json').write_text(json.dumps({'status': 'FAIL', 'failures': failures}, indent=2) + '\n')
+            raise ValueError('Actual clipboard qualification failed: ' + ', '.join(item['family'] for item in failures))
     browsers = [validate_browser(output / family, family, manifest, digest(manifest_path)) for family in FAMILIES]
     report = {'schema': 1, 'status': 'PASS', 'context': actual_context,
               'archiveSha256': digest(archive), 'manifestSha256': digest(manifest_path),

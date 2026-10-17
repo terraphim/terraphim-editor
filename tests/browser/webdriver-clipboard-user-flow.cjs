@@ -1,6 +1,7 @@
 'use strict';
-// Real W3C WebDriver input in the explicitly selected installed browser. No clipboard seeding,
-// synthetic keyboard/clipboard events, prior clipboard capture, or restore.
+// Real W3C input in the explicitly selected installed browser. Public payload
+// is written only by an actual trusted fixture click. No privileged clipboard
+// injection, synthetic key/clipboard events, prior clipboard capture or restore.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const net = require('node:net');
@@ -50,12 +51,14 @@ const freePort = () => new Promise((resolve,reject) => {
   const locate=selector=>command('POST',route('/element'),{using:'css selector',value:selector}).then(value=>value[elementKey]);
   const keys=(element,text)=>command('POST',route(`/element/${element}/value`),{text});
   const property=(element,name)=>command('GET',route(`/element/${element}/property/${name}`));
+  const publicPageSnapshot=()=>script(`const s=window.terraphimEditor?.surface,root=document.querySelector('[role="textbox"][aria-label="Markdown source"]'),active=document.activeElement,selection=getSelection(),offset=(node,n)=>{if(!root||!node||!root.contains(node))return null;const range=document.createRange();range.selectNodeContents(root);range.setEnd(node,n);return range.toString().length;};return {sourceText:root?.innerText??null,modelText:s?.getText()??null,sourceFocused:active===root,documentFocused:document.hasFocus(),visibilityState:document.visibilityState,nativeSelection:selection?{anchorNode:selection.anchorNode?.nodeName,anchorOffset:selection.anchorOffset,focusNode:selection.focusNode?.nodeName,focusOffset:selection.focusOffset,isCollapsed:selection.isCollapsed,anchorInSource:root?.contains(selection.anchorNode),focusInSource:root?.contains(selection.focusNode)}:null,activeElement:active?{tag:active.tagName,id:active.id,label:active.getAttribute('aria-label')}:null,selectionDomUtf16:selection?{anchor:offset(selection.anchorNode,selection.anchorOffset),focus:offset(selection.focusNode,selection.focusOffset)}:null,selectedText:selection?.toString()??null,pasteEvents:window.__publicPasteEvents??[],richNodes:root?.querySelectorAll('b,img').length??null};`);
   const pasted='p1\np2\np3',rawPasted='p1\r\np2\rp3',copied='p1\np2';
   let failure;
   try {
     await waitFor(async()=>{if(startupError)throw startupError;try{return await command('GET','/status');}catch{return false;}},'owned WebDriver ready');
     session=await command('POST','/session',{capabilities:{alwaysMatch:{browserName:family,...(family==='firefox'?{'moz:firefoxOptions':{binary:browserPath,args:[]}}:{'goog:chromeOptions':{binary:browserPath,args:['--no-first-run','--no-default-browser-check']}})}}});
     assert.equal(session.capabilities.browserName,family,'Actual driver browser differs from requested family');
+    await fs.writeFile(path.join(output,'browser-identity.json'),JSON.stringify({browserFamily:family,platform:process.platform,headless:false,browser:session.capabilities.browserVersion,buildID:session.capabilities['moz:buildID'],platformName:session.capabilities.platformName,browserPath,browserSha256:hash(await fs.readFile(browserPath)),driverPath,driverSha256:hash(await fs.readFile(driverPath)),driverVersion:spawnSync(driverPath,['--version'],{encoding:'utf8'}).stdout.trim(),nodeVersion:process.version},null,2)+'\n');
     await command('POST',route('/window/rect'),{width:1140,height:900});
     await command('POST',route('/timeouts'),{implicit:0,pageLoad:30000,script:5000});
     await command('POST',route('/url'),{url:process.env.TERRAPHIM_STORY_URL});
@@ -72,6 +75,7 @@ const freePort = () => new Promise((resolve,reject) => {
     await waitFor(async()=>{const state=await script("const b=document.querySelector('#public-clipboard-fixture');return {copied:b.dataset.copied,error:b.dataset.error}");if(state.error)throw new Error('Trusted ClipboardItem setup failed: '+state.error);return state.copied==='true';},'trusted public mixed-format copy activation');
     await keys(source,KEY.meta+KEY.up+KEY.null);
     assertPublicClipboard([rawPasted,pasted,'p1\rp2\rp3','p1\r\np2\r\np3']);
+    await fs.writeFile(path.join(output,'before-native-paste-public-page.json'),JSON.stringify(await publicPageSnapshot(),null,2)+'\n');
     await keys(source,KEY.meta+'v'+KEY.null);
     await waitFor(async()=>(await property(source,'innerText'))===pasted+'Hello','actual public paste output');
     const pasteProof=await script(`const root=arguments[0],selection=window.getSelection();if(!selection||!selection.isCollapsed||!root.contains(selection.anchorNode))throw new Error('Caret outside source after paste');const range=document.createRange();range.selectNodeContents(root);range.setEnd(selection.anchorNode,selection.anchorOffset);return {caret:range.toString().length,richNodes:root.querySelectorAll('b,img').length,events:window.__publicPasteEvents.slice()};`,[{[elementKey]:source}]);
@@ -98,6 +102,17 @@ const freePort = () => new Promise((resolve,reject) => {
   } catch(error) {
     failure=error;
     await fs.writeFile(path.join(output,'failure.json'),JSON.stringify({status:'FAIL',error:String(error),priorClipboardRead:false,priorClipboardRestored:false},null,2)+'\n');
+    // Read only this fresh public-fixture page after failure; no clipboard
+    // contents are read, no state/selection/handler is changed, no retry occurs.
+    if(session){
+      try{
+        const observed=await publicPageSnapshot();
+        await fs.writeFile(path.join(output,'failure-public-page.json'),JSON.stringify(observed,null,2)+'\n');
+      }catch(diagnostic){await fs.writeFile(path.join(output,'failure-readback-error.txt'),String(diagnostic)+'\n');}
+      try{const png=await command('GET',route('/screenshot'));await fs.writeFile(path.join(output,'failure-public-page.png'),Buffer.from(png,'base64'));}
+      catch(diagnostic){await fs.writeFile(path.join(output,'failure-screenshot-error.txt'),String(diagnostic)+'\n');}
+    }
+
   }
   finally {
     if(session){try{await command('DELETE',route(''));}catch(error){driverLog+='\nSession cleanup: '+error.message;}}

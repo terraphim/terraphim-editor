@@ -158,6 +158,23 @@ class OwnedProcessTests(unittest.TestCase):
         self.assertEqual(actual, 7)
         self.assert_not_running(int(child_file.read_text()))
 
+    def test_both_real_failed_processes_are_observed_without_admission(self):
+        attempted = []
+        def observe(family):
+            attempted.append(family)
+            folder = self.folder / family
+            folder.mkdir()
+            with (folder / 'actual.log').open('w') as log:
+                code = M.run_owned([sys.executable, '-c', 'import sys;sys.exit(7)'], ROOT,
+                                   dict(os.environ), log, folder, timeout=5)
+            if code:
+                raise ValueError('Real child exit ' + str(code))
+        failures = M.observe_families(observe)
+        self.assertEqual(attempted, ['chrome', 'firefox'])
+        self.assertEqual([row['family'] for row in failures], attempted)
+        self.assertTrue(all('Real child exit 7' in row['error'] for row in failures))
+        self.assertFalse((self.folder / 'clipboard-admission.json').exists())
+
 
 if __name__ == '__main__':
     unittest.main()
