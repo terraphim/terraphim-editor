@@ -4,7 +4,7 @@ mod support;
 use support::*;
 #[path = "support/cycling.rs"]
 mod cycling;
-use cycling::*;
+use cycling::{fixture, run, ERASER, PAPERCLIP, THUMBTACK};
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]

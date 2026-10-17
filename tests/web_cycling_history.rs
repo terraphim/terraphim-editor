@@ -2,9 +2,10 @@
 #![cfg(target_arch = "wasm32")]
 mod support;
 use support::*;
+use terraphim_alternatives::{write, Document, Source, SpanKind};
 #[path = "support/cycling.rs"]
 mod cycling;
-use cycling::*;
+use cycling::{run, ERASER, PAPERCLIP, THUMBTACK};
 wasm_bindgen_test_configure!(run_in_browser);
 
 /// "Give me a eraser." (an article typed against the a/an rule) with span

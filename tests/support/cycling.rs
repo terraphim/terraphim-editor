@@ -14,7 +14,7 @@ use terraphim_alternatives::{write, Document, Source, SpanKind};
 /// "Pass me a paperclip. Drop this.\n\nSecond line.\n" with span `s1` over
 /// "paperclip" (alternatives "eraser" and "thumbtack") and ghost `g1` over
 /// " Drop this.", built through the crate so the fixture is always valid.
-fn fixture() -> String {
+pub(super) fn fixture() -> String {
     let mut doc = Document::new("Pass me a paperclip. Drop this.\n\nSecond line.\n");
     let id = doc.add_span(SpanKind::Word, 10, 19).unwrap();
     doc.add_alternative(&id, "eraser", Source::Human, None)
