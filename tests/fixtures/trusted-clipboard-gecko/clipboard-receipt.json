@@ -1,0 +1,34 @@
+{
+  "status": "PASS",
+  "scope": "Actual installed Firefox via W3C GeckoDriver native clicks/keys and public clipboard fixture; not synthetic ClipboardEvent qualification",
+  "browser": "153.0",
+  "buildID": "20260715202819",
+  "firefoxPath": "/Applications/Firefox.app/Contents/MacOS/firefox",
+  "firefoxSha256": "a5ee1d6124f8b42b7b985c8e766def5eeb2141a443279116db773bcba41945e8",
+  "driverPath": "/Users/alex/Library/Caches/.wasm-pack/geckodriver-654dd0c3a88b5d6f/geckodriver",
+  "driverSha256": "5d82307edc8549124bd4e7b6f275e1228e0a530e5abbfb294be3f310486561a4",
+  "driverVersion": "geckodriver 0.37.1 (300705c65d1b 2026-07-17 09:25 +0000)\n\nThe source code of this program is available from\ntesting/geckodriver in https://hg.mozilla.org/mozilla-central.\n\nThis program is subject to the terms of the Mozilla Public License 2.0.\nYou can obtain a copy of the license at https://mozilla.org/MPL/2.0/.",
+  "viewport": [
+    1140,
+    805
+  ],
+  "priorClipboardRead": false,
+  "priorClipboardRestored": false,
+  "preflight": "Only OS boolean equality to public text before each native paste",
+  "pasteProof": {
+    "caret": 8,
+    "events": [
+      {
+        "isTrusted": true,
+        "target": "Markdown source",
+        "types": [
+          "text/html",
+          "text/plain"
+        ]
+      }
+    ],
+    "richNodes": 0
+  },
+  "pastedText": "p1\np2\np3Hello",
+  "copiedText": "p1\np2"
+}

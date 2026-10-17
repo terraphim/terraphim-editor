@@ -34,9 +34,10 @@ const server = http.createServer(async (request,response) => {
     if (!/^[a-z0-9-]+\.cjs$/.test(script)) throw Error('A browser fixture filename is required');
     const child = spawn(process.execPath,[path.join(__dirname,script)],{stdio:'inherit',env:{...process.env,TERRAPHIM_STORY_URL:origin}});
     exitCode = await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',(code,signal)=>resolve(signal?1:code));});
-    const manifest = JSON.parse(await fs.readFile(path.join(assets,'host-assets.json'),'utf8'));
+    const manifestPath = process.env.TERRAPHIM_ASSET_MANIFEST || path.join(assets,'host-assets.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath,'utf8'));
     const mismatches = Object.entries(served).filter(([name,digest])=>manifest.assets[name]!==digest);
-    await fs.writeFile(path.join(output,'runtime-assets.json'),JSON.stringify({status:exitCode===0&&mismatches.length===0?'PASS':'FAIL',exitCode,assets,manifestSha256:hash(await fs.readFile(path.join(assets,'host-assets.json'))),served,mismatches},null,2)+'\n');
+    await fs.writeFile(path.join(output,'runtime-assets.json'),JSON.stringify({status:exitCode===0&&mismatches.length===0?'PASS':'FAIL',exitCode,assets,manifestSha256:hash(await fs.readFile(manifestPath)),served,mismatches},null,2)+'\n');
     if(mismatches.length)exitCode=1;
   } finally {await new Promise(resolve=>server.close(resolve));}
   process.exitCode=exitCode;
