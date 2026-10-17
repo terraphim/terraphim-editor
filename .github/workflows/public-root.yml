@@ -117,7 +117,7 @@ jobs:
           for row in receipt['runs']:
               assert row['status'] == 'PASS' and row['exitCode'] == 0
               source = Path('tests', row['binary'] + '.rs').read_text()
-              count = len(re.findall(r'^#\[wasm_bindgen_test(?:\([^\]]*\))?\]', source, re.M))
+              count = len(re.findall(r'^[ \t]*#\[wasm_bindgen_test(?:\([^\]]*\))?\]', source, re.M))
               assert count > 0 and row['reportedCounts'] == [[str(count), '0', '0']], row
               assert hashlib.sha256((folder / (row['binary'] + '.log')).read_bytes()).hexdigest() == row['logSha256']
           PY
