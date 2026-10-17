@@ -1849,7 +1849,7 @@ class MarkdownEditor {
     const retained=this.pendingAuthorityDraft();
     this.authorityQueueGeneration=(this.authorityQueueGeneration||0)+1;
     this.authorityQueue=Promise.resolve();this.authorityFault=null;this.authorityDrafts.clear();
-    this.authorityStatus.textContent='';this.surface.root.removeAttribute('aria-readonly');
+    this.setAuthorityStatus('');this.surface.root.removeAttribute('aria-readonly');
     if(this.altPanel) {
       this.altPanel.authorityCancelGeneration=(this.altPanel.authorityCancelGeneration||0)+1;
       if(this.altPanel.live)this.altPanel.endLive();
@@ -1900,21 +1900,29 @@ class MarkdownEditor {
     if(node && sel && document.activeElement===this.surface.root) sel.setBaseAndExtent(node,Math.min(selection.start,node.length),node,Math.min(selection.end,node.length));
   }
 
+  /** Update the flow status and remeasure indicators after its line changes. */
+  setAuthorityStatus(text) {
+    this.authorityStatus.textContent = text;
+    // A fixed-height surface can move without resizing when this sibling
+    // appears or clears. Its overlay must follow the final text position.
+    this.indicators?.scheduleLayout();
+  }
+
   authorityEnqueue(work) {
     const generation=this.authorityQueueGeneration;
     const queued = this.authorityQueue.then(async () => {
       if(generation!==this.authorityQueueGeneration)throw new Error('Pending operation belongs to a recovered authority');
       if (this.destroyed) throw new Error('Editor disposed; pending draft retained by host');
       if (this.authorityFault) throw this.authorityFault;
-      this.authorityStatus.textContent = 'Applying pending changes…';
+      this.setAuthorityStatus('Applying pending changes…');
       try { return await work(); }
-      finally { if (generation===this.authorityQueueGeneration && !this.authorityFault) this.authorityStatus.textContent = ''; }
+      finally { if (generation===this.authorityQueueGeneration && !this.authorityFault) this.setAuthorityStatus(''); }
     });
     // Keep the queue usable after a confirmed refusal; callers still receive it.
     this.authorityQueue = queued.catch(error => {
       if(generation!==this.authorityQueueGeneration)return;
       if (error?.authorityUncertain) this.authorityFault = error;
-      this.authorityStatus.textContent = `Not accepted: ${error?.message || error}`;
+      this.setAuthorityStatus(`Not accepted: ${error?.message || error}`);
       if (this.authorityFault) this.surface.root.setAttribute('aria-readonly','true');
     });
     return queued;
@@ -1967,7 +1975,7 @@ class MarkdownEditor {
         } finally { this.authorityPainting = false; this.authorityRenderDraft(); }
       } else if (painted || error?.authorityUncertain) {
         this.authorityFault = error;
-        this.authorityStatus.textContent = 'Native outcome is uncertain. Preserve drafts and recover explicitly.';
+        this.setAuthorityStatus('Native outcome is uncertain. Preserve drafts and recover explicitly.');
       }
       throw error;
     }
