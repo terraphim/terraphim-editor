@@ -17,10 +17,9 @@ async fn test_save_writes_back_to_a_kept_file_handle() {
     let result = js_async(
         r##"
         const out = [];
-        // The File System Access path: the default option, which headless
-        // Chrome supports for origin-private file handles.
+        // A real writable origin-private handle is usable independently of
+        // global picker APIs. The actual file readback below proves support.
         let ed = teFiles.reinit({ fileSystemAccess: undefined });
-        if (!ed.persistence.fsAccess) return 'File System Access not detected';
         const dir = await navigator.storage.getDirectory();
         const handle = await dir.getFileHandle('kept.md', { create: true });
         const canonical = teFiles.canonicalFull(ed);

@@ -30,8 +30,11 @@
  *     else the first heading, else untitled.md); later saves write to the
  *     same handle without asking. Opening a file through the picker, or
  *     dropping one in Chromium, keeps its handle, so saving writes back.
- *   - otherwise (Firefox, Safari, or config.fileSystemAccess === false): a
- *     download of the .md through a Blob and an <a download>.
+ *   - a retained writable file handle works independently of global picker
+ *     availability, including browser-owned origin-private files.
+ *   - without a usable handle or save picker, or when
+ *     config.fileSystemAccess === false: a download of the .md through a
+ *     Blob and an <a download>.
  * te:written {name, method: 'file' | 'download'} follows a completed write.
  * save() returns the saved text synchronously (null when cancelled or when
  * the document model is unavailable); `lastWrite` is the write's promise,
@@ -920,9 +923,18 @@ class TePersistence {
    * cancelled picker writes nothing. The notice tells the user each time.
    */
   writeFile(text, name, { keepHandle = false, generation = this.generation } = {}) {
-    if (!this.fsAccess) return Promise.resolve(this.download(text, name));
+    // An already-open writable handle does not require global picker APIs
+    // (for example an origin-private file in Firefox). Keep an explicit
+    // download-only policy authoritative even when a handle was supplied.
+    const fileAccessEnabled = this.config.fileSystemAccess !== false;
+    const canReuseHandle = fileAccessEnabled && keepHandle && this.handle;
+    const canPickSave = fileAccessEnabled && typeof window.showSaveFilePicker === 'function';
+    if (!canPickSave && !canReuseHandle) return Promise.resolve(this.download(text, name));
     const pick = () => {
       try {
+        if (this.config.fileSystemAccess === false || typeof window.showSaveFilePicker !== 'function') {
+          throw new DOMException('Save picker unavailable', 'NotSupportedError');
+        }
         return window.showSaveFilePicker({ suggestedName: name, types: TE_PICKER_TYPES });
       } catch (err) {
         return Promise.reject(err);
