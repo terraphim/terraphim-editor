@@ -217,8 +217,39 @@ impl TrimPlan {
     ///   faded sentence deletes the rest of the sentence and keeps the word;
     ///   [`make_cuts`](crate::make_cuts) tidies the joins around it.
     ///
+    /// A separator shared by crossing sentence cuts belongs to the earlier
+    /// active fragment, only after Keep subtraction; exact cut coverage remains
+    /// unchanged. Crossings containing non-whitespace are never normalized.
+    ///
     /// Unknown ids in `kept` are ignored.
     pub fn active(&self, level: TrimLevel, kept: &[CutId]) -> Vec<Cut> {
+        let mut active = self.active_fragments(level, kept);
+        // Adjacent sentence candidates can both own the separator: an opener
+        // takes its trailing gap while its successor takes that leading gap.
+        // Assign only that already-cut whitespace to the earlier fragment.
+        // Keep subtraction runs first, so every kept original byte still wins.
+        for index in 0..active.len() {
+            for prior in 0..index {
+                let before = &active[prior];
+                let current = &active[index];
+                if before.start < current.start
+                    && current.start < before.end
+                    && before.end < current.end
+                    && self.is_blank(current.start, before.end)
+                {
+                    let start = before.end;
+                    active[index].start = start;
+                    active[index].words = self.words_in(start, active[index].end);
+                }
+            }
+        }
+        active.sort_by_key(|cut| (cut.start, cut.end));
+        active
+    }
+
+    // The original Keep subtraction and fragment identities, before assigning
+    // duplicate whitespace. Retained as the common real implementation seam.
+    fn active_fragments(&self, level: TrimLevel, kept: &[CutId]) -> Vec<Cut> {
         let mut kept_ranges: Vec<(usize, usize)> = kept
             .iter()
             .filter_map(|&id| self.get(id))
@@ -836,5 +867,155 @@ fn sentence_candidates(
             tiebreak: scores[si].tiebreak,
             reason: reason.into(),
         });
+    }
+}
+
+#[cfg(test)]
+mod whitespace_ownership_tests {
+    use super::*;
+
+    const BODY: &str = include_str!("../tests/fixtures/public-project-brief.md");
+
+    fn crossing(a: &Cut, b: &Cut) -> bool {
+        a.start < b.end
+            && b.start < a.end
+            && !((a.start <= b.start && b.end <= a.end) || (b.start <= a.start && a.end <= b.end))
+    }
+
+    #[test]
+    fn actual_public_brief_active_fragments_have_single_separator_owner() {
+        let at = BODY.find("decision").unwrap();
+        let plan = trim_plan_excluding(
+            BODY,
+            &LabConfig::with_defaults().unwrap(),
+            &[terraphim_alternatives::text::ByteRange {
+                start: at,
+                end: at + "decision".len(),
+            }],
+        );
+        assert_eq!(plan.total_words(), 111);
+        let active = plan.active(TrimLevel::Half, &[]);
+        for (index, cut) in active.iter().enumerate() {
+            for prior in &active[..index] {
+                assert!(
+                    !crossing(prior, cut),
+                    "published crossing: {prior:?} / {cut:?}"
+                );
+            }
+        }
+    }
+
+    fn coverage(plan: &TrimPlan, cuts: &[Cut]) -> Vec<bool> {
+        let mut covered = vec![false; plan.units.len()];
+        for cut in cuts {
+            covered[cut.start..cut.end].fill(true);
+        }
+        covered
+    }
+
+    fn assert_preserved(body: &str, plan: &TrimPlan, level: TrimLevel, kept: &[CutId]) {
+        let raw = plan.active_fragments(level, kept);
+        let owned = plan.active(level, kept);
+        assert_eq!(coverage(plan, &raw), coverage(plan, &owned));
+        assert_eq!(crate::make_cuts(body, &raw), crate::make_cuts(body, &owned));
+        for cut in &owned {
+            let original = raw
+                .iter()
+                .find(|r| r.id == cut.id && r.end == cut.end)
+                .unwrap();
+            assert_eq!(cut.words, original.words);
+            assert_eq!(cut.reason, original.reason);
+            assert_eq!(cut.score, original.score);
+            assert_eq!(cut.first_level, original.first_level);
+            assert_eq!(cut.tier, original.tier);
+            assert!(cut.start >= original.start);
+            assert!(plan.is_blank(original.start, cut.start));
+            for id in kept {
+                let kept = plan.get(*id).unwrap();
+                assert!(cut.end <= kept.start || kept.end <= cut.start);
+            }
+            assert!(char::decode_utf16(plan.units[..cut.start].iter().copied()).all(|c| c.is_ok()));
+            assert!(char::decode_utf16(plan.units[..cut.end].iter().copied()).all(|c| c.is_ok()));
+        }
+    }
+
+    #[test]
+    fn all_public_brief_levels_and_4096_keep_masks_preserve_exact_cuts_and_kept_bytes() {
+        let at = BODY.find("decision").unwrap();
+        let plan = trim_plan_excluding(
+            BODY,
+            &LabConfig::with_defaults().unwrap(),
+            &[terraphim_alternatives::text::ByteRange {
+                start: at,
+                end: at + "decision".len(),
+            }],
+        );
+        assert_eq!(plan.cuts().len(), 12);
+        for mask in 0..(1 << plan.cuts().len()) {
+            let kept: Vec<_> = plan
+                .cuts()
+                .iter()
+                .filter(|c| mask & (1 << c.id.0) != 0)
+                .map(|c| c.id)
+                .collect();
+            for level in TrimLevel::ALL {
+                assert_preserved(BODY, &plan, level, &kept);
+                let active = plan.active(level, &kept);
+                for (index, cut) in active.iter().enumerate() {
+                    assert!(active[..index].iter().all(|prior| !crossing(prior, cut)));
+                }
+            }
+        }
+    }
+
+    fn two_cuts(body: &str, first_end: usize, second_start: usize) -> TrimPlan {
+        let mut plan = trim_plan(body, &LabConfig::with_defaults().unwrap());
+        let end = body.encode_utf16().count();
+        plan.cuts = [(0, first_end), (second_start, end)]
+            .into_iter()
+            .enumerate()
+            .map(|(i, (start, end))| Cut {
+                id: CutId(i as u32),
+                start,
+                end,
+                tier: Tier::Sentence,
+                first_level: TrimLevel::Half,
+                score: 1.0,
+                reason: "real separator regression".into(),
+                words: plan.words_in(start, end),
+            })
+            .collect();
+        plan
+    }
+
+    #[test]
+    fn unicode_whitespace_scalar_boundaries_and_each_keep_choice_preserve_exact_coverage() {
+        for separator in [" ", "\t", "\r\n", "\u{a0}", "\u{2003}", " \t\u{a0}\r\n"] {
+            let body = format!("🙂Alpha{separator}Beta");
+            let start = "🙂Alpha".encode_utf16().count();
+            let end = start + separator.encode_utf16().count();
+            let plan = two_cuts(&body, end, start);
+            for kept in [
+                vec![],
+                vec![CutId(0)],
+                vec![CutId(1)],
+                vec![CutId(0), CutId(1)],
+            ] {
+                assert_preserved(&body, &plan, TrimLevel::Half, &kept);
+            }
+            let active = plan.active(TrimLevel::Half, &[]);
+            assert_eq!(active[1].start, active[0].end);
+            assert!(!crossing(&active[0], &active[1]));
+        }
+    }
+
+    #[test]
+    fn crossings_that_include_real_content_are_not_normalized_or_weakened() {
+        let body = "🙂Alpha Beta";
+        let plan = two_cuts(body, 8, 6);
+        let raw = plan.active_fragments(TrimLevel::Half, &[]);
+        assert!(crossing(&raw[0], &raw[1]));
+        assert!(!plan.is_blank(raw[1].start, raw[0].end));
+        assert_eq!(plan.active(TrimLevel::Half, &[]), raw);
     }
 }

@@ -360,3 +360,30 @@ test('authored alternative exports real typed KG synonyms and Undo removes actua
   await page.evaluate(()=>editor.surface.redo());assert.deepEqual(JSON.parse(await a.query('export_knowledge_graph')),graph);
  }finally{await page.close();}
 });
+
+test('actual public brief Walk Keep Cuts Undo then Done preserves protected history', {timeout:60000},async()=>{
+ const body=await fs.readFile(process.env.TERRAPHIM_TRIM_REGRESSION_FIXTURE||path.resolve(__dirname,'../../crates/terraphim_lab/tests/fixtures/public-project-brief.md'),'utf8');
+ const role=await fs.readFile(path.join(process.env.TERRAPHIM_AUTHORITY_ASSETS,'roles/default.json'),'utf8');
+ const output=process.env.TERRAPHIM_TRIM_REGRESSION_OUTPUT||path.join(await fs.mkdtemp(path.join(os.tmpdir(),'terraphim-trim-controller-')),'outputs');await fs.mkdir(output,{recursive:false});
+ const {page,a}=await setup(body);const receipt={scope:'Real component DOM/controllers + actual native worker; not installed-host UI save evidence',checks:[]};
+ try{
+  await page.evaluate(async role=>{await editor.authority.control({kind:'role-load',json:role});await editor.chrome.setMode('write-on',{persist:false});},role);
+  const initial=await a.snapshot();
+  for(const action of ['typos_and_punctuation','weakest_sentences','long_sentences','convoluted_sentences','off_tone','hedges_and_filler'])await page.evaluate(action=>editor.lab.run(action),action);
+  for(const level of ['original','slight','tighten','sharper','half'])await page.evaluate(level=>editor.lab.trim.select(level),level);
+  const first=await page.evaluate(()=>({plan:editor.lab.trim.plan,status:editor.lab.trim.status}));assert.equal(first.plan.totalWords,111);assert.equal(first.plan.protectionCount,1);assert.equal((await a.snapshot()).source,initial.source);receipt.checks.push('Six marks and five levels preserve111-word source/protectedCount1');
+  await page.locator('.te-trim-walk-start').click();await page.locator('.te-trim-next').click();await page.locator('.te-trim-prev').click();await page.locator('.te-trim-keep').click();
+  await page.waitForFunction(()=>editor.lab.trim.kept.has(0)&&editor.lab.trim.active.every(c=>c.id!==0));await page.locator('.te-trim-stop').click();
+  const clicked=await page.evaluate(()=>{const el=Array.from(editor.surface.root.querySelectorAll('[data-te-decoration]')).find(el=>el.textContent.trim()==='maybe');if(!el)return false;el.click();return true;});assert.equal(clicked,true,'Actual faded maybe segment must exist');
+  await page.waitForFunction(()=>editor.lab.trim.kept.has(1)&&editor.lab.trim.active.every(c=>c.id!==1));
+  const expected=await a.query('trim_make_cuts',['half','[0,1]']);await page.locator('.te-trim-cut').click();await page.waitForFunction(expected=>editor.surface.getText()===expected,expected.text);await settle(page);
+  const cut=await a.snapshot();assert.equal(cut.projection.body,expected.text);await fs.writeFile(path.join(output,'actual-make-cuts.md'),cut.source);receipt.checks.push('Actual Walk/Keep/faded-Keep MakeCuts matches native result');
+  assert.equal(await page.evaluate(()=>editor.surface.undo()),true);await settle(page);assert.equal((await a.snapshot()).source,initial.source);await fs.writeFile(path.join(output,'actual-cuts-undo.md'),(await a.snapshot()).source);receipt.checks.push('Whole Cuts Undo restores exact original716 bytes');
+  await page.evaluate(async()=>{editor.lab.open();await editor.lab.trim.select('half');});
+  await fs.writeFile(path.join(output,'actual-before-done.json'),JSON.stringify(await page.evaluate(()=>({plan:editor.lab.trim.plan,status:editor.lab.trim.status})),null,2)+'\n');
+  const done=await page.evaluate(()=>editor.lab.trim.done());receipt.done=done;receipt.live=await page.evaluate(()=>editor.lab.trim.live.textContent);await settle(page);
+  const promoted=await a.snapshot();await fs.writeFile(path.join(output,'actual-done.md'),promoted.source);assert.equal(done,true,receipt.live);assert.equal(promoted.projection.body,body);assert.ok(promoted.projection.annotations.ghosts.length);receipt.checks.push('Done promotes independent actual persistent ghosts without changing body');
+  assert.equal(await page.evaluate(()=>editor.surface.undo()),true);assert.equal((await a.snapshot()).source,initial.source);assert.equal(await page.evaluate(()=>editor.surface.redo()),true);assert.equal((await a.snapshot()).source,promoted.source);receipt.checks.push('Whole protected Done Undo/Redo retains exact source and native receipt');receipt.status='PASS';
+ }catch(error){receipt.status='FAIL';receipt.error=error.stack;throw error;}
+ finally{await fs.writeFile(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2)+'\n');await page.close();}
+});
