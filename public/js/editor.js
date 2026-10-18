@@ -165,6 +165,7 @@ class EditorSurface {
     // A text move ({ start, end, to }, see MarkdownEditor.moveRange) rides
     // on the edit and its history step, so undo and redo can replay it as a
     // move in the document model rather than a deletion plus an insertion.
+    if (options.ghostEdit) edit.ghostEdit = { ...options.ghostEdit };
     if (options.move) edit.move = { ...options.move };
     // A swap of alternatives ({ span, from, to }, see
     // MarkdownEditor.swapAlternative, issue #9) rides the same way: undo and
@@ -226,6 +227,9 @@ class EditorSurface {
       if (s === e && inserted === '') continue;
       if (old.slice(s, e) === inserted) continue;
       const edit = { start: s, deletedLength: e - s, deletedText: old.slice(s, e), insertedText: inserted };
+      const nativeEdit = options.historyEdits?.[applied.length];
+      if (options.historyEdits && (!nativeEdit || nativeEdit.start !== edit.start || nativeEdit.deletedText !== edit.deletedText || nativeEdit.insertedText !== edit.insertedText)) throw new Error('Native batch history differs from its exact surface edit');
+      if (nativeEdit?.ghostEdit) edit.ghostEdit = { ...nativeEdit.ghostEdit };
       this.text = old.slice(0, s) + inserted + old.slice(e);
       this.decorations = EditorSurface.mapRanges(this.decorations, edit);
       applied.push(edit);
@@ -242,6 +246,7 @@ class EditorSurface {
     if (entry && entry.text === this.text) {
       entry.edits = applied.map((edit) => ({
         start: edit.start, deletedText: edit.deletedText, insertedText: edit.insertedText,
+        ...(edit.ghostEdit ? {ghostEdit:{...edit.ghostEdit}} : {}),
       }));
     }
     this.dispatchInput('insertReplacementText', null);
@@ -398,6 +403,12 @@ class EditorSurface {
       });
     }
     next.sort((a, b) => a.start - b.start || a.end - b.end);
+    if (this.authorityEditor && !this.authorityEditor.authorityPainting && this.authorityEditor.authorityDrafts.has('body')) {
+      // A decoration frame must not replace newer raw input with the older accepted projection.
+      this.decorations = next;
+      this.authorityDecorationsPending = true;
+      return this.getDecorations();
+    }
     const sel = this.getSelectionOffsets();
     this.decorations = next;
     this.render();
@@ -489,7 +500,7 @@ class EditorSurface {
       source: source || last.source,
       edits: group.flatMap((entry) => entry.edits),
     };
-    if (group.some((entry) => entry.ghostHistory || entry.edits.some((step) => step.ghost))) merged.ghostHistory = true;
+    if (group.some((entry) => entry.ghostHistory || entry.edits.some((step) => step.ghost || step.ghostEdit))) merged.ghostHistory = true;
     this.history.splice(first, count, merged);
     this.historyIndex = first;
     return true;
@@ -532,7 +543,7 @@ class EditorSurface {
     if (this.historyOwner) { this.historyOwner.undo(); return true; }
     if (!this.canUndo()) return false;
     const undone = this.history[this.historyIndex];
-    if (undone.ghostHistory || (undone.edits && undone.edits.some((step) => step.ghost))) {
+    if (undone.ghostHistory || (undone.edits && undone.edits.some((step) => step.ghost || step.ghostEdit))) {
       return this.replayGhostHistory(this.historyIndex - 1, 'undo', undone.edits);
     }
     this.historyIndex -= 1;
@@ -546,7 +557,7 @@ class EditorSurface {
     if (this.historyOwner) { this.historyOwner.redo(); return true; }
     if (!this.canRedo()) return false;
     const next = this.history[this.historyIndex + 1];
-    if (next.ghostHistory || (next.edits && next.edits.some((step) => step.ghost))) {
+    if (next.ghostHistory || (next.edits && next.edits.some((step) => step.ghost || step.ghostEdit))) {
       return this.replayGhostHistory(this.historyIndex + 1, 'redo', next.edits);
     }
     this.historyIndex += 1;
@@ -834,6 +845,7 @@ class EditorSurface {
     const step = edit
       ? { start: edit.start, deletedText: edit.deletedText, insertedText: edit.insertedText }
       : null;
+    if (step && edit.ghostEdit) step.ghostEdit = {...edit.ghostEdit};
     if (step && edit.move) step.move = edit.move;
     if (step && edit.swap) step.swap = edit.swap;
     if (step && edit.overflow) step.overflow = edit.overflow;
@@ -875,6 +887,7 @@ class EditorSurface {
       !top.ghostHistory && !(top.edits && top.edits.some((step) => step.ghost)) &&
       top.source === source &&
       now - top.time < this.coalesceMs;
+    const previousEdits = coalesce ? top.edits : null;
     if (coalesce) {
       // The burst's entry keeps every step; contiguous steps are combined.
       entry.edits = top.edits && step ? EditorSurface.appendStep(top.edits, step, top.text) : null;
@@ -884,6 +897,22 @@ class EditorSurface {
       if (this.history.length > this.historyLimit) this.history.shift();
       this.historyIndex = this.history.length - 1;
     }
+    if (edit && step) {
+      this.recordedEdits ||= new WeakMap();
+      this.recordedEdits.set(edit, {entry,step,previousEdits});
+    }
+  }
+
+  /** Retain native-issued mapping on the exact edit before text coalescing loses it. */
+  retainGhostEdit(edit, ghostEdit) {
+    if (!ghostEdit || typeof ghostEdit.receipt !== 'string' || typeof ghostEdit.undo !== 'boolean') throw new Error('Invalid native text Ghost receipt');
+    edit.ghostEdit = {...ghostEdit};
+    const recorded = this.recordedEdits?.get(edit);
+    // Batch edits notify before their single history entry is recorded.
+    if (!recorded) return;
+    if (this.history[this.historyIndex] !== recorded.entry || recorded.entry.text !== this.text) throw new Error('Native text Ghost receipt has no matching history entry');
+    recorded.step.ghostEdit = {...ghostEdit};
+    recorded.entry.edits = recorded.previousEdits ? [...recorded.previousEdits,recorded.step] : [recorded.step];
   }
 
   /**
@@ -1229,6 +1258,7 @@ class EditorSurface {
     if (step.move) inverse.move = { ...step.move, ...EditorSurface.invertMove(step.move) };
     if (step.swap) inverse.swap = { ...step.swap, span: step.swap.span, from: step.swap.to, to: step.swap.from };
     if (step.overflow) inverse.overflow = { ...step.overflow, before: step.overflow.after, after: step.overflow.before };
+    if (step.ghostEdit) inverse.ghostEdit = {...step.ghostEdit,undo:!step.ghostEdit.undo};
     if (step.ghost) inverse.ghost = { ...step.ghost, change: step.ghost.change, undo: typeof step.ghost.undo === 'boolean' ? !step.ghost.undo : step.ghost.undo };
     return inverse;
   }
@@ -1253,7 +1283,7 @@ class EditorSurface {
   static appendStep(steps, next, before) {
     const last = steps[steps.length - 1];
     if (!last) return [next];
-    if ([last, next].some((step) => step.ghost || step.alt || step.move || step.swap || step.overflow)) return [...steps, next];
+    if ([last, next].some((step) => step.ghost || step.ghostEdit || step.alt || step.move || step.swap || step.overflow)) return [...steps, next];
     const lastEnd = last.start + last.insertedText.length;
     const nextEnd = next.start + next.deletedText.length;
     if (next.start > lastEnd || nextEnd < last.start) return [...steps, next];
@@ -1293,6 +1323,7 @@ class EditorSurface {
       if (step.swap) edit.swap = step.swap;
       if (step.overflow) edit.overflow = step.overflow;
       if (step.ghost) edit.ghost = step.ghost;
+      if (step.ghostEdit) edit.ghostEdit = step.ghostEdit;
       out.push({ edit, text: t });
     }
     return t === expected ? out : null;
@@ -1849,7 +1880,7 @@ class MarkdownEditor {
     const retained=this.pendingAuthorityDraft();
     this.authorityQueueGeneration=(this.authorityQueueGeneration||0)+1;
     this.authorityQueue=Promise.resolve();this.authorityFault=null;this.authorityDrafts.clear();
-    this.setAuthorityStatus('');this.surface.root.removeAttribute('aria-readonly');
+    this.setAuthorityStatus('');this.surface.root.removeAttribute('aria-readonly');this.surface.authorityDecorationsPending=false;
     if(this.altPanel) {
       this.altPanel.authorityCancelGeneration=(this.altPanel.authorityCancelGeneration||0)+1;
       if(this.altPanel.live)this.altPanel.endLive();
@@ -1872,6 +1903,12 @@ class MarkdownEditor {
 
   authorityClearDraft(key, sequence) {
     if (this.authorityDrafts.get(key)?.sequence === sequence) this.authorityDrafts.delete(key);
+    if (!this.surface.destroyed && !this.authorityDrafts.has('body') && this.surface.authorityDecorationsPending && this.surface.serialise().text === this.surface.getText()) {
+      const selection = this.surface.readSelection();
+      this.surface.authorityDecorationsPending = false;
+      this.surface.render();
+      if (selection) this.surface.setSelectionOffsets(selection.start,selection.end,selection.direction);
+    }
     if (this.authority.reportDraft) this.authority.reportDraft(this.pendingAuthorityDraft());
   }
 
@@ -1892,12 +1929,34 @@ class MarkdownEditor {
     return this.authority.historyChanged();
   }
 
-  authorityRenderDraft() {
+  authorityRawSelection() {
     const draft=this.authorityDrafts.get('body');
-    if (!draft || draft.input.text===this.surface.getText()) return;
+    if (!draft || this.surface.serialise().text !== draft.input.text) return null;
+    return {sequence:draft.sequence,text:draft.input.text,selection:this.surface.readSelection()};
+  }
+
+  authorityRenderDraft(rawBeforePaint = null) {
+    const draft=this.authorityDrafts.get('body');
+    if (!draft) return;
+    const preserved = rawBeforePaint?.sequence===draft.sequence && rawBeforePaint.text===draft.input.text ? rawBeforePaint.selection : null;
+    if (this.surface.serialise().text===draft.input.text) {
+      // Accepted paints and confirmed rollbacks can restore correct text with an older caret.
+      if (!preserved || document.activeElement!==this.surface.root) return;
+      const current=this.surface.readSelection();
+      if (current && current.start===preserved.start && current.end===preserved.end && current.direction===preserved.direction) return;
+      if (draft.input.text===this.surface.getText()) {
+        this.surface.setSelectionOffsets(preserved.start,preserved.end,preserved.direction);
+        return;
+      }
+      // A rollback may reattach pre-paint raw nodes while the accepted model is older.
+      // Preserve the raw caret without clamping it to that model or canonicalizing via it.
+    }
     this.surface.root.textContent=draft.input.text;
-    const node=this.surface.root.firstChild, sel=document.getSelection(), selection=draft.input.selection;
-    if(node && sel && document.activeElement===this.surface.root) sel.setBaseAndExtent(node,Math.min(selection.start,node.length),node,Math.min(selection.end,node.length));
+    const node=this.surface.root.firstChild, sel=document.getSelection(), selection=preserved || draft.input.selection;
+    if(node && sel && document.activeElement===this.surface.root) {
+      const start=Math.min(selection.start,node.length),end=Math.min(selection.end,node.length);
+      sel.setBaseAndExtent(node,selection.direction==='backward'?end:start,node,selection.direction==='backward'?start:end);
+    }
   }
 
   /** Update the flow status and remeasure indicators after its line changes. */
@@ -1940,6 +1999,7 @@ class MarkdownEditor {
       const accepted = await this.authority.transact(request, async started => {
         if(generation!==this.authorityQueueGeneration)throw new Error('Prepared outcome belongs to a recovered authority');
         if (!started || started.ok !== true || typeof started.token !== 'string' || typeof started.source !== 'string') throw new Error('Invalid prepared native outcome');
+        const rawBeforePaint=this.authorityRawSelection();
         const focus=document.activeElement;
         const focusCaret=focus instanceof HTMLInputElement||focus instanceof HTMLTextAreaElement ? [focus.selectionStart,focus.selectionEnd] : null;
         this.authorityPainting = true;
@@ -1955,7 +2015,7 @@ class MarkdownEditor {
           if(generation===this.authorityQueueGeneration && focus?.isConnected && focus!==this.surface.root && typeof focus.focus==='function') {
             focus.focus();if(focusCaret)focus.setSelectionRange(...focusCaret);
           }
-          this.authorityPainting = false; this.authorityRenderDraft();
+          this.authorityPainting = false; this.authorityRenderDraft(rawBeforePaint);
         }
       });
       if(generation!==this.authorityQueueGeneration)throw new Error('Accepted outcome belongs to a recovered authority');
@@ -1966,13 +2026,14 @@ class MarkdownEditor {
     } catch (error) {
       if(generation!==this.authorityQueueGeneration)throw error;
       if (error?.authorityRolledBack || error?.authorityUnchanged) {
+        const rawBeforeRollback=this.authorityRawSelection();
         this.authorityPainting = true;
         try {
           api.open_document(source);
           this.restoreGhostHistoryCheckpoint(saved, api);
           for (let index=0;index<references.length;index++) Object.assign(references[index],saved.history[index]);
           this.surface.history = references;
-        } finally { this.authorityPainting = false; this.authorityRenderDraft(); }
+        } finally { this.authorityPainting = false; this.authorityRenderDraft(rawBeforeRollback); }
       } else if (painted || error?.authorityUncertain) {
         this.authorityFault = error;
         this.setAuthorityStatus('Native outcome is uncertain. Preserve drafts and recover explicitly.');
@@ -2002,7 +2063,7 @@ class MarkdownEditor {
       const a = this.surface.snap(this.surface.clamp(Math.min(start,end))), b=this.surface.snap(this.surface.clamp(Math.max(start,end)));
       const meta = {kind:'text_edit',...await this.authorityEditMeta(before,a,b,text,0)};
       let edit;
-      const accepted=await this.authorityTransaction({route:'action',expectedBody:before,meta,textArgs:[text]}, () => { edit=this.surface.replaceRange(a,b,text,options); });
+      const accepted=await this.authorityTransaction({route:'action',expectedBody:before,meta,textArgs:[text]}, started => { edit=this.surface.replaceRange(a,b,text,{...options,ghostEdit:started.result?.edit?.ghostEdit}); });
       return accepted ? edit : null;
     });
   }
@@ -2011,12 +2072,12 @@ class MarkdownEditor {
     const before = this.surface.getText();
     return this.authorityEnqueue(async () => {
       if(before!==this.surface.getText()) throw new Error('Batch action base changed; input retained');
-      const ordered=edits.map(edit=>({start:Math.min(edit.start,edit.end),end:Math.max(edit.start,edit.end),insert:EditorSurface.normaliseNewlines(String(edit.insert||''))})).sort((a,b)=>b.start-a.start);
+      const ordered=edits.map(edit=>({start:Math.min(edit.start,edit.end),end:Math.max(edit.start,edit.end),insert:EditorSurface.normaliseNewlines(String(edit.insert||''))})).sort((a,b)=>a.start-b.start||a.end-b.end).reverse();
       let body=before; const batch=[], args=[];
-      for(const edit of ordered) { batch.push(await this.authorityEditMeta(body,edit.start,edit.end,edit.insert,args.length));args.push(edit.insert);body=body.slice(0,edit.start)+edit.insert+body.slice(edit.end); }
+      for(const edit of ordered) { if(body.slice(edit.start,edit.end)===edit.insert)continue; batch.push(await this.authorityEditMeta(body,edit.start,edit.end,edit.insert,args.length));args.push(edit.insert);body=body.slice(0,edit.start)+edit.insert+body.slice(edit.end); }
       if(!batch.length)return [];
       let applied;
-      const accepted=await this.authorityTransaction({route:'action',expectedBody:before,meta:{kind:'text_edits',edits:batch},textArgs:args},()=>{applied=this.surface.replaceRanges(edits,options);});
+      const accepted=await this.authorityTransaction({route:'action',expectedBody:before,meta:{kind:'text_edits',edits:batch},textArgs:args},started=>{applied=this.surface.replaceRanges(edits,{...options,historyEdits:started.result?.edits?.map(value=>value.edit)});});
       return accepted ? applied : [];
     });
   }
@@ -2028,16 +2089,11 @@ class MarkdownEditor {
       const before=this.surface.getText(), edit=EditorSurface.diff(before,text,hint);
       if(!edit) {this.authorityClearDraft('body',sequence);return;}
       const meta={kind:'text_edit',...await this.authorityEditMeta(before,edit.start,edit.start+edit.deletedLength,edit.insertedText,0)};
-      await this.authorityTransaction({route:'action',expectedBody:before,meta,textArgs:[edit.insertedText]},()=> {
-        this.surface.replaceRange(edit.start,edit.start+edit.deletedLength,edit.insertedText,{source,selectStart:selection.start,selectEnd:selection.end});
+      await this.authorityTransaction({route:'action',expectedBody:before,meta,textArgs:[edit.insertedText]},started=> {
+        this.surface.replaceRange(edit.start,edit.start+edit.deletedLength,edit.insertedText,{source,selectStart:selection.start,selectEnd:selection.end,ghostEdit:started.result?.edit?.ghostEdit});
       });
       this.authorityClearDraft('body',sequence);
-      const later=this.authorityDrafts.get('body');
-      if(later && later.sequence>sequence) {
-        this.surface.root.textContent=later.input.text;
-        const node=this.surface.root.firstChild, sel=document.getSelection();
-        if(node && sel && document.activeElement===this.surface.root) sel.setBaseAndExtent(node,Math.min(later.input.selection.start,node.length),node,Math.min(later.input.selection.end,node.length));
-      }
+      this.authorityRenderDraft();
     }).catch(error=>this.ghostHistoryNotice(error));
   }
 
@@ -2060,7 +2116,7 @@ class MarkdownEditor {
         if(edit.move)return {...base,kind:'move',move:edit.move};
         if(edit.swap)return {...base,kind:'swap',...edit.swap};
         if(edit.overflow)return {...base,kind:'overflow',...edit.overflow};
-        return {...base,kind:'edit'};
+        return {...base,kind:'edit',...(edit.ghostEdit ? {ghostEdit:edit.ghostEdit} : {})};
       });
       const accepted=await this.authorityTransaction({route:'history',expectedBody:body,targetBody:target.text,operationsJson:JSON.stringify(operations)},started=> {
         surface.historyIndex=index;this.paintGhostHistory(started.annotations,applied);
@@ -2244,20 +2300,21 @@ class MarkdownEditor {
   }
 
   static nativeGhostHistoryOperations(body, steps, target) {
-    if (!Array.isArray(steps) || !steps.some((step) => step && step.ghost)) throw new Error('Ghost history metadata is missing; text-diff fallback is forbidden');
+    if (!Array.isArray(steps) || !steps.some((step) => step && (step.ghost || step.ghostEdit))) throw new Error('Ghost history metadata is missing; text-diff fallback is forbidden');
     if (steps.length > 4096) throw new Error('Too many history operations');
-    const allowed = ['start','deletedText','insertedText','ghost','alt','move','swap','overflow'];
+    const allowed = ['start','deletedText','insertedText','ghost','ghostEdit','alt','move','swap','overflow'];
     for (const step of steps) {
       if (Object.keys(step).some((key) => !allowed.includes(key)) ||
-          ['ghost','alt','move','swap','overflow'].filter((key) => step[key]).length > 1 ||
+          ['ghost','ghostEdit','alt','move','swap','overflow'].filter((key) => step[key]).length > 1 ||
           !Number.isInteger(step.start) || step.start < 0 || step.start > 0xffffffff ||
           typeof step.deletedText !== 'string' || typeof step.insertedText !== 'string') {
         throw new Error('Invalid or conflicting ghost-group history metadata');
       }
+      if (step.ghostEdit && (typeof step.ghostEdit.receipt !== 'string' || typeof step.ghostEdit.undo !== 'boolean')) throw new Error('Invalid native text Ghost receipt');
       if (step.ghost && (typeof step.ghost.undo !== 'boolean' || step.deletedText || step.insertedText)) {
         throw new Error('Ghost receipt must be annotation-only with an exact direction');
       }
-      for (const [key, fields] of Object.entries({ghost:['change','undo'],alt:['span','before','after'],
+      for (const [key, fields] of Object.entries({ghost:['change','undo'],ghostEdit:['receipt','undo'],alt:['span','before','after'],
         move:['start','end','to'],swap:['span','from','to'],overflow:['before','after']})) {
         if (step[key] && (Object.keys(step[key]).length !== fields.length ||
             fields.some((field) => !Object.hasOwn(step[key], field)))) {
@@ -2274,7 +2331,7 @@ class MarkdownEditor {
       if (edit.move) return {...base,kind:'move',move:edit.move};
       if (edit.swap) return {...base,kind:'swap',...edit.swap};
       if (edit.overflow) return {...base,kind:'overflow',...edit.overflow};
-      return {...base,kind:'edit'};
+      return {...base,kind:'edit',...(edit.ghostEdit ? {ghostEdit:edit.ghostEdit} : {})};
     });
     const json = JSON.stringify(operations);
     MarkdownEditor.ghostTransportBounds(body, target, json);
@@ -2363,6 +2420,10 @@ class MarkdownEditor {
       // replacing its body with the surface text and re-anchoring by text.
       this.reflectSync(api.sync_document_body(text));
       return;
+    }
+    if (outcome?.ghostEdit && change.source !== 'undo' && change.source !== 'redo') {
+      this.surface.retainGhostEdit(edit,outcome.ghostEdit);
+      this.surface.ghostHistoryAdapter = this;
     }
     if (outcome) this.reflectSetAside(outcome.setAside, outcome.notice, outcome.warning);
   }

@@ -52,14 +52,14 @@ async function setup(source='Risk needs a decision.\n',existing,authorityEnabled
  await page.goto(origin+'/terraphim-editor.min.js');await page.setContent('<!doctype html><div id="fixture"></div>');
  await page.addScriptTag({url:origin+'/terraphim-editor.min.js'});await page.addScriptTag({url:origin+'/history-checkpoint.js'});
  await page.evaluate(async({source,role,authorityEnabled})=>{
-  window.actual=await TeraphimEditor.create(document.querySelector('#fixture'),{loadShoelace:false,value:source,dirtyTitle:false,config:{hostManaged:true,fileSystemAccess:false}});window.editor=actual.markdownEditor;
+  window.actual=await TeraphimEditor.create(document.querySelector('#fixture'),{loadShoelace:false,value:source,dirtyTitle:false,config:{hostManaged:true,fileSystemAccess:false}});window.editor=actual.markdownEditor;actual.openDocument(source);
   editor.loadThesaurus(role);window.nativeSnapshot=await nativeOperation('snapshot');window.captured=null;window.drafts=[];
   if(!authorityEnabled)return;
   let queue=Promise.resolve();function serial(fn){const next=queue.then(fn);queue=next.catch(()=>{});return next;}
   editor.setAuthority({get roleGeneration(){return nativeSnapshot.roleGeneration;},get providerGeneration(){return nativeSnapshot.providerGeneration;},reportDraft(value){drafts.push(structuredClone(value));},
    transact(command,paint){return serial(async()=>{let prepared;try{prepared=await nativeOperation('prepare',command);}catch(error){if(/context exited/.test(error.message))error.authorityUncertain=true;throw error;}if(prepared.kind==='no-change'){window.nativeFixtureNoChangePending=true;if(window.nativeFixtureNoChangeDelay)await new Promise(resolve=>setTimeout(resolve,window.nativeFixtureNoChangeDelay));return null;}
-    try{const started={...prepared.result,source:prepared.presentationSource,presentationSource:prepared.presentationSource};captured=await paint(started);if(window.nativeFixturePaintFailure)throw new Error('Actual post-paint checkpoint failure');if(window.nativeFixtureDelay)await new Promise(resolve=>setTimeout(resolve,window.nativeFixtureDelay));nativeSnapshot=await nativeOperation('finish');return started;}
-    catch(error){try{nativeSnapshot=await nativeOperation('abort');error.authorityRolledBack=true;}catch{error.authorityUncertain=true;}throw error;}});},
+    try{const started={...prepared.result,source:prepared.presentationSource,presentationSource:prepared.presentationSource};captured=await paint(started);if(window.nativeFixtureFailNextPaint){window.nativeFixtureFailNextPaint=false;throw new Error('Actual one-shot post-paint checkpoint failure');}if(window.nativeFixturePaintFailure)throw new Error('Actual post-paint checkpoint failure');if(window.nativeFixtureDelay)await new Promise(resolve=>setTimeout(resolve,window.nativeFixtureDelay));nativeSnapshot=await nativeOperation('finish');return started;}
+    catch(error){window.nativeFixtureAbortPending=true;try{if(window.nativeFixtureAbortDelay)await new Promise(resolve=>setTimeout(resolve,window.nativeFixtureAbortDelay));nativeSnapshot=await nativeOperation('abort');error.authorityRolledBack=true;}catch{error.authorityUncertain=true;}finally{window.nativeFixtureAbortPending=false;}throw error;}});},
    historyChanged(){return serial(async()=>{captured=TerraphimHistoryCheckpoint.capture(editor.surface,editor.documentApi().save_document(),editor.altPanel);nativeSnapshot=await nativeOperation('history');});},
    query(name,args=[]){return serial(()=>nativeOperation('query',{name,args}));},control(value){return serial(async()=>{const r=await nativeOperation('control',value);nativeSnapshot=r.snapshot;return r.result;});}
   });
@@ -386,4 +386,145 @@ test('actual public brief Walk Keep Cuts Undo then Done preserves protected hist
   assert.equal(await page.evaluate(()=>editor.surface.undo()),true);assert.equal((await a.snapshot()).source,initial.source);assert.equal(await page.evaluate(()=>editor.surface.redo()),true);assert.equal((await a.snapshot()).source,promoted.source);receipt.checks.push('Whole protected Done Undo/Redo retains exact source and native receipt');receipt.status='PASS';
  }catch(error){receipt.status='FAIL';receipt.error=error.stack;throw error;}
  finally{await fs.writeFile(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2)+'\n');await page.close();}
+});
+
+
+test('native Ghost text mapping survives real typing Undo Redo and saved-source reopening', {timeout:60000},async()=>{
+ const body='Risk needs mitigation.\n\nThe public project needs careful review.\n';
+ for(const mode of ['burst','tail']){
+  const {page,a}=await setup(body);let reopened;
+  try{
+   await page.evaluate(()=>{window.ghostInputTrace=[];for(const name of ['beforeinput','input'])editor.surface.root.addEventListener(name,event=>{const selection=document.getSelection();ghostInputTrace.push({type:name,trusted:event.isTrusted,inputType:event.inputType,data:event.data,text:editor.surface.root.textContent,selection:selection?{text:selection.toString(),anchor:selection.anchorOffset,focus:selection.focusOffset}:null,ranges:event.getTargetRanges?Array.from(event.getTargetRanges(),range=>({start:range.startOffset,end:range.endOffset})):[],sequence:editor.authorityDraftSequence,painting:editor.authorityPainting});},{capture:true,passive:true});});
+   await page.evaluate(()=>editor.ghosts.ghost(0,4));await settle(page);
+   const before=await a.snapshot();
+   await page.evaluate(mode=>{editor.surface.focus();editor.surface.setSelectionOffsets(mode==='tail'?3:1,4);},mode);
+   if(mode==='burst')await page.keyboard.type('isk-long');else await page.keyboard.press('Backspace');
+   await settle(page);const after=await a.snapshot();
+   if(process.env.TERRAPHIM_GHOST_HISTORY_OUTPUT){await fs.mkdir(process.env.TERRAPHIM_GHOST_HISTORY_OUTPUT,{recursive:true});await fs.writeFile(path.join(process.env.TERRAPHIM_GHOST_HISTORY_OUTPUT,mode+'.json'),JSON.stringify({scope:'Real headless controller with actual native owner; not native Mac UI',before,after,events:await page.evaluate(()=>ghostInputTrace)},null,2)+'\n');}
+   assert.equal(after.projection.body,mode==='burst'?body.replace('Risk','Risk-long'):body.replace('Risk','Ris'));
+   assert.equal(await page.evaluate(()=>editor.surface.undo()),true);await settle(page);assert.equal((await a.snapshot()).source,before.source);
+   assert.equal(await page.evaluate(()=>editor.surface.redo()),true);await settle(page);assert.equal((await a.snapshot()).source,after.source);
+   const next=await setup(after.source);reopened=next.page;
+   assert.equal((await next.a.snapshot()).source,after.source);
+   assert.equal(await reopened.evaluate(()=>editor.surface.getText()),after.projection.body);
+  }finally{await reopened?.close();await page.close();}
+ }
+});
+
+
+test('native Ghost receipts follow exact batch order through no-ops and a fresh view', {timeout:60000},async()=>{
+ const {page,a,view}=await setup('Risk needs mitigation.\n');let other;
+ try{
+  await page.evaluate(()=>editor.ghosts.ghost(0,4));await settle(page);const before=await a.snapshot();
+  await page.evaluate(()=>editor.surface.replaceRanges([{start:4,end:4,insert:'1'},{start:4,end:4,insert:'2'},{start:0,end:1,insert:'R'},{start:3,end:4,insert:''}],{source:'test-batch'}));await settle(page);
+  const after=await a.snapshot();assert.equal(after.projection.body,'Ris12 needs mitigation.\n');
+  const checkpoint=await page.evaluate(()=>TerraphimHistoryCheckpoint.capture(editor.surface,editor.documentApi().save_document(),editor.altPanel));
+  await a.detachView(view);other=(await setup(after.source,a)).page;
+  await other.evaluate(({checkpoint,source})=>TerraphimHistoryCheckpoint.restore(editor.surface,checkpoint,source,editor),{checkpoint,source:after.source});
+  assert.equal(await other.evaluate(()=>editor.surface.undo()),true);await settle(other);assert.equal((await a.snapshot()).source,before.source);
+  assert.equal(await other.evaluate(()=>editor.surface.redo()),true);await settle(other);assert.equal((await a.snapshot()).source,after.source);
+ }finally{await other?.close();await page.close();}
+});
+// Append-only proposed regressions for the existing actual-controller fixture.
+// Uses actual Rust ResourceAuthority/production controller and a delayed REAL finish,
+// never an invented native response. setup/settle/state/assert/test are canonical fixture bindings.
+test('decoration-only refresh preserves pending real native body text and DOM caret', {timeout:60000},async()=>{
+ const body='Risk remains.\n';const {page,a}=await setup(body);
+ try{
+  await page.evaluate(()=>editor.ghosts.ghost(0,4));await settle(page);
+  await page.evaluate(()=>{window.nativeFixtureDelay=250;editor.surface.focus();editor.surface.setSelectionOffsets(1,4);});
+  await page.keyboard.type('isk-long');
+  await page.waitForFunction(()=>{
+   const draft=editor.authorityDrafts.get('body');
+   return draft&&draft.input.text!==editor.surface.getText()&&editor.surface.serialise().text===draft.input.text;
+  });
+  const observation=await page.evaluate(()=>{
+   const read=()=>({text:editor.surface.serialise().text,selection:editor.surface.readSelection(),draft:structuredClone(editor.authorityDrafts.get('body')),accepted:editor.surface.getText()});
+   const before=read();
+   if (!before.draft || before.text === before.accepted || before.text !== before.draft.input.text) throw new Error('Pending raw decoration precondition changed before actual apply');
+   const renderCount=editor.decorations.renderCount, batchDepth=editor.decorations.batchDepth;
+   // Real production registry application of an ordinary cosmetic layer. It
+   // exercises the same setDecorations/render path as a scheduled Ghost refresh.
+   editor.decorations.set('raw-paint-regression',[{id:'pending',start:0,end:1,className:'te-regression-decoration'}]);
+   return {before,after:read(),renderCountBefore:renderCount,renderCountAfter:editor.decorations.renderCount,batchDepth};
+  });
+  console.log('actual-decoration-observation '+JSON.stringify(observation));
+  assert.equal(observation.after.text,observation.before.text,'decoration paint discarded raw native input');
+  assert.deepEqual(observation.after.selection,observation.before.selection,'decoration paint moved raw native caret');
+  assert.deepEqual(observation.after.draft,observation.before.draft,'cosmetic refresh changed the native proposal');
+  await settle(page);assert.equal((await a.snapshot()).projection.body,'Risk-long remains.\n');
+ }finally{await page.close();}
+});
+
+test('real ArrowLeft during pending native body acceptance survives paint and next character', {timeout:60000},async()=>{
+ const body='Risk remains.\n';const {page,a}=await setup(body);
+ try{
+  await page.evaluate(()=>editor.ghosts.ghost(0,4));await settle(page);
+  await page.evaluate(()=>{window.nativeFixtureDelay=250;editor.surface.focus();editor.surface.setSelectionOffsets(1,4);});
+  await page.keyboard.type('isk-long');
+  await page.waitForFunction(()=>{
+   const draft=editor.authorityDrafts.get('body');
+   return draft&&draft.input.text==='Risk-long remains.\n'&&draft.input.text!==editor.surface.getText()&&editor.surface.serialise().text===draft.input.text;
+  });
+  await page.keyboard.press('ArrowLeft');
+  const moved=await page.evaluate(()=>editor.surface.readSelection());
+  assert.equal(moved.start,8);assert.equal(moved.end,8);
+  await settle(page);
+  const after=await page.evaluate(()=>({text:editor.surface.serialise().text,selection:editor.surface.readSelection()}));
+  assert.equal(after.text,'Risk-long remains.\n');
+  assert.deepEqual(after.selection,moved,'accepted paint restored the older input-event caret');
+  await page.keyboard.type('X');await settle(page);
+  assert.equal((await a.snapshot()).projection.body,'Risk-lonXg remains.\n');
+ }finally{await page.close();}
+});
+
+test('guarded real native abort preserves newer actual caret and raw body draft', {timeout:60000},async()=>{
+ const body='Risk remains.\n';const {page,a}=await setup(body);
+ try {
+  await page.evaluate(()=>editor.ghosts.ghost(0,4));await settle(page);
+  const baseline=await a.snapshot();
+  await page.evaluate(()=>{
+   window.nativeFixtureFailNextPaint=true;
+   window.nativeFixtureAbortDelay=1200;
+   editor.surface.focus();editor.surface.setSelectionOffsets(1,4);
+  });
+  await page.keyboard.type('Q');
+  await page.waitForFunction(()=>window.nativeFixtureAbortPending===true);
+  const pending=await page.evaluate(()=>({
+   raw:editor.surface.serialise().text,
+   draft:structuredClone(editor.authorityDrafts.get('body')),
+   selection:editor.surface.readSelection()
+  }));
+  assert.equal(pending.raw,'RQ remains.\n');
+  assert.equal(pending.draft.input.text,pending.raw);
+  assert.equal(pending.selection.start,2);assert.equal(pending.selection.end,2);
+  // This is actual browser keyboard selection movement WHILE a REAL guarded
+  // native abort is waiting. No selection setter, synthetic key or snapshot edit.
+  await page.keyboard.press('ArrowLeft');
+  const moved=await page.evaluate(()=>editor.surface.readSelection());
+  assert.equal(moved.start,1);assert.equal(moved.end,1);
+  // The public queue resolves its rejection handler; authoritySettled correctly
+  // refuses the still-unaccepted draft and must not be used as a success oracle.
+  await page.evaluate(()=>editor.authorityQueue);
+  await page.waitForFunction(()=>window.nativeFixtureAbortPending===false);
+  const after=await page.evaluate(()=>({
+   raw:editor.surface.serialise().text,accepted:editor.surface.getText(),
+   draft:structuredClone(editor.authorityDrafts.get('body')),
+   selection:editor.surface.readSelection(),fault:!!editor.authorityFault,
+   pendingDecorations:!!editor.surface.authorityDecorationsPending
+  }));
+  assert.equal((await a.snapshot()).source,baseline.source,
+   'guarded abort changed actual accepted native source/annotations');
+  assert.equal(after.accepted,body);
+  assert.equal(after.raw,pending.raw,'rollback lost later raw text');
+  assert.equal(after.draft.sequence,pending.draft.sequence);
+  assert.equal(after.draft.input.text,pending.raw);
+  assert.deepEqual(after.selection,moved,'rollback restored stale input-event caret');
+  assert.equal(after.fault,false,'confirmed abort incorrectly retired native authority');
+  // The one-shot fixture failure is already consumed: an actual next key accepts
+  // the retained raw document at the preserved caret through the real worker.
+  await page.keyboard.type('X');await settle(page);
+  assert.equal((await a.snapshot()).projection.body,'RXQ remains.\n');
+  assert.equal((await state(page)).drafts.intents.length,0);
+ } finally { await page.close(); }
 });

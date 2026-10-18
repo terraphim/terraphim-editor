@@ -49,8 +49,8 @@
 //!   overlapping a live item, is re-attached. Undoing the edit that detached a
 //!   span therefore brings its alternatives back.
 
-use std::cell::RefCell;
-use std::collections::HashSet;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::providers::Suggestion;
@@ -109,6 +109,8 @@ pub struct EditOutcome {
     /// [`DocumentSession::set_aside_notice`]), `None` when nothing is set
     /// aside.
     pub notice: Option<String>,
+    /// Native-issued exact Ghost mapping metadata, absent when Ghosts did not change.
+    pub ghost_edit: Option<GhostEditReference>,
 }
 
 /// One open document: the span model plus, after a malformed open, the raw
@@ -129,6 +131,8 @@ pub struct DocumentSession {
     reserved_ids: HashSet<String>,
     /// Exact receipts issued by this open session; rejects forged replay targets.
     ghost_receipts: HashSet<String>,
+    /// Session-private snapshots; serialized history can only name an issued receipt.
+    text_ghost_receipts: HashMap<String, TextGhostReceipt>,
 }
 
 #[derive(Debug, Clone)]
@@ -518,6 +522,54 @@ impl DocumentSession {
         deleted_len: usize,
         inserted: &str,
     ) -> Result<EditOutcome, EditError> {
+        if self.doc.annotations.ghosts.is_empty() && self.set_aside.ghosts.is_empty() {
+            return self.apply_edit_mapped(start, deleted_len, inserted);
+        }
+        let next = TEXT_GHOST_WATERMARK
+            .with(|n| n.get().checked_add(1))
+            .ok_or(EditError::IdAllocation)?;
+        let before = self.ghost_snapshot();
+        let before_body_hash = crate::host::source_hash(self.body());
+        let end = start
+            .checked_add(deleted_len)
+            .ok_or(EditError::InvalidRange {
+                start,
+                end: usize::MAX,
+            })?;
+        let deleted_hash = utf16_to_byte(self.body(), start)
+            .zip(utf16_to_byte(self.body(), end))
+            .map(|(a, b)| crate::host::source_hash(&self.body()[a..b]));
+        let mut outcome = self.apply_edit_mapped(start, deleted_len, inserted)?;
+        let after = self.ghost_snapshot();
+        if before.live != after.live || before.set_aside != after.set_aside {
+            let receipt = format!("text-ghost-{next}");
+            self.text_ghost_receipts.insert(
+                receipt.clone(),
+                TextGhostReceipt {
+                    before_body_hash,
+                    after_body_hash: crate::host::source_hash(self.body()),
+                    start,
+                    deleted_hash: deleted_hash.expect("successful mapped edit validated range"),
+                    inserted_hash: crate::host::source_hash(inserted),
+                    before,
+                    after,
+                },
+            );
+            TEXT_GHOST_WATERMARK.with(|n| n.set(next));
+            outcome.ghost_edit = Some(GhostEditReference {
+                receipt,
+                undo: false,
+            });
+        }
+        Ok(outcome)
+    }
+
+    fn apply_edit_mapped(
+        &mut self,
+        start: usize,
+        deleted_len: usize,
+        inserted: &str,
+    ) -> Result<EditOutcome, EditError> {
         let end = start
             .checked_add(deleted_len)
             .ok_or(EditError::InvalidRange {
@@ -559,6 +611,7 @@ impl DocumentSession {
             set_aside: self.set_aside.len(),
             warning,
             notice: self.set_aside_notice(),
+            ghost_edit: None,
         })
     }
 
@@ -823,6 +876,35 @@ impl GhostSnapshot {
     }
 }
 
+/// Reference to an actual native text-edit Ghost mapping, not a supplied snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GhostEditReference {
+    /// Opaque name looked up only in the issuing native session.
+    pub receipt: String,
+    /// Whether this operation reverses the original edit.
+    pub undo: bool,
+}
+
+impl GhostEditReference {
+    fn to_json(&self) -> Value {
+        json!({"receipt":self.receipt,"undo":self.undo})
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TextGhostReceipt {
+    before_body_hash: String,
+    after_body_hash: String,
+    start: usize,
+    deleted_hash: String,
+    inserted_hash: String,
+    before: GhostSnapshot,
+    after: GhostSnapshot,
+}
+
+// This watermark is outside DocumentSession::open/reset; old names are never reissued.
+thread_local! { static TEXT_GHOST_WATERMARK: Cell<u64> = const { Cell::new(0) }; }
+
 /// Exact receipt for independent ghost promotion; body is only a guard.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GhostChange {
@@ -976,6 +1058,10 @@ impl DocumentSession {
         {
             return Err("ghost transaction state conflict".into());
         }
+        self.restore_issued_ghost_snapshot(target)
+    }
+
+    fn restore_issued_ghost_snapshot(&mut self, target: &GhostSnapshot) -> Result<(), String> {
         let mut ids = HashSet::new();
         for ghost in target.live.iter().chain(target.set_aside.iter()) {
             if !ids.insert(&ghost.id)
@@ -1068,14 +1154,18 @@ impl EditOutcome {
     /// `{ detached, detachedGhosts, reattached, setAside, warning, notice }`
     /// for JavaScript.
     pub fn to_json(&self) -> Value {
-        json!({
+        let mut value = json!({
             "detached": self.detached,
             "detachedGhosts": self.detached_ghosts,
             "reattached": self.reattached,
             "setAside": self.set_aside,
             "warning": self.warning,
             "notice": self.notice,
-        })
+        });
+        if let Some(reference) = &self.ghost_edit {
+            value["ghostEdit"] = reference.to_json();
+        }
+        value
     }
 }
 
@@ -1829,6 +1919,7 @@ impl DocumentSession {
             set_aside: self.set_aside.len(),
             warning: None,
             notice: self.set_aside_notice(),
+            ghost_edit: None,
         })
     }
 }
@@ -2718,7 +2809,9 @@ struct HistoryTextEdit {
 
 #[derive(Debug, Clone)]
 enum HistoryKind {
-    Edit,
+    Edit {
+        ghost_edit: Option<GhostEditReference>,
+    },
     Ghost {
         change: GhostChange,
         undo: bool,
@@ -2762,6 +2855,14 @@ pub fn parse_history_operations(
             .as_str()
             .ok_or_else(|| history_error("invalid-payload", "history kind is required"))?;
         let fields: &[&str] = match kind {
+            "edit" if value.get("ghostEdit").is_some() => &[
+                "kind",
+                "body",
+                "start",
+                "deletedText",
+                "insertedText",
+                "ghostEdit",
+            ],
             "edit" => &["kind", "body", "start", "deletedText", "insertedText"],
             "ghost" => &["kind", "body", "change", "undo"],
             "alt" => &[
@@ -2814,7 +2915,24 @@ pub fn parse_history_operations(
             })
         };
         let kind = match kind {
-            "edit" => HistoryKind::Edit,
+            "edit" => {
+                let ghost_edit = value
+                    .get("ghostEdit")
+                    .map(|reference| {
+                        history_fields(reference, &["receipt", "undo"])?;
+                        Ok(GhostEditReference {
+                            receipt: history_string(reference, "receipt")?,
+                            undo: reference["undo"].as_bool().ok_or_else(|| {
+                                history_error(
+                                    "invalid-payload",
+                                    "Ghost edit direction must be boolean",
+                                )
+                            })?,
+                        })
+                    })
+                    .transpose()?;
+                HistoryKind::Edit { ghost_edit }
+            }
             "ghost" => {
                 let change = &value["change"];
                 history_fields(change, &["body", "before", "after"])?;
@@ -2908,6 +3026,56 @@ impl HistoryTextEdit {
 }
 
 impl DocumentSession {
+    fn replay_text_ghost_edit(
+        &mut self,
+        edit: &HistoryTextEdit,
+        reference: &GhostEditReference,
+    ) -> Result<(), String> {
+        let issued = self
+            .text_ghost_receipts
+            .get(&reference.receipt)
+            .cloned()
+            .ok_or("unknown or stale text Ghost receipt")?;
+        let (expected, target, body_hash, deleted_hash, inserted_hash) = if reference.undo {
+            (
+                &issued.after,
+                &issued.before,
+                &issued.after_body_hash,
+                &issued.inserted_hash,
+                &issued.deleted_hash,
+            )
+        } else {
+            (
+                &issued.before,
+                &issued.after,
+                &issued.before_body_hash,
+                &issued.deleted_hash,
+                &issued.inserted_hash,
+            )
+        };
+        if self.raw_block.is_some()
+            || crate::host::source_hash(self.body()) != *body_hash
+            || edit.start != issued.start
+            || crate::host::source_hash(&edit.deleted) != *deleted_hash
+            || crate::host::source_hash(&edit.inserted) != *inserted_hash
+            || self.doc.annotations.ghosts != expected.live
+            || self.set_aside.ghosts != expected.set_aside
+        {
+            return Err("text Ghost receipt state or edit conflict".into());
+        }
+        self.apply_edit_mapped(edit.start, utf16_len(&edit.deleted), &edit.inserted)
+            .map_err(|e| e.to_string())?;
+        let target_body_hash = if reference.undo {
+            &issued.before_body_hash
+        } else {
+            &issued.after_body_hash
+        };
+        if crate::host::source_hash(self.body()) != *target_body_hash {
+            return Err("text Ghost target body conflict".into());
+        }
+        self.restore_issued_ghost_snapshot(target)
+    }
+
     /// Simulate the complete ordered group on one clone, publish only after
     /// every metadata/body guard passes. Ghost-free legacy APIs are unchanged.
     pub fn replay_history_group_atomic(
@@ -2939,11 +3107,17 @@ impl DocumentSession {
                 HistoryKind::Ghost { change, undo } => trial
                     .replay_ghost_change(change, *undo)
                     .map_err(model_error)?,
-                HistoryKind::Edit => {
+                HistoryKind::Edit { ghost_edit } => {
                     let e = op.edit.as_ref().expect("decoded edit");
-                    trial
-                        .apply_edit(e.start, utf16_len(&e.deleted), &e.inserted)
-                        .map_err(|e| model_error(e.to_string()))?;
+                    if let Some(reference) = ghost_edit {
+                        trial
+                            .replay_text_ghost_edit(e, reference)
+                            .map_err(model_error)?;
+                    } else {
+                        trial
+                            .apply_edit_mapped(e.start, utf16_len(&e.deleted), &e.inserted)
+                            .map_err(|e| model_error(e.to_string()))?;
+                    }
                 }
                 HistoryKind::Alt { span, target } => {
                     let e = op.edit.as_ref().expect("decoded edit");
@@ -2976,7 +3150,7 @@ impl DocumentSession {
                 HistoryKind::Overflow { before, after } => {
                     let e = op.edit.as_ref().expect("decoded edit");
                     trial
-                        .apply_edit(e.start, utf16_len(&e.deleted), &e.inserted)
+                        .apply_edit_mapped(e.start, utf16_len(&e.deleted), &e.inserted)
                         .map_err(|e| model_error(e.to_string()))?;
                     if !trial
                         .replay_overflow(before, after)
@@ -3241,7 +3415,14 @@ fn apply_action_edit(
         ));
     }
     let mut result = outcome.to_json();
-    result.as_object_mut().expect("outcome object").insert("edit".into(), json!({"start":start,"deletedLength":deleted_len,"deletedText":deleted,"insertedText":inserted}));
+    let mut actual_edit = json!({"start":start,"deletedLength":deleted_len,"deletedText":deleted,"insertedText":inserted});
+    if let Some(reference) = &outcome.ghost_edit {
+        actual_edit["ghostEdit"] = reference.to_json();
+    }
+    result
+        .as_object_mut()
+        .expect("outcome object")
+        .insert("edit".into(), actual_edit);
     Ok(result)
 }
 
