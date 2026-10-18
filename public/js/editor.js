@@ -2122,7 +2122,7 @@ class MarkdownEditor {
         surface.historyIndex=index;this.paintGhostHistory(started.annotations,applied);
         surface.setSelectionOffsets(target.start,target.end);
       });
-      if(accepted)this.notifyGhostHistory(direction==='undo'?'historyUndo':'historyRedo',accepted.annotations);
+      if(accepted)this.notifyGhostHistory(direction==='undo'?'historyUndo':'historyRedo',accepted.annotations,applied);
       return !!accepted;
     });
   }
@@ -2353,14 +2353,16 @@ class MarkdownEditor {
         else s.setSelectionOffsets(entry.start, entry.end);
       });
     if (!result) throw new Error('Native mixed history begin returned an invalid no-op');
-    this.notifyGhostHistory(source === 'undo' ? 'historyUndo' : 'historyRedo', result.annotations);
+    this.notifyGhostHistory(source === 'undo' ? 'historyUndo' : 'historyRedo', result.annotations,applied);
   }
 
-  notifyGhostHistory(inputType, annotations = null) {
+  notifyGhostHistory(inputType, annotations = null, applied = []) {
     // Native and registry already replayed every edit. Notify observers once
     // without an edit envelope (so ranges are not mapped twice), only after
     // final acknowledgement. Suppress only the duplicate model mirror.
     try {
+      const source = inputType === 'historyUndo' ? 'undo' : inputType === 'historyRedo' ? 'redo' : 'trim';
+      if (applied.length) this.blocks?.replayAcceptedHistory?.(applied,source);
       if (annotations) {
         const count = annotations.setAside.spans.length + annotations.setAside.ghosts.length;
         const notice = count === 0 ? null : `${count} ${count === 1 ? 'annotation (alternatives or ghost) is' : 'annotations (alternatives or ghosts) are'} out of step with the text. ${count === 1 ? 'It is' : 'They are'} preserved and saved with the document, and ${count === 1 ? 'is' : 'are'} re-attached if the text returns.`;
@@ -2371,7 +2373,7 @@ class MarkdownEditor {
       const previous = this.suppressModelSync;
       this.suppressModelSync = true;
       try {
-        this.surface.emitChange(null, inputType === 'historyUndo' ? 'undo' : inputType === 'historyRedo' ? 'redo' : 'trim');
+        this.surface.emitChange(null, source);
       } finally { this.suppressModelSync = previous; }
       if (this.indicators) this.indicators.flush();
       this.surface.dispatchInput(inputType, null);

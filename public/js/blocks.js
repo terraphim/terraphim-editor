@@ -747,19 +747,50 @@ class BlocksView {
     }
   }
 
+  /** Map an acknowledged native replay without mirroring model/decorations twice.
+   * The following aggregate surface notification performs the final render.
+   */
+  replayAcceptedHistory(applied, source) {
+    const changes = applied.filter(({edit}) => edit && !edit.ghost &&
+      (edit.move || edit.deletedLength > 0 || edit.insertedText.length > 0))
+      .map(({edit,text}) => ({edit,text,source}));
+    if (!changes.length) return;
+    if (this.authorityApplying) {
+      this.authorityChanges.push(...changes);
+      this.dirty = true;
+      return;
+    }
+    const hadFocus = this.container.contains(document.activeElement);
+    let overlapped = null;
+    for (const change of changes) {
+      const edit = change.edit, whole = BlocksView.replacesWhole(change);
+      if (this.drafts.length) this.mapDrafts(edit, whole);
+      if (this.editing && !this.mapEditing(edit, whole)) {
+        overlapped = this.editing;
+        this.editing = null;
+        this.keepDraft(overlapped, edit, whole);
+      }
+    }
+    if (this.drafts.length) this.renderDrafts();
+    this.acceptedHistoryPresentation = {hadFocus,overlapped,source};
+  }
+
   onSurfaceChange(change) {
     if(this.authorityApplying){this.authorityChanges.push(change);this.dirty=true;return;}
+    const acceptedHistory = !change?.edit && change?.source === this.acceptedHistoryPresentation?.source
+      ? this.acceptedHistoryPresentation : null;
+    this.acceptedHistoryPresentation = null;
     const edit = change && change.edit;
     const whole = !!edit && BlocksView.replacesWhole(change);
     // Kept drafts follow every change, in either view.
     if (edit && this.drafts.length) this.mapDrafts(edit, whole);
-    let overlapped = null;
+    let overlapped = acceptedHistory?.overlapped || null;
     if (this.editing && edit && !this.mapEditing(edit, whole)) {
       overlapped = this.editing;
       this.editing = null;
     }
-    const hadFocus = this.container.contains(document.activeElement);
-    if (overlapped) this.keepDraft(overlapped, edit, whole);
+    const hadFocus = !!acceptedHistory?.hadFocus || this.container.contains(document.activeElement);
+    if (overlapped && !acceptedHistory?.overlapped) this.keepDraft(overlapped, edit, whole);
     else if (edit && this.drafts.length) this.renderDrafts();
     if (!this.isActive()) return;
     if (this.applying) {

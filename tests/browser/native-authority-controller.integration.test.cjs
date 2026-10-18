@@ -528,3 +528,22 @@ test('guarded real native abort preserves newer actual caret and raw body draft'
   assert.equal((await state(page)).drafts.intents.length,0);
  } finally { await page.close(); }
 });
+
+test('accepted native block Undo Redo maps kept draft anchors exactly once', {timeout:60000},async()=>{
+ const {page,a}=await setup('A\n\nX\n\nC\n');
+ try{
+  await page.evaluate(async()=>{await editor.blocks.setView('blocks');await editor.blocks.editBlock(1);});
+  await page.locator('.te-block-editor').fill('X draft');await page.keyboard.press('Escape');
+  await page.waitForFunction(()=>!editor.blocks.editing&&editor.blocks.keptDrafts().length===1);
+  await page.evaluate(async()=>{await editor.blocks.moveBlock(1,'down');await editor.blocks.moveBlock(2,'up');});
+  assert.equal(await page.evaluate(()=>editor.blocks.keptDrafts()[0].anchor),3);
+  await page.evaluate(()=>editor.blocks.undo());
+  assert.equal((await a.snapshot()).projection.body,'A\n\nC\n\nX\n');
+  assert.equal(await page.evaluate(()=>editor.blocks.keptDrafts()[0].anchor),6);
+  await page.evaluate(()=>editor.blocks.redo());assert.equal(await page.evaluate(()=>editor.blocks.keptDrafts()[0].anchor),3);
+  await page.evaluate(()=>editor.blocks.undo());
+  assert.equal(await page.evaluate(()=>editor.blocks.applyDraft(editor.blocks.keptDrafts()[0].id)),'replace');
+  await settle(page);assert.equal((await a.snapshot()).projection.body,'A\n\nC\n\nX draft\n');
+  assert.equal((await state(page)).drafts.intents.length,0);
+ }finally{await page.close();}
+});
