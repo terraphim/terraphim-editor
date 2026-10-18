@@ -206,6 +206,15 @@ class SourceTests(unittest.TestCase):
     def test_clean_reviewed_rc_accepted(self):
         self.assertEqual(M.admit_source('v0.1.0-rc.2', self.root), self.source)
 
+    def test_commit_checkout_without_tag_ref_refuses_until_history_is_present(self):
+        # Checking out the correct commit is insufficient: admission also
+        # verifies the immutable tag and its membership in public main.
+        self.git('tag', '-d', 'v0.1.0-rc.2')
+        with self.assertRaises(subprocess.CalledProcessError):
+            M.admit_source('v0.1.0-rc.2', self.root)
+        self.git('tag', 'v0.1.0-rc.2', self.source)
+        self.assertEqual(M.admit_source('v0.1.0-rc.2', self.root), self.source)
+
     def test_stable_wrong_component_and_version_tags_refused(self):
         for tag in ('main', 'v0.1.0', 'v0.2.0-rc.2', 'terraphim_lab-v0.1.1', 'v0.1.0-rc.2;echo unsafe'):
             with self.subTest(tag=tag), self.assertRaises(ValueError): M.admit_source(tag, self.root)
@@ -220,6 +229,19 @@ class SourceTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_every_release_admission_job_fetches_tag_and_main_history(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/release.yml').read_text()
+        sections = {
+            'candidate': workflow.split('  candidate:', 1)[1].split('  trusted-clipboard:', 1)[0],
+            'trusted-clipboard': workflow.split('  trusted-clipboard:', 1)[1].split('  publish:', 1)[0],
+            'publish': workflow.split('  publish:', 1)[1],
+        }
+        for name, section in sections.items():
+            checkout = section.split('- uses: actions/checkout@', 1)[1].split('\n      - ', 1)[0]
+            with self.subTest(job=name):
+                self.assertIn('ref: ${{ github.sha }}', checkout)
+                self.assertIn('fetch-depth: 0', checkout)
+
     def test_only_protected_dependent_job_can_publish_exact_qualified_artifact(self):
         workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/release.yml').read_text()
         build, publish = workflow.split('  publish:', 1)
