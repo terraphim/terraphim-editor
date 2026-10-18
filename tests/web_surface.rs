@@ -144,7 +144,7 @@ fn test_browser_dom_shapes_read_back_as_plain_text() {
 }
 
 #[wasm_bindgen_test]
-fn test_native_typing_newlines_and_paste() {
+fn test_native_typing_and_newlines() {
     let _document = fresh_full_editor();
     let result = js_string(
         r##"(() => {
@@ -170,22 +170,44 @@ fn test_native_typing_newlines_and_paste() {
           document.execCommand('insertText', false, 'next');
           if (s.getText() !== 'Hello world\nnext') out.push('typed after enter ' + JSON.stringify(s.getText()));
           if (!teTest.canonical()) out.push('not canonical after enter');
-          // Paste strips formatting and normalises line endings.
-          const dt = new DataTransfer();
-          dt.setData('text/html', '<b>rich</b><img src=x>');
-          dt.setData('text/plain', 'p1\r\np2\rp3');
-          s.setSelectionOffsets(0);
-          const paste = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
-          s.root.dispatchEvent(paste);
-          if (!paste.defaultPrevented) out.push('paste not cancelled');
-          if (s.getText() !== 'p1\np2\np3Hello world\nnext') out.push('paste text ' + JSON.stringify(s.getText()));
-          if (s.root.querySelector('b, img')) out.push('rich content inserted');
-          if (s.getSelectionOffsets().start !== 8) out.push('caret after paste');
-          // Copy produces plain text with newlines.
-          const copyData = new DataTransfer();
-          s.setSelectionOffsets(0, 5);
-          s.root.dispatchEvent(new ClipboardEvent('copy', { clipboardData: copyData, bubbles: true, cancelable: true }));
-          if (copyData.getData('text/plain') !== 'p1\np2') out.push('copy ' + JSON.stringify(copyData.getData('text/plain')));
+          // Actual rich/plain paste, CRLF normalization, caret and selected
+          // plain-text copy are mandatory in trusted-clipboard CI for both
+          // Chrome and Firefox (tests/browser/webdriver-clipboard-user-flow.cjs).
+          return out.join('; ');
+        })()"##,
+    );
+    assert_eq!(result, "");
+}
+
+#[wasm_bindgen_test]
+fn test_empty_clipboard_paste_preserves_body_history_selection_and_dirty_state() {
+    let _document = fresh_full_editor();
+    let result = js_string(
+        r##"(() => {
+          const ed = window.__teEditor, s = ed.surface, p = ed.persistence;
+          const out = [];
+          const check = (label) => {
+            s.focus();
+            s.setSelectionOffsets(0, 5);
+            const before = { body: s.getText(), history: JSON.stringify(s.history),
+              index: s.historyIndex, selection: JSON.stringify(s.getSelectionOffsets()), dirty: p.dirty };
+            // A browser-constructed empty ClipboardEvent; no supplied DataTransfer, clipboard
+            // payload, permission shim or replacement event/handler.
+            const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+            if (paste.clipboardData && paste.clipboardData.getData('text/plain') !== '') out.push(label + ' unexpected payload');
+            s.root.dispatchEvent(paste);
+            if (!paste.defaultPrevented) out.push(label + ' paste not cancelled');
+            if (s.getText() !== before.body) out.push(label + ' body changed');
+            if (JSON.stringify(s.history) !== before.history || s.historyIndex !== before.index) out.push(label + ' history changed');
+            if (JSON.stringify(s.getSelectionOffsets()) !== before.selection) out.push(label + ' selection changed');
+            if (p.dirty !== before.dirty) out.push(label + ' dirty state changed');
+            if (!teTest.canonical()) out.push(label + ' noncanonical body');
+          };
+          if (p.dirty) out.push('fresh document unexpectedly dirty');
+          check('clean');
+          s.replaceRange(0, 0, 'Public note. ');
+          if (!p.dirty) out.push('actual edit did not establish dirty state');
+          check('dirty');
           return out.join('; ');
         })()"##,
     );
