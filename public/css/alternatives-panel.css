@@ -44,7 +44,7 @@
        the document's first line (the page's top margin), and the key hint at
        the foot, clear of the bottom-left corner controls (1.25rem offset plus
        a 1.75rem control, and air), as on the Overflow panel. */
-    padding: max(1.5rem, calc(var(--te-page-margin-top) - 2.5rem)) 1.25rem 4.25rem;
+    padding: var(--te-alt-panel-padding-top, max(1.5rem, calc(var(--te-page-margin-top) - 2.5rem))) 1.25rem 4.25rem;
     container-type: inline-size;
     background-color: var(--te-color-panel);
     border-right: 1px solid var(--te-color-panel-border);

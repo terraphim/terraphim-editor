@@ -172,6 +172,9 @@ class TeAlternativesPanel {
     this.returnFocus = null;
     this.frame = 0;
     this.retargetFrame = 0;
+    this.positionFrame = 0;
+    this.positionObserver = null;
+    this.positionAbortController = null;
     // The new alternative being typed in the add line (issue #106), or null:
     // { spanId, index, base } where base is the surface history entry from
     // before it began (so its steps can be folded into one, or undone).
@@ -301,6 +304,78 @@ class TeAlternativesPanel {
     this.host = host;
   }
 
+  /** Position only: host reflow must never rebuild a pending input. */
+  startPositioning() {
+    if (this.positionAbortController || !this.opened || this.destroyed) return;
+    const controller = new AbortController();
+    this.positionAbortController = controller;
+    const signal = controller.signal;
+    const schedule = () => this.schedulePosition();
+    window.addEventListener('resize', schedule, { signal, passive: true });
+    document.addEventListener('scroll', schedule, { signal, capture: true, passive: true });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', schedule, { signal, passive: true });
+    if (typeof ResizeObserver === 'function') {
+      this.positionObserver = new ResizeObserver(schedule);
+      for (const node of new Set([this.surface.root, this.host, this.host.parentElement, document.body])) {
+        if (node) this.positionObserver.observe(node);
+      }
+    }
+    if (document.fonts) {
+      document.fonts.addEventListener('loadingdone', schedule, { signal });
+      document.fonts.ready.then(schedule);
+    }
+  }
+
+  stopPositioning() {
+    if (this.positionFrame) cancelAnimationFrame(this.positionFrame);
+    this.positionFrame = 0;
+    if (this.positionObserver) this.positionObserver.disconnect();
+    this.positionObserver = null;
+    if (this.positionAbortController) this.positionAbortController.abort();
+    this.positionAbortController = null;
+  }
+
+  schedulePosition() {
+    if (!this.opened || this.destroyed || this.positionFrame) return;
+    this.positionFrame = requestAnimationFrame(() => {
+      this.positionFrame = 0;
+      this.positionTabs();
+    });
+  }
+
+  /** Read the actual first line without Surface selection/DOM repair APIs. */
+  positionTabs() {
+    if (!this.opened || this.destroyed || !this.root || !this.surface.root.isConnected) return;
+    const source = this.surface.root;
+    const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let firstTop = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const range = document.createRange();
+      if (node.nodeType === Node.TEXT_NODE && node.length) {
+        range.setStart(node, 0);
+        range.setEnd(node, 1);
+      } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
+        // Native contenteditable can represent the first empty line as a
+        // block containing BR, before any text node. Do not skip that line.
+        range.selectNode(node);
+      } else if (node.nodeType === Node.ELEMENT_NODE && /^(DIV|P)$/.test(node.tagName)
+          && !node.textContent && !node.querySelector('br')) {
+        const rect = node.getBoundingClientRect();
+        if (rect.height > 0) { firstTop = rect.top + (parseFloat(getComputedStyle(node).paddingTop) || 0); break; }
+        continue;
+      } else continue;
+      const rect = Array.from(range.getClientRects()).find(r => r.height > 0);
+      if (rect) { firstTop = rect.top; break; }
+    }
+    if (firstTop === null) firstTop = source.getBoundingClientRect().top + (parseFloat(getComputedStyle(source).paddingTop) || 0);
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const top = Math.max(1.5 * rem, firstTop - this.root.getBoundingClientRect().top - 2.5 * rem);
+    const value = `${top}px`;
+    if (this.root.style.getPropertyValue('--te-alt-panel-padding-top') !== value) {
+      this.root.style.setProperty('--te-alt-panel-padding-top', value);
+    }
+  }
+
   chromeControl() {
     const chrome = this.editor.chrome;
     return chrome && chrome.root ? chrome.root.querySelector('[data-control="alternatives"]') : null;
@@ -394,6 +469,7 @@ class TeAlternativesPanel {
       control.setAttribute('aria-expanded', 'true');
       control.setAttribute('aria-controls', this.root.id);
     }
+    this.startPositioning();
     this.render();
     if (options.focus !== false) this.focusLine(this.activeLineIndex());
     return true;
@@ -408,6 +484,7 @@ class TeAlternativesPanel {
     this.finishLive();
     this.commitFocused();
     this.opened = false;
+    this.stopPositioning();
     this.root.hidden = true;
     this.host.classList.remove('te-alt-open');
     const control = this.chromeControl();
@@ -664,6 +741,7 @@ class TeAlternativesPanel {
   }
 
   render() {
+    this.positionTabs();
     this.renderCount += 1;
     for (const kind of TE_ALT_KINDS) {
       const on = kind === this.tab;
@@ -1496,6 +1574,7 @@ class TeAlternativesPanel {
     }
     this.destroyed = true;
     this.opened = false;
+    this.stopPositioning();
     if (this.frame) cancelAnimationFrame(this.frame);
     if (this.retargetFrame) cancelAnimationFrame(this.retargetFrame);
     this.frame = 0;
