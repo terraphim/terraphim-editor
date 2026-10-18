@@ -278,6 +278,14 @@ class WriteOnChrome {
     root.append(counter, corners, this.buildShortcutReference(listen));
     this.mount.appendChild(root);
 
+    // Escape can return focus to a chrome button. Keep its history keys in
+    // this editor instead of allowing a host's normal Markdown Undo route.
+    listen(root, 'keydown', (e) => {
+      if (e.defaultPrevented || !(e.target instanceof Element) || !e.target.closest('button')) return;
+      this.editor.surface?.onKeyDown(e);
+      if (e.defaultPrevented) e.stopPropagation();
+    });
+
     // The tools toggle, from anywhere inside the editor (the surface, a
     // toolbar button, the preview). Exactly Ctrl+Shift+L: Shift is matched
     // as teConfigShortcutMatches does, so Ctrl+L stays the link shortcut.
