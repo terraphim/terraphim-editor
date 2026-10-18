@@ -480,3 +480,34 @@ fn test_deleting_ghosted_text_then_undo_restores_the_ghost() {
         })()"##,
     );
 }
+
+/// R-5.3: text-exact inverse edits are not necessarily annotation-exact.
+/// Uses the real public editing surface and Rust session, not native UI input.
+#[wasm_bindgen_test]
+fn test_partial_ghost_typing_burst_and_tail_delete_undo_restore_exact_source() {
+    setup();
+    problems(
+        r##"(() => {
+      const failures = [];
+      for (const mode of ['burst', 'tail']) {
+        teGh.open('Risk needs mitigation.\n');
+        const ed = teGh.ed(), s = teGh.s();
+        ed.ghosts.ghost(0, 4);
+        const before = ed.documentApi().save_document();
+        if (mode === 'burst') {
+          s.replaceRange(1, 4, 'i', {source:'typing'});
+          for (const c of 'sk-long') s.replaceRange(s.getText().indexOf(' needs'), s.getText().indexOf(' needs'), c, {source:'typing'});
+        } else s.replaceRange(3, 4, '', {source:'delete'});
+        const after = ed.documentApi().save_document();
+        if (!s.undo()) failures.push(mode + ': undo refused');
+        if (ed.documentApi().save_document() !== before) failures.push(mode + ': undo lost Ghost extent');
+        if (!s.redo()) failures.push(mode + ': redo refused');
+        if (ed.documentApi().save_document() !== after) failures.push(mode + ': redo changed source');
+        const reopened = ed.documentApi().save_document();
+        teGh.open(reopened);
+        if (ed.documentApi().save_document() !== reopened) failures.push(mode + ': reopen changed source');
+      }
+      return failures.join('; ');
+    })()"##,
+    );
+}

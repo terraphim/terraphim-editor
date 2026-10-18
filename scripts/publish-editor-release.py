@@ -263,9 +263,14 @@ def anonymous_download(url, destination):
     return destination.read_bytes()
 
 
-def publish(repo, tag, files, source):
+def publish(repo, tag, files, source, clipboard_evidence=None):
     if repo != REPOSITORY:
         raise ValueError("Invalid GitHub repository")
+    if clipboard_evidence is None or not files:
+        raise ValueError('Fresh actual Chrome/Firefox clipboard admission is required before publication')
+    clipboard = load_module('trusted_clipboard_release', 'scripts/qualify-trusted-clipboard.py')
+    import os
+    clipboard.verify_admission(clipboard_evidence, files[0].parent, source, clipboard.context(os.environ))
     repository = api(f"repos/{repo}")
     if repository.get("private") is not False or repository.get("full_name", "").lower() != repo.lower():
         raise ValueError("Publication requires the exact public GitHub repository")
@@ -409,7 +414,7 @@ def main():
     build = sub.add_parser('package'); build.add_argument('--tag', required=True); build.add_argument('--stage', type=Path, required=True); build.add_argument('--output', type=Path, required=True)
     test = sub.add_parser('qualify'); test.add_argument('--tag', required=True); test.add_argument('--folder', type=Path, required=True); test.add_argument('--evidence', type=Path, required=True)
     verify = sub.add_parser('verify'); verify.add_argument('--tag', required=True); verify.add_argument('--folder', type=Path, required=True)
-    release = sub.add_parser('publish'); release.add_argument('--tag', required=True); release.add_argument('--folder', type=Path, required=True); release.add_argument('--receipt', type=Path, required=True)
+    release = sub.add_parser('publish'); release.add_argument('--tag', required=True); release.add_argument('--folder', type=Path, required=True); release.add_argument('--receipt', type=Path, required=True); release.add_argument('--clipboard-evidence', type=Path, required=True)
     args = parser.parse_args()
     if args.command == 'admit':
         print(admit_source(args.tag))
@@ -429,7 +434,7 @@ def main():
             for path in files:
                 (snapshot / path.name).write_bytes(path.read_bytes())
             source, snapshots = verify_package(snapshot, args.tag)
-            result = publish(REPOSITORY, args.tag, snapshots, source)
+            result = publish(REPOSITORY, args.tag, snapshots, source, args.clipboard_evidence)
         args.receipt.parent.mkdir(parents=True, exist_ok=True)
         with args.receipt.open('x') as output:
             output.write(json.dumps(result, indent=2) + '\n')

@@ -176,7 +176,7 @@
     _load(op, payload) {
       return this._transition(async epoch => {
         const coordinator = this.options.roleCoordinator;
-        if (!coordinator?.prepare || !coordinator?.commit || !coordinator?.discard || coordinator.commit.constructor?.name === 'AsyncFunction') throw error('invalid_input', 'Role coordinator requires a synchronous atomic commit');
+        if (!coordinator?.prepare || !coordinator?.commit || !coordinator?.discard || (coordinator.commit.constructor?.name === 'AsyncFunction' && !coordinator.allowAsyncCommit)) throw error('invalid_input', 'Role coordinator requires an atomic commit');
         const previous = { generation: this.generation, hasRole: this.hasRole, checkpoint: this.checkpoint };
         let mainToken; let activated = false; let committed = false;
         try {
@@ -187,9 +187,14 @@
           mainToken = await coordinator.prepare(candidate.thesaurusText); this._latest(epoch);
           await this._command('activate_role', { token: candidate.token, nextGeneration: String(BigInt(this.generation) + 1n) }, {}, true);
           activated = true; this._latest(epoch);
-          // Commit must check its opaque token synchronously against the main role.
+          // Standalone commits remain synchronous. A native resource authority
+          // explicitly opts in to an acknowledged commit; its opaque token still
+          // validates the current role atomically before native publication.
           const commitResult = coordinator.commit(mainToken);
-          if (commitResult && typeof commitResult.then === 'function') throw error('invalid_input', 'Role coordinator commit must be synchronous');
+          if (commitResult && typeof commitResult.then === 'function') {
+            if (!coordinator.allowAsyncCommit) throw error('invalid_input', 'Role coordinator commit must be synchronous');
+            await commitResult;
+          }
           committed = true; this.hasRole = true; this.checkpoint = null; this._latest(epoch);
         } catch (reason) {
           if (mainToken !== undefined) { try { await coordinator.discard(mainToken); } catch (_) {} }

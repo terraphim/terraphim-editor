@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Actual Worker RoleGraph qualification</title>
+<link rel="stylesheet" href="terraphim-editor.min.css">
+<div id="host" style="height:400px"></div>
+<pre id="result" role="status">Running local WASM, Worker and IndexedDB checks…</pre>
+<script src="terraphim-editor.min.js"></script>
+<script type="module">
+const checks = [];
+const check = (name, condition) => { if (!condition) throw new Error(name); checks.push(name); };
+const failCode = async (name, operation, code) => {
+  try { await operation(); } catch (error) { check(name, error.code === code); return; }
+  throw new Error(name + ': accepted');
+};
+const namespace = 'qualification-' + crypto.randomUUID();
+let editor;
+try {
+  editor = await TeraphimEditor.create(document.getElementById('host'), {
+    loadShoelace: false,
+    value: 'alpha beta alpha beta',
+    config: {fileSystemAccess:false, autosaveDelay:0},
+  });
+  const graph = editor.rolegraph;
+  await graph.ready;
+  await editor.markdownEditor.graphRoleSync;
+  await failCode('no role refuses indexing', () => graph.indexDocuments([{id:'x',title:'x',body:'alpha beta'}]), 'role_required');
+  const role = JSON.stringify({name:'real browser qualification',data:{
+    alpha:{id:4294967295,nterm:'alpha'},beta:{id:1,nterm:'beta'},
+  }});
+  await graph.loadRole(role);
+  const snapshot = JSON.parse(editor.bindings.kg_role_snapshot_json());
+  check('main KG agrees with worker generation', snapshot.generation === graph.generation);
+  check('main KG has actual role', JSON.parse(snapshot.thesaurusText).name === 'real browser qualification');
+  await graph.indexDocuments([{id:'a',title:'document a',body:'alpha beta alpha alpha beta'}]);
+  const before = await graph.command('stats');
+  const query = await graph.query('alpha');
+  check('real graph query returns results', JSON.stringify(query).includes('document a') || JSON.stringify(query).includes('"a"'));
+  const edges = await graph.command('edges');
+  check('large edge identity crosses JS exactly', JSON.stringify(edges).includes('18446744069414584321'));
+  await graph.indexDocuments([{id:'a',title:'document a',body:'alpha beta alpha alpha beta'}]);
+  check('reindex stats remain identical', JSON.stringify(await graph.command('stats')) === JSON.stringify(before));
+  const serialized = await graph.exportSnapshot();
+  check('export includes original source corpus', serialized.includes('alpha beta alpha alpha beta'));
+  await failCode('corrupt snapshot refused', () => graph.importSnapshot('not JSON'), 'invalid_snapshot');
+  check('bad snapshot keeps generation', JSON.parse(editor.bindings.kg_role_snapshot_json()).generation === graph.generation);
+  await failCode('durable storage requires opt-in', () => graph.saveCheckpoint(), 'storage_failed');
+  graph.setPersistence({enabled:true,namespace});
+  await graph.saveCheckpoint();
+  await graph.removeDocument('a');
+  await graph.restoreCheckpoint();
+  check('real IndexedDB restores source corpus', (await graph.exportSnapshot()).includes('alpha beta alpha alpha beta'));
+  check('restore publishes actual main KG', JSON.parse(editor.bindings.kg_role_snapshot_json()).generation === graph.generation);
+  // Fault injection aborts a REAL transaction; no storage or graph engine mock.
+  const storage = graph.storage;
+  const previousCheckpoint = await storage.load();
+  const database = await storage._open();
+  const transaction = database.transaction.bind(database);
+  database.transaction = (...args) => {
+    const tx = transaction(...args);
+    if (args[1] === 'readwrite') queueMicrotask(() => tx.abort());
+    return tx;
+  };
+  await failCode('aborted durable write reports failure', () => graph.saveCheckpoint(), 'storage_failed');
+  database.transaction = transaction;
+  check('aborted overwrite preserves previous checkpoint exactly', (await storage.load()) === previousCheckpoint);
+  // A sandboxed opaque origin produces a real browser IndexedDB denial.
+  const deniedCode = await new Promise((resolve,reject) => {
+    const frame=document.createElement('iframe');
+    frame.sandbox='allow-scripts';
+    const nonce=crypto.randomUUID();
+    const timer=setTimeout(()=>{cleanup();reject(Error('storage denial timeout'));},5000);
+    const receive=({source,data})=>{if(source===frame.contentWindow && data?.nonce===nonce){cleanup();resolve(data.code);}};
+    const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',receive);frame.remove();};
+    window.addEventListener('message',receive);
+    frame.srcdoc=`<script src="${new URL('./terraphim-editor.min.js',location.href).href}"><\/script><script>
+      (async()=>{let code;try{const s=new TeRoleGraphStorage({enabled:true,namespace:'denied'});await s.load();code='accepted';}catch(e){code=e.code||e.name;}parent.postMessage({nonce:${JSON.stringify(nonce)},code},'*');})();
+      <\/script>`;
+    document.body.append(frame);
+  });
+  check('actual IndexedDB denial is typed', deniedCode==='storage_failed');
+  await graph.attachDocument({id:'attached',indexSource:'markdown'});
+  editor.setValue('beta alpha beta');
+  await new Promise(resolve => setTimeout(resolve, 250));
+  check('attached source is original Markdown', (await graph.exportSnapshot()).includes('beta alpha beta'));
+  graph.detachDocument();
+  const counts = await graph.command('stats');
+  await graph.saveCheckpoint();
+  const checkpointGeneration=graph.generation;
+  graph.options.queryTimeout=100;
+  graph.worker.terminate(); // real Worker loss, not a messaging double
+  await failCode('terminated Worker watchdog reports failure',()=>graph.command('stats'),'timeout');
+  await graph.lifecycle;
+  check('real Worker recovery uses saved checkpoint', graph.state==='ready' && graph.generation===checkpointGeneration &&
+    (await graph.query('alpha')).some(document=>document.id==='attached'));
+  check('Worker recovery preserves main-role association',JSON.parse(editor.bindings.kg_role_snapshot_json()).generation===graph.generation);
+  const beforeRawBad=graph.generation;
+  try {editor.bindings.kg_load_thesaurus('not JSON');} catch (_) {}
+  check('invalid raw main load preserves graph association',graph.generation===beforeRawBad && graph.state==='ready');
+  editor.bindings.kg_load_thesaurus(role);
+  check('raw main load immediately invalidates old graph results',graph.state==='syncing');
+  await graph.lifecycle;
+  check('raw main load synchronizes actual graph',JSON.parse(editor.bindings.kg_role_snapshot_json()).generation===graph.generation &&
+    (await graph.command('stats')).document_count===0);
+  editor.bindings.kg_clear_thesaurus();
+  check('raw main clear immediately invalidates old graph results',graph.state==='syncing');
+  await graph.lifecycle;
+  check('raw main clear synchronizes actual graph',JSON.parse(editor.bindings.kg_role_snapshot_json()).generation===graph.generation && !graph.hasRole);
+  await failCode('raw main clear refuses graph query',()=>graph.query('alpha'),'role_required');
+  editor.destroy();
+  check('destroy terminates graph without touching opted-in storage', graph.state === 'destroyed');
+  editor=await TeraphimEditor.create(document.getElementById('host'),{
+    loadShoelace:false,value:'alpha beta',config:{fileSystemAccess:false,autosaveDelay:0},
+  });
+  const lazyGraph=editor.rolegraph;
+  await lazyGraph.ready;
+  // Intentionally do NOT await the initial editor graphRoleSync: load supersedes it.
+  await lazyGraph.loadRole(role);
+  await lazyGraph.attachDocument({id:'lazy-attached',indexSource:'markdown'});
+  check('lazy load then attachment waits on current lifecycle',
+    (await lazyGraph.query('alpha')).some(document=>document.id==='lazy-attached'));
+  editor.destroy();
+  window.deliveryResult = {ok:true,checks,counts,userAgent:navigator.userAgent};
+} catch (error) {
+  window.deliveryResult = {ok:false,checks,error:String(error),code:error.code || null,userAgent:navigator.userAgent};
+} finally {
+  if (editor) editor.destroy();
+  // Delete only this run's randomly generated qualification database.
+  indexedDB.deleteDatabase('te-rolegraph:' + namespace);
+  document.getElementById('result').textContent = JSON.stringify(window.deliveryResult,null,2);
+}
+</script>
+</html>

@@ -232,3 +232,123 @@ async fn test_tabs_one_line_quiet_count_and_video_layout() {
     .await;
     assert_eq!(result, "");
 }
+
+#[wasm_bindgen_test]
+async fn test_embedded_header_tracks_tabs_without_rebuilding_pending_input() {
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    install_alt_panel_helpers();
+    let fixture = js_string_literal(&provenance_fixture());
+    js_eval(&format!(
+        r##"(() => {{
+          const header = document.createElement('header');
+          header.id = 'te-public-embedding-header';
+          const title = document.createElement('h1'); title.textContent = 'Public host heading';
+          const paragraph = document.createElement('p'); paragraph.textContent = 'Host content before the embedded editor.';
+          header.append(title, paragraph);
+          document.body.insertBefore(header, document.getElementById('app'));
+          const ed = window.__teEditor, s = ed.surface;
+          ed.openDocument({fixture}); ed.chrome.setMode('write-on');
+          s.focus(); s.setSelectionOffsets(12, 12); teTest.control('alternatives').click();
+          window.__teHeaderPanel = teAlt.P(); window.__teHeaderState = {{}};
+          return 0;
+        }})()"##
+    ));
+    let first = run_steps(&[r##"
+      const P = window.__teHeaderPanel;
+      const line = s.rangeForOffsets(0, 4).getClientRects()[0];
+      const tb = P.tablist.getBoundingClientRect();
+      if (!(tb.bottom <= line.top && line.top - tb.top < 64)) out.push('tabs not just above the first line: tabs ' + JSON.stringify([tb.top, tb.bottom]) + ' line ' + line.top);
+      window.__teHeaderState.headerDraft = P.lineInputs().find(input => !input.readOnly && !input.classList.contains('te-alt-input--new'));
+      if (!window.__teHeaderState.headerDraft) return 'missing editable alternative';
+      window.__teHeaderState.headerDraft.focus(); window.__teHeaderState.headerDraft.value = 'public pending alternative';
+      window.__teHeaderState.headerDraft.dispatchEvent(new Event('input', { bubbles: true }));
+      window.__teHeaderState.headerBody = s.getText(); window.__teHeaderState.headerHistory = s.history.length; window.__teHeaderState.headerRenders = P.renderCount;
+      const paragraph = document.createElement('p');
+      paragraph.textContent = 'More real host content changes the editor position while its draft remains open.';
+      document.getElementById('te-public-embedding-header').appendChild(paragraph);
+    "##]).await;
+    let resized = wait_until(|| js_number(r##"Number((() => {
+      const P = window.__teHeaderPanel, s = window.__teEditor.surface, range = document.createRange();
+      const text = document.createTreeWalker(s.root, NodeFilter.SHOW_TEXT).nextNode();
+      if (!text || !P.root) return false;
+      range.setStart(text, 0); range.setEnd(text, Math.min(1, text.length));
+      const line = range.getClientRects()[0], tabs = P.tablist.getBoundingClientRect();
+      return !!line && tabs.bottom <= line.top && line.top - tabs.top < 64;
+    })())"##) == 1.0).await;
+    let second = run_steps(&[r##"
+      const P = window.__teHeaderPanel;
+      if (document.activeElement !== window.__teHeaderState.headerDraft || window.__teHeaderState.headerDraft.value !== 'public pending alternative') out.push('header resize lost pending input/focus');
+      if (P.renderCount !== window.__teHeaderState.headerRenders) out.push('geometry rebuilt panel inputs');
+      if (s.getText() !== window.__teHeaderState.headerBody || s.history.length !== window.__teHeaderState.headerHistory) out.push('geometry changed document/history');
+      window.__teHeaderState.headerRoot = P.root; window.__teHeaderState.headerStyle = window.__teHeaderState.headerRoot.getAttribute('style');
+      // Queue a real position update, then destroy before its frame executes.
+      if (typeof P.schedulePosition === 'function') P.schedulePosition();
+      window.__teHeaderState.headerDrafts = P.destroy();
+      document.getElementById('te-public-embedding-header').appendChild(document.createElement('p')).textContent = 'Host changes after teardown.';
+    "##]).await;
+    // Negative lifecycle check: allow native resize notifications and frames.
+    sleep(40).await;
+    let last = run_steps(&[r##"
+      const P = window.__teHeaderPanel;
+      if (window.__teHeaderState.headerRoot.isConnected || window.__teHeaderState.headerRoot.getAttribute('style') !== window.__teHeaderState.headerStyle) out.push('destroyed geometry observer wrote panel');
+      if (P.positionFrame || P.positionObserver || P.positionAbortController) out.push('position lifecycle retained work');
+      if (!window.__teHeaderState.headerDrafts.some(d => d.value === 'public pending alternative')) out.push('teardown lost pending draft');
+      document.getElementById('te-public-embedding-header').remove();
+    "##]).await;
+    assert_eq!(first, "");
+    assert!(resized, "actual header resize did not realign the tabs");
+    assert_eq!(second, "");
+    assert_eq!(last, "");
+}
+
+#[wasm_bindgen_test]
+async fn test_first_visual_blank_line_geometry_does_not_repair_raw_dom() {
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    install_alt_panel_helpers();
+    js_eval(
+        r##"(() => {
+      const ed = window.__teEditor, s = ed.surface;
+      const header = document.createElement('header'); header.id = 'te-blank-line-header';
+      const title = document.createElement('h1'); title.textContent = 'Public embedding heading';
+      header.appendChild(title); document.body.insertBefore(header, document.getElementById('app'));
+      s.setText('\nRisk'); ed.chrome.setMode('write-on');
+      ed.altPanel.open({ start: 1, end: 5, kind: 'word' }, { focus: false });
+      window.__teBlankPanel = ed.altPanel;
+      return 0;
+    })()"##,
+    );
+    let setup_settled = wait_until(|| js_number("Number(!window.__teEditor.headings.frame && window.__teEditor.headings.headings.length === 0)") == 1.0).await;
+    let first = run_steps(&[r##"
+      const P = window.__teBlankPanel, range = document.createRange();
+      const text = document.createTreeWalker(s.root, NodeFilter.SHOW_TEXT).nextNode();
+      range.setStart(text, 0); range.setEnd(text, 1);
+      const line = range.getClientRects()[0], tabs = P.tablist.getBoundingClientRect();
+      if (!line || !(tabs.bottom <= line.top && line.top - tabs.top < 64)) out.push('leading newline first line alignment');
+      // Real pending contenteditable shape for the same body, without input
+      // dispatch or a model operation. Geometry must not canonicalize it.
+      const empty = document.createElement('div'); empty.appendChild(document.createElement('br'));
+      const paragraph = document.createElement('div'); paragraph.textContent = 'Risk';
+      s.root.replaceChildren(empty, paragraph);
+      window.__teBlankBefore = { html: s.root.innerHTML, body: s.getText(), history: s.history.length, renders: s.renderCount };
+      const more = document.createElement('p'); more.textContent = 'More real host content repositions the same raw editor DOM.';
+      document.getElementById('te-blank-line-header').appendChild(more);
+    "##]).await;
+    let positioned = wait_until(|| js_number(r##"Number((() => {
+      const P = window.__teBlankPanel, s = window.__teEditor.surface, br = s.root.querySelector('div > br');
+      if (!br) return false;
+      const range = document.createRange(); range.selectNode(br);
+      const line = Array.from(range.getClientRects()).find(r => r.height > 0), tabs = P.tablist.getBoundingClientRect();
+      return !!line && tabs.bottom <= line.top && line.top - tabs.top < 64;
+    })())"##) == 1.0).await;
+    let last = run_steps(&[r##"
+      const P = window.__teBlankPanel, before = window.__teBlankBefore;
+      if (s.root.innerHTML !== before.html || s.getText() !== before.body || s.history.length !== before.history || s.renderCount !== before.renders) out.push('geometry repaired raw DOM or changed document/history');
+      P.destroy(); document.getElementById('te-blank-line-header').remove();
+    "##]).await;
+    assert!(setup_settled, "initial real heading setup did not settle");
+    assert_eq!(first, "");
+    assert!(positioned, "tabs skipped the first empty visual paragraph");
+    assert_eq!(last, "");
+}

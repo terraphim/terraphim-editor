@@ -79,7 +79,7 @@ async fn bench_typing_latency_logged_paths() {
         now() - t0
     };
 
-    bench_load_surface(&doc_text);
+    bench_load_surface(&doc_text).await;
     sleep(0).await;
     let renders_before = js_number("teTest.surface().renderCount");
     let preview_renders_before = preview_render_count();

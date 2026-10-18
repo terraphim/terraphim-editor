@@ -147,6 +147,10 @@ class EditorReleaseTests(unittest.TestCase):
     def test_wrong_publication_repository_is_refused_before_any_api_call(self):
         with self.assertRaises(ValueError): M.publish('other/repository', self.tag, [], self.source)
 
+    def test_correct_repository_cannot_publish_without_fresh_clipboard_admission(self):
+        with self.assertRaisesRegex(ValueError, 'clipboard'):
+            M.publish(M.REPOSITORY, self.tag, [], self.source)
+
     def test_checksum_manifest_rejects_malformed_duplicate_names(self):
         valid = 'a' * 64 + '  editor-candidate.tar.gz\n'
         self.assertEqual(M.checksums(valid), {'editor-candidate.tar.gz': 'a' * 64})
@@ -221,7 +225,10 @@ class WorkflowTests(unittest.TestCase):
         build, publish = workflow.split('  publish:', 1)
         self.assertNotIn('contents: write', build)
         self.assertNotIn('GH_TOKEN:', build)
-        self.assertIn('needs: candidate', publish)
+        self.assertIn('needs: [candidate, trusted-clipboard]', publish)
+        self.assertIn('artifact-ids: ${{ needs.trusted-clipboard.outputs.artifact-id }}', publish)
+        self.assertIn('--clipboard-evidence', publish)
+        self.assertIn('runs-on: macos-15', build)
         self.assertIn('environment: editor-release', publish)
         self.assertIn('artifact-ids: ${{ needs.candidate.outputs.artifact-id }}', publish)
         self.assertLess(publish.index('publish-editor-release.py verify'), publish.index('GH_TOKEN:'))

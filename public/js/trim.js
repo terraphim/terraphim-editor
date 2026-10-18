@@ -334,6 +334,7 @@ class TeLabTrim {
    * Returns the status, or null.
    */
   select(level, opts = {}) {
+    if(this.editor.authority)return this.authoritySelect(level,opts);
     if (this.destroyed) return null;
     if (level === 'original') {
       this.reset();
@@ -374,6 +375,7 @@ class TeLabTrim {
 
   /** Recompute the status and the preview (one bridge call when the plan is fresh). */
   refresh() {
+    if(this.editor.authority)return this.authorityRefresh();
     const api = this.api();
     if (!api || !this.trimming) return null;
     let status;
@@ -501,6 +503,7 @@ class TeLabTrim {
     if (!this.plan || !this.plan.cuts.some((c) => c.id === cutId)) return null;
     this.kept.add(cutId);
     const status = this.refresh();
+    if(status&&typeof status.then==='function')return status.then(value=>{if(value)this.announce(`Kept. ${value.cardText}`);return value;});
     if (status) this.announce(`Kept. ${status.cardText}`);
     return status;
   }
@@ -577,6 +580,7 @@ class TeLabTrim {
    * edits, or null when refused (stale plan, nothing to cut, no API).
    */
   makeCuts() {
+    if(this.editor.authority)return this.authorityMakeCuts();
     if (this.destroyed || this.stale || !this.trimming) return null;
     const api = this.api();
     if (!api) return null;
@@ -609,6 +613,7 @@ class TeLabTrim {
 
   /** Protected Done records independent persistent ghosts before retiring UI. */
   done() {
+    if(this.editor.authority)return this.authorityDone();
     if (!this.cardOpen) return;
     let committed;
     try {
@@ -626,6 +631,64 @@ class TeLabTrim {
     this.reset();
     this.announce(committed ? 'Done: cuts saved as ghosts. Undo restores them.' : 'Done: no cuts to save.');
     return true;
+  }
+
+  async authoritySelect(level,opts={}) {
+    if(this.destroyed)return null;
+    if(level==='original'){this.reset();return null;}
+    this.cancelPendingReset();this.stale=false;this.level=level;
+    const status=await this.authorityRefresh();
+    if(!status)return null;
+    this.cardOpen=true;this.lab.close(false);this.sync();
+    if(opts.focusCard)this.card.focus({preventScroll:true});
+    return status;
+  }
+
+  async authorityRefresh() {
+    if(this.destroyed||!this.trimming)return null;
+    const request=this.authorityRefreshSequence=(this.authorityRefreshSequence||0)+1;
+    const level=this.level;
+    try {
+      await this.editor.authoritySettled();
+      const body=this.surface.getText(),generation=this.editor.authority.roleGeneration;
+      const raw=await this.editor.authority.query('kg_role_snapshot_json',[]);
+      const role=typeof raw==='string'?JSON.parse(raw):raw;
+      if(!role?.loaded||!role.protectionReady)throw new Error(role?.protectionError||'Load a protected role before Trim');
+      if(!this.plan||this.planText!==body||this.plan.roleGeneration!==generation) {
+        this.plan=await this.editor.authority.query('trim_plan_json',[]);this.planText=body;this.kept.clear();
+      }
+      const status=await this.editor.authority.query('trim_status',[level,JSON.stringify(Array.from(this.kept))]);
+      if(request!==this.authorityRefreshSequence||this.level!==level||this.surface.getText()!==body||this.editor.authority.roleGeneration!==generation)return null;
+      if(!status||status.kgProtected!==true||status.roleGeneration!==generation)throw new Error('Trim role generation changed');
+      this.status=status;this.active=Array.from(status.active||[]);
+      if(this.walkIndex>=this.active.length)this.walkIndex=this.active.length-1;
+      this.draw();this.renderCard();this.emit('te:trim',{level,status});return status;
+    } catch(error){if(request===this.authorityRefreshSequence)this.refuse(error);return null;}
+  }
+
+  async authorityMakeCuts() {
+    if(this.destroyed||this.stale||!this.trimming)return null;
+    try {
+      await this.editor.authoritySettled();
+      const body=this.surface.getText(),generation=this.editor.authority.roleGeneration,level=this.level;
+      const made=await this.editor.authority.query('trim_make_cuts',[level,JSON.stringify(Array.from(this.kept))]);
+      if(this.surface.getText()!==body||this.editor.authority.roleGeneration!==generation)throw new Error('Trim snapshot changed before cuts');
+      const edits=Array.from(made.edits||[]);if(!edits.length)return null;
+      this.applying=true;let applied;
+      try {applied=await this.surface.replaceRanges(edits,{source:'trim'});}finally{this.applying=false;}
+      if(this.surface.getText()!==made.text)throw new Error('Accepted cuts differ from native plan');
+      const words=this.status?.cardText||'';this.reset(false);this.announce(`Cuts made. ${words}`);this.surface.focus();this.emit('te:trim-cut',{level,edits:applied});return applied;
+    } catch(error){this.refuse(error);return null;}
+  }
+
+  async authorityDone() {
+    if(!this.cardOpen)return false;
+    try {
+      await this.editor.authoritySettled();
+      const committed=await this.editor.commitTrimGhosts(this.level,Array.from(this.kept));
+      this.stopWalk(false);this.plan=null;this.planText=null;this.reset();
+      this.announce(committed?'Done: cuts saved as ghosts. Undo restores them.':'Done: no cuts to save.');return true;
+    } catch(error){this.announce(`Done refused: ${error?.error||error?.message||error}`);return false;}
   }
 
   /** Back to Original: no preview, no kept set, no card. */

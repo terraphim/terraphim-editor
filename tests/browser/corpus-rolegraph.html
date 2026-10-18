@@ -1,0 +1,230 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Local engineering corpus qualification</title>
+<pre id="result">Running local corpus qualification</pre>
+<script src="./terraphim-editor.min.js"></script>
+<script type="module">
+// Source/terms/graph metadata stay in memory. Only aggregate evidence escapes.
+const result = {ok:false, completed:false, profiles:[]};
+let regression = false;
+const assert = (value, message) => { if (!value) { if(!regression)result.failedInvariant=message; throw Error(message); } };
+const bytes = text => new TextEncoder().encode(text).length;
+const decimal = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
+const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+const normal = value => Array.isArray(value) ? value.map(normal) : value && typeof value === 'object'
+  ? Object.fromEntries(Object.keys(value).sort().map(key => [key, normal(value[key])])) : value;
+const equal = (a,b) => same(normal(a), normal(b));
+// Upstream graph JSON contains HashSet-backed arrays without an order promise.
+const unordered = value => Array.isArray(value) ? value.map(unordered).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  : value && typeof value==='object' ? Object.fromEntries(Object.keys(value).sort().map(k=>[k,unordered(value[k])])) : value;
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+let client, observer;
+const longTasks = [];
+let memory = [];
+async function pages(op, count) {
+  const entries = [];
+  for (let offset=0; offset<count; offset+=100) {
+    const page = await client.command(op, {offset, limit:100});
+    assert(page.length === Math.min(100,count-offset), 'Graph page count');
+    entries.push(...page);
+  }
+  assert(new Set(entries.map(e=>e.id)).size === count, 'Graph identities');
+  return entries;
+}
+function oracle(node, edges) {
+  const candidates = new Map();
+  for (const id of node?.connected_with || []) {
+    const edge = edges.get(id);
+    assert(edge, 'Missing edge');
+    for (const [id,rank] of Object.entries(edge.doc_hash)) {
+      const candidate = candidates.get(id) || {rank:0n, edges:[]};
+      candidate.rank += BigInt(node.rank) + BigInt(edge.rank) + BigInt(rank);
+      candidate.edges.push(edge); candidates.set(id,candidate);
+    }
+  }
+  return candidates;
+}
+function validateQuery(docs, candidates, nodeId, canonical, corpus) {
+  const ranks = Array.from(candidates.values(), d=>d.rank).sort((a,b)=>a>b?-1:a<b?1:0);
+  assert(docs.length === Math.min(10,candidates.size), 'Query count');
+  const seen = new Set();
+  for (const [i,doc] of docs.entries()) {
+    assert(doc && same(Object.keys(doc).sort(), ['id','matched_edges','nodes','rank','tags']), 'Query DTO fields');
+    assert(corpus.has(doc.id) && !seen.has(doc.id), 'Query corpus identity'); seen.add(doc.id);
+    const expected = candidates.get(doc.id);
+    assert(decimal(doc.rank) && expected && BigInt(doc.rank) === expected.rank && expected.rank === ranks[i], 'Exact query rank');
+    assert(same(doc.nodes,[nodeId]) && same(doc.tags,[canonical]), 'Query concept semantics');
+    const edges = expected.edges.toSorted((a,b)=>BigInt(a.id)<BigInt(b.id)?-1:1);
+    assert(equal(doc.matched_edges,edges), 'Exact matched edge metadata');
+  }
+}
+try {
+  const inputs = await (await fetch('./local-corpus.json')).json();
+  result.longTaskSupported = PerformanceObserver.supportedEntryTypes?.includes('longtask') === true;
+  if (result.longTaskSupported) {
+    observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e=>({start:e.startTime,duration:e.duration}))));
+    observer.observe({type:'longtask', buffered:false});
+  }
+  for (const input of inputs) {
+    memory = [];
+    const evidence = {profile:input.label, documents:input.documents.length};
+    result.profiles.push(evidence);
+    const corpus = new Map(input.documents.map(d=>[d.id,d]));
+    const terms = Object.entries(JSON.parse(input.thesaurusText).data);
+    const conceptIds = new Set(terms.map(([,e])=>String(e.id)));
+    const sourceBytes = input.documents.reduce((n,d)=>n+bytes(d.title+d.body),0);
+    assert(corpus.size === input.documents.length && corpus.size>0 && corpus.size<=1000, 'Corpus count');
+    assert(sourceBytes+input.documents.reduce((n,d)=>n+bytes(d.id),0)<=16*1024**2 && input.documents.every(d=>bytes(d.title+d.body)<=1024**2), 'Native byte bounds');
+    let association;
+    const coordinator = {
+      prepare: async text => JSON.parse(text),
+      commit: token => { association = token; },
+      discard: () => {}
+    }; // Test host's atomic role association; not an embedded main-editor test.
+    client = new TeRoleGraphClient({assetBase:new URL('./',location.href).href,
+      roleCoordinator:coordinator, workerUrl:new URL('./performance-rolegraph-worker.js',location.href).href,
+      workerFactory:(url,options)=>{
+        const worker = new Worker(url,options);
+        worker.addEventListener('message',event=>{
+          if(event.data?.type==='performance_memory') {memory.push(event.data);event.stopImmediatePropagation();}
+        });
+        return worker;
+      }});
+    let start = performance.now(); await client.ready;
+    evidence.startupMs = performance.now()-start;
+    const windowStart = performance.now();
+    start = performance.now();
+    await client.syncRole({generation:'1',thesaurusText:input.thesaurusText,name:input.label});
+    evidence.prepareActivateMs = performance.now()-start;
+    start = performance.now();
+    const indexed = await client.indexDocuments(input.documents);
+    evidence.indexMs = performance.now()-start;
+    assert(indexed.indexed===corpus.size && client.generation==='1', 'Index count/generation');
+    const stats = await client.command('stats');
+    evidence.stats = stats;
+    assert(stats.document_count===corpus.size && stats.node_count<=conceptIds.size, 'Graph statistics');
+    const nodes = await pages('nodes',stats.node_count);
+    const edgeList = await pages('edges',stats.edge_count);
+    const nodeMap = new Map(nodes.map(n=>[n.id,n]));
+    const edges = new Map(edgeList.map(e=>[e.id,e]));
+    for(const node of nodes) assert(decimal(node.id) && conceptIds.has(node.id) && decimal(node.rank)
+      && node.connected_with.every(id=>decimal(id)&&edges.has(id)), 'Node DTO');
+    for(const edge of edgeList) {
+      assert(decimal(edge.id) && decimal(edge.rank), 'Edge DTO');
+      for(const [id,rank] of Object.entries(edge.doc_hash)) assert(corpus.has(id)&&decimal(rank), 'Edge corpus identity');
+    }
+    let matchedDocs = 0;
+    for(const doc of input.documents) {
+      // Whole-document match exceeds the 4 KiB query bound for some sources.
+      // Overlap preserves terms crossing chunk boundaries; no source inference.
+      const matches = [];
+      const overlap = Math.max(...terms.map(([term])=>term.length));
+      assert(overlap<512,'Term chunk overlap bound');
+      for(let offset=0;offset<doc.body.length;offset+=512) {
+        matches.push(...await client.command('match',{text:doc.body.slice(offset,offset+512+overlap)}));
+      }
+      assert(matches.every(id=>conceptIds.has(id)), 'Source match membership');
+      if(matches.length)matchedDocs++;
+      const retrieved = await client.command('document',{id:doc.id});
+      assert(retrieved.sourceAvailable && equal(retrieved.source,doc), 'Exact clean source retrieval');
+      assert(retrieved.nodes.every(id=>decimal(id)&&conceptIds.has(id)), 'Indexed source concept membership');
+    }
+    assert(matchedDocs>0 && nodes.length>0, 'Zero source concept coverage');
+    const graphDocuments = new Set(edgeList.flatMap(edge=>Object.keys(edge.doc_hash)));
+    assert(graphDocuments.size>0,'Zero graph edge document coverage');
+    evidence.coverage = {matchedDocuments:matchedDocs, graphEdgeDocuments:graphDocuments.size,
+      totalDocuments:corpus.size, graphConcepts:nodes.length, thesaurusConcepts:conceptIds.size};
+    const plans=[];
+    for(const [term,entry] of terms) {
+      const matches = await client.command('match',{text:term});
+      assert(matches.length===1 && matches[0]===String(entry.id), 'Thesaurus term matching invariant');
+      plans.push({term,id:String(entry.id),canonical:entry.nterm,candidates:oracle(nodeMap.get(String(entry.id)),edges)});
+    }
+    const samples=[];
+    const baseline=[];
+    let nonempty=0;
+    let regressionChecks=0;
+    // Every provided term queried at least once, followed by >=100 timed calls.
+    const warmup=10, measured=Math.max(100,plans.length);
+    for(let i=0;i<warmup+measured;i++) {
+      const plan=plans[i%plans.length];
+      start=performance.now();
+      const docs=await client.query(plan.term,{limit:10,offset:0});
+      const elapsed=performance.now()-start; // Oracle is strictly outside timer.
+      validateQuery(docs,plan.candidates,plan.id,plan.canonical,corpus);
+      if(docs.length && regressionChecks===0) {
+        const mutations=[
+          value=>{value[0].id='outside-corpus';},
+          value=>{value[0].rank=Number(value[0].rank);},
+          value=>{value[0].rank=String(BigInt(value[0].rank)+1n);},
+          value=>{value[0].nodes=['999999'];},
+          value=>{value[0].tags=['invalid'];},
+          value=>{value[0].matched_edges=[];}
+        ];
+        if(docs.length>1)mutations.push(value=>{value[1]=value[0];});
+        for(const mutate of mutations) {
+          const altered=structuredClone(docs);mutate(altered);
+          let rejected=false;regression=true;
+          try {validateQuery(altered,plan.candidates,plan.id,plan.canonical,corpus);}catch(_){rejected=true;}
+          finally {regression=false;}
+          assert(rejected,'Oracle mutation not rejected');regressionChecks++;
+        }
+      }
+      if(docs.length)nonempty++;
+      if(i>=warmup)samples.push(elapsed);
+    }
+    assert(nonempty>0,'Zero graph query coverage');
+    evidence.oracleRegressionChecks=regressionChecks;
+    for(const plan of plans) baseline.push(await client.query(plan.term,{limit:10,offset:0}));
+    evidence.queryPlan={terms:plans.length,warmup,measured,mode:'graph',limit:10,timing:'client command to response; oracle excluded'};
+    evidence.nonemptyTermQueries=baseline.filter(d=>d.length>0).length;
+    evidence.emptyTermQueries=baseline.filter(d=>d.length===0).length;
+    samples.sort((a,b)=>a-b);
+    evidence.queryP95Ms=samples[Math.ceil(samples.length*.95)-1];
+    const snapshotText=await client.exportSnapshot();
+    const snapshot=JSON.parse(snapshotText);
+    evidence.snapshotBytes=bytes(snapshotText);
+    assert(evidence.snapshotBytes<=16*1024**2 && snapshot.version===1 && snapshot.generation==='1'
+      && snapshot.revision===client.revision, 'Snapshot bounds/version/generation/revision');
+    assert(snapshot.documents.length===corpus.size && new Set(snapshot.documents.map(d=>d.id)).size===corpus.size
+      && snapshot.documents.every(d=>equal(corpus.get(d.id),d)), 'Snapshot source equality');
+    assert(snapshot.documents.reduce((n,d)=>n+bytes(d.title+d.body),0)===sourceBytes,'Snapshot clean source bytes');
+    await client.importSnapshot(snapshotText);
+    assert(client.generation==='2' && client.revision==='0', 'Import activation generation/revision');
+    const semanticTerms = data => Object.fromEntries(Object.entries(data).map(([key,e])=>[key,{id:String(e.id),nterm:e.nterm}]));
+    assert(equal(semanticTerms(association.data),semanticTerms(JSON.parse(input.thesaurusText).data)), 'Imported role association');
+    assert(equal(await client.command('stats'),stats), 'Round-trip statistics');
+    assert(equal(await pages('nodes',stats.node_count),nodes) && equal(await pages('edges',stats.edge_count),edgeList), 'Round-trip graph metadata');
+    for(const [i,plan] of plans.entries()) {
+      const docs=await client.query(plan.term,{limit:10,offset:0});
+      validateQuery(docs,plan.candidates,plan.id,plan.canonical,corpus);
+      // Equal-rank result order is not a stable API promise.
+      assert(equal(docs.toSorted((a,b)=>a.id.localeCompare(b.id)),baseline[i].toSorted((a,b)=>a.id.localeCompare(b.id))), 'Round-trip query identities/ranks');
+    }
+    const second=JSON.parse(await client.exportSnapshot());
+    assert(equal(second.documents,snapshot.documents) && same(unordered(JSON.parse(second.graphJson)),unordered(JSON.parse(snapshot.graphJson))), 'Round-trip snapshot equality');
+    evidence.roundTrip=true; evidence.sourceBytes=sourceBytes;
+    const windowEnd=performance.now(); await delay(100);
+    const completed=memory.filter(m=>m.operationCompleted);
+    assert(completed.length===client.sequence && completed.every((m,i)=>m.requestId===String(i+1)), 'Worker dispatch memory coverage');
+    evidence.memoryDispatches=completed.length;
+    evidence.peakWorkerWasmBytes=Math.max(...memory.map(m=>m.highwater));
+    evidence.graphWindowLongTasks=result.longTaskSupported?longTasks.filter(t=>t.start<windowEnd&&t.start+t.duration>windowStart).length:null;
+    evidence.budgets={query:evidence.queryP95Ms<=100,workerWasm:evidence.peakWorkerWasmBytes<=128*1024**2,
+      mainThread:result.longTaskSupported?evidence.graphWindowLongTasks===0:null};
+    assert(evidence.budgets.query&&evidence.budgets.workerWasm, 'Query/Worker budget');
+    if(result.longTaskSupported)assert(evidence.budgets.mainThread,'Main-thread long task budget');
+    client.destroy(); client=null;
+  }
+  result.completed=true;result.ok=true;
+  result.embeddingStatus='graph client and test host atomic association only; main editor association not qualified';
+} catch(error) {
+  // Only locally authored invariant messages are safe; upstream messages are not.
+  result.errorType=error.name;
+  result.failureStage='browser corpus invariants or production dispatch';
+} finally {
+  if(client)client.destroy();if(observer)observer.disconnect();
+  window.corpusResult=result;
+  document.querySelector('#result').textContent=JSON.stringify(result,null,2);
+}
+</script>

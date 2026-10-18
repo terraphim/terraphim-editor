@@ -177,6 +177,7 @@ class BlocksView {
     // Drafts kept after an outside change overlapped an open block editor.
     this.drafts = [];
     this.nextDraftId = 1;
+    this.authorityDraftId = 0;
     // Blocks was showing when Write_On mode, or hiding the plain-mode tools,
     // took over.
     this.resumeAfterWriteOn = false;
@@ -660,6 +661,7 @@ class BlocksView {
    * the caret goes to the edited position or the start of the focused block.
    */
   setView(view, { persist = true, focus = true } = {}) {
+    if(this.authorityEnabled())return this.authoritySetView(view,{persist,focus});
     if (this.destroyed) return;
     const next = view === 'blocks' ? 'blocks' : 'text';
     if (next === 'blocks' && this.writeOnActive()) return;
@@ -674,7 +676,7 @@ class BlocksView {
       this.container.hidden = false;
       this.setCurrent(this.focusIndex, focus);
     } else {
-      let target = null;
+      let target = this.authorityViewSelection || null;
       if (this.editing) {
         target = this.commitEdit({ rerender: false });
       }
@@ -745,18 +747,50 @@ class BlocksView {
     }
   }
 
+  /** Map an acknowledged native replay without mirroring model/decorations twice.
+   * The following aggregate surface notification performs the final render.
+   */
+  replayAcceptedHistory(applied, source) {
+    const changes = applied.filter(({edit}) => edit && !edit.ghost &&
+      (edit.move || edit.deletedLength > 0 || edit.insertedText.length > 0))
+      .map(({edit,text}) => ({edit,text,source}));
+    if (!changes.length) return;
+    if (this.authorityApplying) {
+      this.authorityChanges.push(...changes);
+      this.dirty = true;
+      return;
+    }
+    const hadFocus = this.container.contains(document.activeElement);
+    let overlapped = null;
+    for (const change of changes) {
+      const edit = change.edit, whole = BlocksView.replacesWhole(change);
+      if (this.drafts.length) this.mapDrafts(edit, whole);
+      if (this.editing && !this.mapEditing(edit, whole)) {
+        overlapped = this.editing;
+        this.editing = null;
+        this.keepDraft(overlapped, edit, whole);
+      }
+    }
+    if (this.drafts.length) this.renderDrafts();
+    this.acceptedHistoryPresentation = {hadFocus,overlapped,source};
+  }
+
   onSurfaceChange(change) {
+    if(this.authorityApplying){this.authorityChanges.push(change);this.dirty=true;return;}
+    const acceptedHistory = !change?.edit && change?.source === this.acceptedHistoryPresentation?.source
+      ? this.acceptedHistoryPresentation : null;
+    this.acceptedHistoryPresentation = null;
     const edit = change && change.edit;
     const whole = !!edit && BlocksView.replacesWhole(change);
     // Kept drafts follow every change, in either view.
     if (edit && this.drafts.length) this.mapDrafts(edit, whole);
-    let overlapped = null;
+    let overlapped = acceptedHistory?.overlapped || null;
     if (this.editing && edit && !this.mapEditing(edit, whole)) {
       overlapped = this.editing;
       this.editing = null;
     }
-    const hadFocus = this.container.contains(document.activeElement);
-    if (overlapped) this.keepDraft(overlapped, edit, whole);
+    const hadFocus = !!acceptedHistory?.hadFocus || this.container.contains(document.activeElement);
+    if (overlapped && !acceptedHistory?.overlapped) this.keepDraft(overlapped, edit, whole);
     else if (edit && this.drafts.length) this.renderDrafts();
     if (!this.isActive()) return;
     if (this.applying) {
@@ -863,6 +897,7 @@ class BlocksView {
       // the whole document was replaced.
       anchor: whole ? null : edit ? edit.start : ed.start,
       reason: reason || (whole ? 'replaced' : 'changed'),
+      ...(ed.authorityKey ? {authorityKey:ed.authorityKey,authoritySequence:ed.authoritySequence} : {}),
     };
     this.drafts.push(draft);
     this.renderDrafts();
@@ -974,6 +1009,7 @@ class BlocksView {
    * 'replace' or 'insert', or null when there is no such draft.
    */
   applyDraft(id) {
+    if(this.authorityEnabled())return this.authorityApplyDraft(id);
     const draft = this.drafts.find((d) => d.id === id);
     if (!draft) return null;
     if (this.editing) this.commitEdit({ rerender: false });
@@ -1008,6 +1044,9 @@ class BlocksView {
 
   /** Drop a kept draft. */
   discardDraft(id) {
+    const draft=this.drafts.find(d=>d.id===id);
+    if(this.authorityEnabled()&&draft?.authorityApplying)return this.authorityRun(()=>this.discardDraft(id));
+    if(this.editor.authority&&draft?.authoritySequence)this.editor.authorityClearDraft(draft.authorityKey,draft.authoritySequence);
     const before = this.drafts.length;
     this.drafts = this.drafts.filter((d) => d.id !== id);
     this.renderDrafts();
@@ -1020,6 +1059,12 @@ class BlocksView {
    * one blank line. Returns the offset where the paragraph starts.
    */
   insertParagraph(at, value) {
+    if(this.editor.authority&&!this.editor.authorityPainting) {
+      const text=this.surface.getText(),before=text.slice(0,at),after=text.slice(at);
+      const pre=at===0||before.endsWith("\n\n")?"":before.endsWith("\n")?"\n":"\n\n";
+      const post=after.trim()===""||after.startsWith("\n\n")?"":after.startsWith("\n")?"\n":"\n\n";
+      return this.surface.replaceRange(at,at,pre+value+post,{source:"blocks",selectStart:at+pre.length}).then(()=>at+pre.length);
+    }
     const text = this.surface.getText();
     const before = text.slice(0, at);
     const after = text.slice(at);
@@ -1035,6 +1080,7 @@ class BlocksView {
 
   /** Open the inline editor for block `index`. Returns the textarea. */
   editBlock(index) {
+    if(this.authorityEnabled())return this.authorityOpenEditor(index);
     if (!this.isActive()) return null;
     if (this.editing) this.commitEdit();
     const cards = this.cards();
@@ -1059,6 +1105,7 @@ class BlocksView {
     this.editing = { ...edit, card, textarea: ta, selection: null };
     this.listen(ta, 'input', () => {
       ta.rows = Math.max(2, ta.value.split('\n').length + 1);
+      this.reportAuthorityDraft(this.editing);
     });
     // While the textarea has focus its selection is the document selection,
     // which an outside surface edit moves; remember it so render() can put
@@ -1087,6 +1134,7 @@ class BlocksView {
    * when nothing was being edited.
    */
   commitEdit({ rerender = true, focus } = {}) {
+    if(this.authorityEnabled())return this.commitEditAuthority({rerender,focus});
     const edit = this.editing;
     if (!edit) return null;
     this.editing = null;
@@ -1142,6 +1190,10 @@ class BlocksView {
    * the kept draft, or null when nothing was typed.
    */
   cancelEdit() {
+    if(this.authorityEnabled()&&this.editing?.authorityCommit) {
+      const pending=this.editing.authorityCommit;
+      return this.authorityRun(async()=>{await pending;return this.cancelEdit();});
+    }
     const edit = this.editing;
     if (!edit) return null;
     this.editing = null;
@@ -1153,6 +1205,7 @@ class BlocksView {
 
   /** Open an editor for a new paragraph after block `index` (-1: at the top). */
   insertBlockAfter(index) {
+    if(this.authorityEnabled())return this.authorityOpenEditor(index,true);
     if (!this.isActive()) return null;
     if (this.editing) this.commitEdit();
     const blocks = this.model.blocks;
@@ -1176,6 +1229,7 @@ class BlocksView {
 
   /** Delete block `index` together with one adjoining separator. */
   deleteBlock(index) {
+    if(this.authorityEnabled())return this.authorityDeleteBlock(index);
     const blocks = this.model.blocks;
     const b = blocks[index];
     if (!b) return;
@@ -1240,6 +1294,7 @@ class BlocksView {
    * puts focus on that action button of the moved card instead of the card.
    */
   moveBlock(index, direction, { focusAction = null } = {}) {
+    if(this.authorityEnabled())return this.authorityMoveBlock(index,direction,{focusAction});
     if (this.destroyed) return false;
     const dir = direction === 'up' || direction < 0 ? -1 : 1;
     let i = index;
@@ -1360,6 +1415,7 @@ class BlocksView {
   }
 
   apply(from, to, insert) {
+    if(this.authorityEnabled())return this.authorityApply(from,to,insert);
     if (this.editing) this.commitEdit({ rerender: false });
     this.applying = true;
     try {
@@ -1371,6 +1427,7 @@ class BlocksView {
   }
 
   undo() {
+    if(this.authorityEnabled())return this.authorityHistory(false);
     if (this.editing) this.commitEdit({ rerender: false });
     this.applying = true;
     let done;
@@ -1384,6 +1441,7 @@ class BlocksView {
   }
 
   redo() {
+    if(this.authorityEnabled())return this.authorityHistory(true);
     if (this.editing) this.commitEdit({ rerender: false });
     this.applying = true;
     let done;
@@ -1491,6 +1549,219 @@ class BlocksView {
       default:
         break;
     }
+  }
+
+  authorityEnabled() { return !!this.editor.authority && !this.authorityLocal; }
+
+  authorityRun(work) {
+    this.authorityPendingActions=(this.authorityPendingActions||0)+1;
+    const pending=(this.authorityQueue||Promise.resolve()).then(()=> {
+      if(this.destroyed)throw new Error('Blocks view disposed; draft retained');
+      return work();
+    }).finally(()=>{this.authorityPendingActions-=1;});
+    this.authorityQueue=pending.catch(error=>this.showNotice(`Block not accepted: ${error?.message||error}`));
+    return pending;
+  }
+
+  reportAuthorityDraft(edit) {
+    if(!this.editor.authority||!edit)return;
+    if(!edit.authorityKey)edit.authorityKey=`block:${++this.authorityDraftId}`;
+    const value=window.EditorSurface.normaliseNewlines(edit.textarea.value);
+    if(edit.isNew ? !value.trim() : value===edit.original) {
+      if(edit.authoritySequence)this.editor.authorityClearDraft(edit.authorityKey,edit.authoritySequence);
+      return;
+    }
+    edit.authoritySequence=this.editor.authorityReportDraft(edit.authorityKey,{
+      value,originalText:edit.original,anchor:edit.start,index:edit.index,isNew:edit.isNew,
+    });
+  }
+
+  async settledAuthority() {
+    if(!this.editor.authority)return;
+    let queued;
+    do {
+      queued=this.authorityQueue;
+      if(queued)await queued;
+      await this.flushAuthorityEditor();
+    } while(queued!==this.authorityQueue);
+  }
+
+  async flushAuthorityEditor(options={}) {
+    let selection=null;
+    while(this.editing)selection=await this.commitEditAuthority(options);
+    return selection;
+  }
+
+  async authorityMutation(work) {
+    const expectedBody=this.surface.getText();
+    // Earlier accepted operations must map their events normally; only this
+    // mutation's tentative events are deferred until its real native finish.
+    await this.editor.authorityQueue;
+    if(expectedBody!==this.surface.getText())throw new Error("Document changed before block operation; draft retained");
+    this.authorityChanges=[];this.authorityApplying=true;this.applying=true;
+    let accepted=false;
+    try {const result=await work();accepted=true;return result;}
+    finally {
+      const changes=this.authorityChanges;this.authorityChanges=null;
+      this.authorityApplying=false;this.applying=false;
+      if(accepted)for(const change of changes) {
+        const edit=change?.edit;
+        if(edit&&this.drafts.length)this.mapDrafts(edit,BlocksView.replacesWhole(change));
+      }
+    }
+  }
+
+  commitEditAuthority({rerender=true,focus}={}) {
+    const edit=this.editing;
+    if(!edit)return Promise.resolve(null);
+    if(edit.authorityCommit)return edit.authorityCommit;
+    const run=async()=> {
+      const ta=edit.textarea,value=window.EditorSurface.normaliseNewlines(ta.value);
+      const selStart=Math.min(ta.selectionStart,value.length),selEnd=Math.min(ta.selectionEnd,value.length);
+      let base=edit.start;
+      this.reportAuthorityDraft(edit);
+      const sequence=edit.authoritySequence;
+      try {
+        await this.authorityMutation(async()=> {
+          const text=this.surface.getText();
+          const stale=edit.isNew?edit.start>text.length:text.slice(edit.start,edit.start+edit.original.length)!==edit.original;
+          if(stale)throw new Error('Block changed before this operation; your draft is retained');
+          if(edit.isNew) {
+            if(value.trim())base=await this.insertParagraph(edit.start,value);
+          } else if(value!==edit.original) {
+            const diff=window.EditorSurface.diff(edit.original,value),from=edit.start+diff.start;
+            await this.surface.replaceRange(from,from+diff.deletedLength,diff.insertedText,{source:'blocks',selectStart:edit.start+selStart,selectEnd:edit.start+selEnd});
+          }
+        });
+        if(sequence)this.editor.authorityClearDraft(edit.authorityKey,sequence);
+        if(this.editing===edit) {
+          if(window.EditorSurface.normaliseNewlines(ta.value)===value)this.editing=null;
+          else {edit.original=value;edit.start=base;edit.isNew=false;this.reportAuthorityDraft(edit);}
+        }
+        if(rerender&&this.isActive()) {
+          const hadFocus=focus===undefined?this.container.contains(document.activeElement)||document.activeElement===document.body:focus;
+          this.render(false);this.focusIndex=this.blockIndexAt(base+selStart);
+          if(!this.editing)this.setCurrent(this.focusIndex,hadFocus);
+        }
+        return {start:base+selStart,end:base+selEnd};
+      } catch(error) {this.showNotice(`Block not accepted: ${error?.message||error}`);throw error;}
+      finally {delete edit.authorityCommit;}
+    };
+    edit.authorityCommit=run();
+    // Event callers may ignore the Promise; direct callers still get rejection.
+    edit.authorityCommit.catch(()=>{});
+    return edit.authorityCommit;
+  }
+
+  authoritySetView(view,options) {
+    const next=view==='blocks'?'blocks':'text';
+    if(next===this.view)return Promise.resolve();
+    return this.authorityRun(async()=> {
+      const target=await this.flushAuthorityEditor({rerender:false,focus:false});
+      this.authorityViewSelection=target;this.authorityLocal=true;
+      try{return this.setView(view,options);}finally{this.authorityLocal=false;this.authorityViewSelection=null;}
+    });
+  }
+
+  authorityOpenEditor(index,insert=false) {
+    return this.authorityRun(async()=> {
+      await this.flushAuthorityEditor();
+      this.authorityLocal=true;
+      try{return insert?this.insertBlockAfter(index):this.editBlock(index);}finally{this.authorityLocal=false;}
+    });
+  }
+
+  authorityApplyDraft(id) {
+    return this.authorityRun(async()=> {
+      await this.flushAuthorityEditor({rerender:false});
+      const draft=this.drafts.find(d=>d.id===id);if(!draft)return null;
+      const target=this.draftTarget(draft);let caret;
+      draft.authorityApplying=true;
+      try {await this.authorityMutation(async()=> {
+        if(target.mode==='replace') {
+          const b=target.block,diff=window.EditorSurface.diff(b.text,draft.value);caret=b.start;
+          if(diff)await this.surface.replaceRange(b.start+diff.start,b.start+diff.start+diff.deletedLength,diff.insertedText,{source:'blocks',selectStart:b.start});
+        } else caret=await this.insertParagraph(target.at,draft.value);
+      });} finally {draft.authorityApplying=false;}
+      this.drafts=this.drafts.filter(d=>d!==draft);
+      if(draft.authoritySequence)this.editor.authorityClearDraft(draft.authorityKey,draft.authoritySequence);
+      this.renderDrafts();
+      if(this.isActive()){this.render(false);this.setCurrent(this.blockIndexAt(caret),true);}
+      return target.mode;
+    });
+  }
+
+  authorityDeleteBlock(index) {
+    return this.authorityRun(async()=> {
+      await this.flushAuthorityEditor({rerender:false});
+      this.model=BlocksView.parse(this.surface.getText());
+      const blocks=this.model.blocks,b=blocks[index];if(!b)return;
+      let from=b.start,to=b.end+b.sep.length;
+      if(index===blocks.length-1){to=b.end;if(index>0)from=blocks[index-1].end;}
+      await this.authorityMutation(()=>this.surface.replaceRange(from,to,'',{source:'blocks',selectStart:from}));
+      this.render(false);this.setCurrent(Math.max(0,Math.min(index,this.model.blocks.length-1)),true);
+    });
+  }
+
+  authorityApply(from,to,insert) {
+    return this.authorityRun(async()=> {
+      await this.flushAuthorityEditor({rerender:false});
+      await this.authorityMutation(()=>this.surface.replaceRange(from,to,insert,{source:'blocks',selectStart:from}));
+      this.render(false);
+    });
+  }
+
+  authorityHistory(redo) {
+    return this.authorityRun(async()=> {
+      await this.flushAuthorityEditor({rerender:false});
+      const done=await this.authorityMutation(()=>redo?this.surface.redo():this.surface.undo());
+      if(done)this.afterHistory();return done;
+    });
+  }
+
+  authorityMoveBlock(index,direction,{focusAction=null}={}) {
+    return this.authorityRun(async()=> {
+      const dir=direction==='up'||direction<0?-1:1;let at=index;
+      if(this.editing) {
+        const ed=this.editing,before=BlocksView.parse(this.surface.getText()).blocks.length;
+        await this.flushAuthorityEditor({rerender:false});
+        const after=BlocksView.parse(this.surface.getText()).blocks.length;
+        if(ed.index<at||(ed.isNew&&ed.index<=at))at+=after-before;
+      }
+      const body=this.surface.getText();this.model=BlocksView.parse(body);
+      const plan=BlocksView.planMove(this.model,body,at,dir);
+      if(!plan)return false;
+      const refused=plan.error||this.fixUpBlocker(plan);
+      if(refused){this.showNotice(refused);return false;}
+      const [start,end,to]=plan.range,lo=Math.min(start,to),hi=Math.max(end,to),piece=body.slice(start,end);
+      const inserted=to>end?body.slice(end,to)+piece:piece+body.slice(to,start);
+      let intermediate=body.slice(0,lo)+inserted+body.slice(hi);
+      const operations=[{kind:'move',body:intermediate,start:lo,deletedText:body.slice(lo,hi),insertedText:inserted,move:{start,end,to}}];
+      for(const fix of plan.fixes) {
+        const diff=window.EditorSurface.diff(fix.from,fix.to),position=fix.at+diff.start;
+        const deleted=intermediate.slice(position,position+diff.deletedLength);
+        if(deleted!==fix.from.slice(diff.start,diff.start+diff.deletedLength))throw new Error('Block separator changed before move');
+        intermediate=intermediate.slice(0,position)+diff.insertedText+intermediate.slice(position+diff.deletedLength);
+        operations.push({kind:'edit',body:intermediate,start:position,deletedText:deleted,insertedText:diff.insertedText});
+      }
+      if(intermediate!==plan.text)throw new Error('Block move plan does not match its exact edits');
+      await this.authorityMutation(()=>this.editor.authorityEnqueue(()=>this.editor.authorityTransaction({route:'history',expectedBody:body,targetBody:plan.text,operationsJson:JSON.stringify(operations)},()=> {
+        this.editor.paintMoveRange({},...plan.range);
+        for(const fix of plan.fixes) {
+          const diff=window.EditorSurface.diff(fix.from,fix.to);
+          this.surface.replaceRange(fix.at+diff.start,fix.at+diff.start+diff.deletedLength,diff.insertedText,{source:'blocks',selectStart:plan.movedStart});
+        }
+        if(operations.length>1&&!this.surface.squashHistory(operations.length,'move'))throw new Error('Block move history could not be grouped');
+        this.surface.setSelectionOffsets(plan.movedStart,plan.movedStart);
+      })));
+      this.showNotice(null);
+      if(this.isActive()) {
+        this.render(false);const target=at+dir,card=this.cards()[target];
+        const button=focusAction&&card?card.querySelector(`.te-block-action[data-action="${focusAction}"]`):null;
+        this.setCurrent(target,!(button&&!button.hidden));if(button&&!button.hidden)button.focus();
+      }
+      return true;
+    });
   }
 
   // ---------------------------------------------------------------------

@@ -324,45 +324,59 @@ fn test_write_on_mode_persists_per_document() {
     let result = js_string(
         r##"(() => {
           const out = [];
-          const reinit = (config, source) => {
+          const input = () => document.querySelector('.markdown-input');
+          const reinit = (config, text) => {
             window.__teEditor.destroy();
-            // Stage a host's replacement after teardown. Teardown may render
-            // the old canonical surface while removing its decoration layers.
-            if (source !== undefined) document.querySelector('.markdown-input').textContent = source;
+            // Install the next document only after the live surface has
+            // cleared its decorations; teardown may re-render its old text.
+            if (text !== undefined) input().textContent = text;
             const ed = new MarkdownEditor(config || window.EditorConfig);
             ed.initialize();
             window.__teEditor = ed;
             return ed;
           };
           const counter = () => document.querySelector('.te-chrome-counter');
-          const docA = 'Document A\n\nsome words';
-          const docB = 'Document B\n\nother words';
-          let ed = reinit(undefined, docA);
-          if (ed.surface.getText() !== docA) out.push('A source not mounted');
+          const docA = '# Document A\n\nsome words';
+          const docB = '## Document B\n\nother words';
+          const checkBody = (text, label) => {
+            if (ed.headings) ed.headings.flush();
+            if (ed.surface.getText() !== text) out.push(label + ' surface text changed');
+            if (input().textContent !== text) out.push(label + ' DOM text changed');
+            if (window.wasmBindings.document_body() !== text) out.push(label + ' model body changed');
+          };
+          let ed = reinit(null, docA);
+          checkBody(docA, 'A initial');
           if (ed.chrome.isWriteOn()) out.push('A started in write-on');
           const keyA = ed.chrome.storageKey();
           if (!keyA.startsWith(window.WRITE_ON_STORAGE_PREFIX + 'h:')) out.push('hash key ' + keyA);
           counter().click();
+          checkBody(docA, 'A write-on');
           if (localStorage.getItem(keyA) !== '1') out.push('not stored ' + localStorage.getItem(keyA));
           // Same document after a re-init: Write_On is restored.
-          ed = reinit(undefined, docA);
+          ed = reinit(null, docA);
+          checkBody(docA, 'A restored');
           if (!ed.chrome.isWriteOn()) out.push('A not restored after re-init');
           if (document.body.dataset.mode !== 'write-on') out.push('body mode not restored');
           if (ed.chrome.storageKey() !== keyA) out.push('A key changed');
           // Another document is not affected.
-          ed = reinit(undefined, docB);
-          if (ed.surface.getText() !== docB) out.push('B source not mounted');
+          ed = reinit(null, docB);
+          checkBody(docB, 'B initial');
           if (ed.chrome.isWriteOn()) out.push('B inherited write-on');
           if (document.body.dataset.mode !== undefined) out.push('B body mode ' + document.body.dataset.mode);
           if (ed.chrome.storageKey() === keyA) out.push('B shares the A key');
           // Loading a different document re-keys via documentChanged().
           ed.surface.setText(docA);
+          checkBody(docA, 'A loaded');
           ed.chrome.documentChanged();
+          if (ed.chrome.storageKey() !== keyA) out.push('documentChanged changed A key');
+          checkBody(docA, 'A re-keyed');
           if (!ed.chrome.isWriteOn()) out.push('documentChanged did not apply A');
           // Toggling A back to plain is stored too.
           counter().click();
+          checkBody(docA, 'A plain');
           if (localStorage.getItem(keyA) !== '0') out.push('plain not stored');
-          ed = reinit(undefined, docA);
+          ed = reinit(null, docA);
+          checkBody(docA, 'A plain restored');
           if (ed.chrome.isWriteOn()) out.push('A plain not restored');
           // A save key or file name takes precedence over the content hash.
           const named = Object.assign({}, window.EditorConfig, { documentKey: 'notes.md' });
@@ -610,4 +624,123 @@ fn test_plain_mode_has_the_video_palette_and_column() {
         })()"##,
     );
     assert_eq!(result, "");
+}
+
+/// Escape keeps its chrome-button focus contract, while history shortcuts
+/// must still update the real Rust document and authored synonym registry.
+#[wasm_bindgen_test]
+async fn test_chrome_button_history_after_panel_escape() {
+    let _document = fresh_full_editor();
+    sleep(0).await;
+    install_alt_panel_helpers();
+    let setup = js_string(
+        r##"(() => {
+          const ed = window.__teEditor, s = ed.surface;
+          ed.openDocument('Risk needs mitigation.\n', 'chrome-history-owned.md');
+          ed.chrome.setMode('write-on');
+          s.focus(); s.setSelectionOffsets(0, 4);
+          const control = teTest.control('alternatives');
+          control.focus(); control.click();
+          const panel = ed.altPanel;
+          if (!panel.isOpen()) return 'panel not open';
+          const input = teAlt.newInput();
+          input.focus(); input.value = 'Concern';
+          if (!teTest.key(input, 'Enter')) return 'alternative Enter not committed';
+          const id = panel.target.spanId;
+          if (!id || s.getText() !== 'Concern needs mitigation.\n') return 'real alternative not active';
+          teTest.key(document.activeElement, 'Escape');
+          if (panel.isOpen() || document.activeElement !== control) return 'Escape did not retain chrome focus';
+          window.__teChromeHistory = {id, source: ed.saveDocument(), history: JSON.stringify(s.history), index: s.historyIndex};
+          return '';
+        })()"##,
+    );
+    assert_eq!(setup, "");
+    let id = js_string("window.__teChromeHistory.id");
+    let synonyms: Vec<String> =
+        serde_json::from_str(&terraphim_editor::document_synonyms(&id, "Concern")).unwrap();
+    assert_eq!(synonyms, ["risk", "concern"]);
+
+    let undone = js_string(
+        r##"(() => {
+          const ed = window.__teEditor, s = ed.surface;
+          const control = teTest.control('alternatives');
+          if (document.activeElement !== control) return 'chrome lost focus before Undo';
+          if (!teTest.key(control, 'z', {ctrlKey: true})) return 'chrome Ctrl+Z was not consumed';
+          if (s.getText() !== 'Risk needs mitigation.\n') return 'chrome Undo did not restore Risk';
+          if (ed.documentApi().document_body() !== s.getText()) return 'Undo Rust body diverged';
+          if (s.historyIndex !== window.__teChromeHistory.index - 1) return 'Undo history index';
+          return '';
+        })()"##,
+    );
+    assert_eq!(undone, "");
+    assert_eq!(document_body(), "Risk needs mitigation.\n");
+    let removed: Vec<String> =
+        serde_json::from_str(&terraphim_editor::document_synonyms(&id, "Concern")).unwrap();
+    assert!(removed.is_empty());
+
+    let redone = js_string(
+        r##"(() => {
+          const ed = window.__teEditor, s = ed.surface, control = teTest.control('alternatives');
+          const checkRedo = () => {
+            if (s.getText() !== 'Concern needs mitigation.\n') return 'Redo body';
+            if (ed.saveDocument() !== window.__teChromeHistory.source) return 'Redo saved source';
+            if (JSON.stringify(s.history) !== window.__teChromeHistory.history || s.historyIndex !== window.__teChromeHistory.index) return 'Redo history changed';
+            return '';
+          };
+          control.focus();
+          if (!teTest.key(control, 'z', {metaKey: true, shiftKey: true})) return 'chrome Meta+Shift+Z not consumed';
+          let failure = checkRedo(); if (failure) return failure;
+          control.focus();
+          if (!teTest.key(control, 'z', {ctrlKey: true})) return 'second chrome Undo not consumed';
+          control.focus();
+          if (!teTest.key(control, 'y', {ctrlKey: true})) return 'chrome Ctrl+Y not consumed';
+          return checkRedo();
+        })()"##,
+    );
+    assert_eq!(redone, "");
+    let restored: Vec<String> =
+        serde_json::from_str(&terraphim_editor::document_synonyms(&id, "Concern")).unwrap();
+    assert_eq!(restored, ["risk", "concern"]);
+
+    let boundaries = js_string(
+        r##"(() => {
+          const ed = window.__teEditor, s = ed.surface, chrome = ed.chrome;
+          const control = teTest.control('alternatives'), before = ed.saveDocument();
+          const outside = document.createElement('button');
+          const input = document.createElement('input');
+          ed.root.append(outside); chrome.root.append(input);
+          const seen = [];
+          const observe = e => seen.push(e.key);
+          ed.root.addEventListener('keydown', observe);
+          try {
+            outside.focus();
+            if (teTest.key(outside, 'z', {ctrlKey: true})) return 'outside host button intercepted';
+            input.focus(); input.value = 'Editable chrome input';
+            if (teTest.key(input, 'z', {ctrlKey: true})) return 'editable input Undo intercepted';
+            control.focus();
+            if (teTest.key(control, 'a', {ctrlKey: true})) return 'unhandled chrome shortcut consumed';
+            if (teTest.key(control, 'z', {ctrlKey: true, altKey: true})) return 'Alt-modified shortcut consumed';
+            if (teTest.key(control, 'z', {ctrlKey: true, isComposing: true})) return 'composition shortcut consumed';
+            if (ed.saveDocument() !== before) return 'unhandled key changed source';
+            if (seen.length !== 5) return 'unhandled events did not bubble';
+            const count = seen.length;
+            if (!teTest.key(control, 'z', {ctrlKey: true})) return 'owned chrome Undo not consumed';
+            if (seen.length !== count) return 'consumed history key escaped to host';
+            control.focus(); teTest.key(control, 'y', {ctrlKey: true});
+            if (ed.saveDocument() !== before) return 'boundary replay changed source';
+          } finally {
+            ed.root.removeEventListener('keydown', observe);
+            outside.remove(); input.remove();
+          }
+          const oldRoot = chrome.root;
+          ed.destroy();
+          document.body.append(oldRoot);
+          try {
+            control.focus();
+            if (teTest.key(control, 'z', {ctrlKey: true})) return 'destroy retained chrome history listener';
+          } finally { oldRoot.remove(); delete window.__teChromeHistory; }
+          return '';
+        })()"##,
+    );
+    assert_eq!(boundaries, "");
 }

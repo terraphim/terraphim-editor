@@ -67,10 +67,14 @@ async fn test_ctrl_shift_d_toggles_the_panel_shift_exact() {
 async fn test_panel_is_full_height_and_flush_right() {
     let markup = r#"<aside class="te-overflow"></aside>"#;
     let rect = rect_in_viewport(1140.0, 800.0, markup, ".te-overflow").await;
-    assert_eq!(
-        (rect.right, rect.top, rect.height),
-        (1140.0, 0.0, 800.0),
-        "the panel should run top to bottom against the right edge of a 1140x800 window"
+    // Layout engines can return fractional CSS pixels (Firefox reports
+    // 1139.999984741211 here). Preserve the geometry check within 0.01px.
+    assert!(
+        (rect.right - 1140.0).abs() < 0.01
+            && rect.top.abs() < 0.01
+            && (rect.height - 800.0).abs() < 0.01,
+        "the panel should fill the right edge of a 1140x800 window: {:?}",
+        (rect.right, rect.top, rect.height)
     );
 
     let _document = fresh_full_editor();

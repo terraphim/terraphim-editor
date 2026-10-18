@@ -126,13 +126,31 @@ pub async fn bench_run_textarea(
     time_keystrokes_yielding(n).await
 }
 
-/// Load `doc_text` into the editing surface and run the render `setText`
-/// scheduled, so it cannot fire during a later yield and be counted as a
-/// keystroke render.
-pub fn bench_load_surface(doc_text: &str) {
+/// Load the real document and wait for its initial heading decorations.
+/// Setup's scheduled decoration render must settle before either benchmark
+/// captures its baseline; later typing keeps every original render assertion.
+pub async fn bench_load_surface(doc_text: &str) {
     js_eval(&format!(
         "teTest.surface().setText({})",
         js_string_literal(doc_text)
     ));
     flush_preview();
+    assert!(
+        wait_until(|| {
+            js_number(
+                r##"Number((() => {
+                  const ed = window.__teEditor, s = ed.surface, layer = ed.headings;
+                  if (!layer || !layer.active || layer.frame) return false;
+                  const expected = TeHeadingLayer.scan(s.getText());
+                  if (JSON.stringify(layer.headings) !== JSON.stringify(expected)) return false;
+                  const decorations = s.getDecorations();
+                  return expected.every(h =>
+                    decorations.some(d => d.start === h.start && d.end === h.end && d.className === 'te-heading') &&
+                    decorations.some(d => d.start === h.start && d.end === h.markerEnd && d.className === 'te-heading-marker'));
+                })())"##,
+            ) == 1.0
+        })
+        .await,
+        "initial heading decorations did not settle before the benchmark baseline"
+    );
 }

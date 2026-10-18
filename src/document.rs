@@ -49,8 +49,8 @@
 //!   overlapping a live item, is re-attached. Undoing the edit that detached a
 //!   span therefore brings its alternatives back.
 
-use std::cell::RefCell;
-use std::collections::HashSet;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::providers::Suggestion;
@@ -109,6 +109,8 @@ pub struct EditOutcome {
     /// [`DocumentSession::set_aside_notice`]), `None` when nothing is set
     /// aside.
     pub notice: Option<String>,
+    /// Native-issued exact Ghost mapping metadata, absent when Ghosts did not change.
+    pub ghost_edit: Option<GhostEditReference>,
 }
 
 /// One open document: the span model plus, after a malformed open, the raw
@@ -129,6 +131,8 @@ pub struct DocumentSession {
     reserved_ids: HashSet<String>,
     /// Exact receipts issued by this open session; rejects forged replay targets.
     ghost_receipts: HashSet<String>,
+    /// Session-private snapshots; serialized history can only name an issued receipt.
+    text_ghost_receipts: HashMap<String, TextGhostReceipt>,
 }
 
 #[derive(Debug, Clone)]
@@ -518,6 +522,54 @@ impl DocumentSession {
         deleted_len: usize,
         inserted: &str,
     ) -> Result<EditOutcome, EditError> {
+        if self.doc.annotations.ghosts.is_empty() && self.set_aside.ghosts.is_empty() {
+            return self.apply_edit_mapped(start, deleted_len, inserted);
+        }
+        let next = TEXT_GHOST_WATERMARK
+            .with(|n| n.get().checked_add(1))
+            .ok_or(EditError::IdAllocation)?;
+        let before = self.ghost_snapshot();
+        let before_body_hash = crate::host::source_hash(self.body());
+        let end = start
+            .checked_add(deleted_len)
+            .ok_or(EditError::InvalidRange {
+                start,
+                end: usize::MAX,
+            })?;
+        let deleted_hash = utf16_to_byte(self.body(), start)
+            .zip(utf16_to_byte(self.body(), end))
+            .map(|(a, b)| crate::host::source_hash(&self.body()[a..b]));
+        let mut outcome = self.apply_edit_mapped(start, deleted_len, inserted)?;
+        let after = self.ghost_snapshot();
+        if before.live != after.live || before.set_aside != after.set_aside {
+            let receipt = format!("text-ghost-{next}");
+            self.text_ghost_receipts.insert(
+                receipt.clone(),
+                TextGhostReceipt {
+                    before_body_hash,
+                    after_body_hash: crate::host::source_hash(self.body()),
+                    start,
+                    deleted_hash: deleted_hash.expect("successful mapped edit validated range"),
+                    inserted_hash: crate::host::source_hash(inserted),
+                    before,
+                    after,
+                },
+            );
+            TEXT_GHOST_WATERMARK.with(|n| n.set(next));
+            outcome.ghost_edit = Some(GhostEditReference {
+                receipt,
+                undo: false,
+            });
+        }
+        Ok(outcome)
+    }
+
+    fn apply_edit_mapped(
+        &mut self,
+        start: usize,
+        deleted_len: usize,
+        inserted: &str,
+    ) -> Result<EditOutcome, EditError> {
         let end = start
             .checked_add(deleted_len)
             .ok_or(EditError::InvalidRange {
@@ -559,6 +611,7 @@ impl DocumentSession {
             set_aside: self.set_aside.len(),
             warning,
             notice: self.set_aside_notice(),
+            ghost_edit: None,
         })
     }
 
@@ -823,6 +876,35 @@ impl GhostSnapshot {
     }
 }
 
+/// Reference to an actual native text-edit Ghost mapping, not a supplied snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GhostEditReference {
+    /// Opaque name looked up only in the issuing native session.
+    pub receipt: String,
+    /// Whether this operation reverses the original edit.
+    pub undo: bool,
+}
+
+impl GhostEditReference {
+    fn to_json(&self) -> Value {
+        json!({"receipt":self.receipt,"undo":self.undo})
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TextGhostReceipt {
+    before_body_hash: String,
+    after_body_hash: String,
+    start: usize,
+    deleted_hash: String,
+    inserted_hash: String,
+    before: GhostSnapshot,
+    after: GhostSnapshot,
+}
+
+// This watermark is outside DocumentSession::open/reset; old names are never reissued.
+thread_local! { static TEXT_GHOST_WATERMARK: Cell<u64> = const { Cell::new(0) }; }
+
 /// Exact receipt for independent ghost promotion; body is only a guard.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GhostChange {
@@ -976,6 +1058,10 @@ impl DocumentSession {
         {
             return Err("ghost transaction state conflict".into());
         }
+        self.restore_issued_ghost_snapshot(target)
+    }
+
+    fn restore_issued_ghost_snapshot(&mut self, target: &GhostSnapshot) -> Result<(), String> {
         let mut ids = HashSet::new();
         for ghost in target.live.iter().chain(target.set_aside.iter()) {
             if !ids.insert(&ghost.id)
@@ -1068,14 +1154,18 @@ impl EditOutcome {
     /// `{ detached, detachedGhosts, reattached, setAside, warning, notice }`
     /// for JavaScript.
     pub fn to_json(&self) -> Value {
-        json!({
+        let mut value = json!({
             "detached": self.detached,
             "detachedGhosts": self.detached_ghosts,
             "reattached": self.reattached,
             "setAside": self.set_aside,
             "warning": self.warning,
             "notice": self.notice,
-        })
+        });
+        if let Some(reference) = &self.ghost_edit {
+            value["ghostEdit"] = reference.to_json();
+        }
+        value
     }
 }
 
@@ -1829,6 +1919,7 @@ impl DocumentSession {
             set_aside: self.set_aside.len(),
             warning: None,
             notice: self.set_aside_notice(),
+            ghost_edit: None,
         })
     }
 }
@@ -2718,7 +2809,9 @@ struct HistoryTextEdit {
 
 #[derive(Debug, Clone)]
 enum HistoryKind {
-    Edit,
+    Edit {
+        ghost_edit: Option<GhostEditReference>,
+    },
     Ghost {
         change: GhostChange,
         undo: bool,
@@ -2762,6 +2855,14 @@ pub fn parse_history_operations(
             .as_str()
             .ok_or_else(|| history_error("invalid-payload", "history kind is required"))?;
         let fields: &[&str] = match kind {
+            "edit" if value.get("ghostEdit").is_some() => &[
+                "kind",
+                "body",
+                "start",
+                "deletedText",
+                "insertedText",
+                "ghostEdit",
+            ],
             "edit" => &["kind", "body", "start", "deletedText", "insertedText"],
             "ghost" => &["kind", "body", "change", "undo"],
             "alt" => &[
@@ -2814,7 +2915,24 @@ pub fn parse_history_operations(
             })
         };
         let kind = match kind {
-            "edit" => HistoryKind::Edit,
+            "edit" => {
+                let ghost_edit = value
+                    .get("ghostEdit")
+                    .map(|reference| {
+                        history_fields(reference, &["receipt", "undo"])?;
+                        Ok(GhostEditReference {
+                            receipt: history_string(reference, "receipt")?,
+                            undo: reference["undo"].as_bool().ok_or_else(|| {
+                                history_error(
+                                    "invalid-payload",
+                                    "Ghost edit direction must be boolean",
+                                )
+                            })?,
+                        })
+                    })
+                    .transpose()?;
+                HistoryKind::Edit { ghost_edit }
+            }
             "ghost" => {
                 let change = &value["change"];
                 history_fields(change, &["body", "before", "after"])?;
@@ -2908,6 +3026,56 @@ impl HistoryTextEdit {
 }
 
 impl DocumentSession {
+    fn replay_text_ghost_edit(
+        &mut self,
+        edit: &HistoryTextEdit,
+        reference: &GhostEditReference,
+    ) -> Result<(), String> {
+        let issued = self
+            .text_ghost_receipts
+            .get(&reference.receipt)
+            .cloned()
+            .ok_or("unknown or stale text Ghost receipt")?;
+        let (expected, target, body_hash, deleted_hash, inserted_hash) = if reference.undo {
+            (
+                &issued.after,
+                &issued.before,
+                &issued.after_body_hash,
+                &issued.inserted_hash,
+                &issued.deleted_hash,
+            )
+        } else {
+            (
+                &issued.before,
+                &issued.after,
+                &issued.before_body_hash,
+                &issued.deleted_hash,
+                &issued.inserted_hash,
+            )
+        };
+        if self.raw_block.is_some()
+            || crate::host::source_hash(self.body()) != *body_hash
+            || edit.start != issued.start
+            || crate::host::source_hash(&edit.deleted) != *deleted_hash
+            || crate::host::source_hash(&edit.inserted) != *inserted_hash
+            || self.doc.annotations.ghosts != expected.live
+            || self.set_aside.ghosts != expected.set_aside
+        {
+            return Err("text Ghost receipt state or edit conflict".into());
+        }
+        self.apply_edit_mapped(edit.start, utf16_len(&edit.deleted), &edit.inserted)
+            .map_err(|e| e.to_string())?;
+        let target_body_hash = if reference.undo {
+            &issued.before_body_hash
+        } else {
+            &issued.after_body_hash
+        };
+        if crate::host::source_hash(self.body()) != *target_body_hash {
+            return Err("text Ghost target body conflict".into());
+        }
+        self.restore_issued_ghost_snapshot(target)
+    }
+
     /// Simulate the complete ordered group on one clone, publish only after
     /// every metadata/body guard passes. Ghost-free legacy APIs are unchanged.
     pub fn replay_history_group_atomic(
@@ -2939,11 +3107,17 @@ impl DocumentSession {
                 HistoryKind::Ghost { change, undo } => trial
                     .replay_ghost_change(change, *undo)
                     .map_err(model_error)?,
-                HistoryKind::Edit => {
+                HistoryKind::Edit { ghost_edit } => {
                     let e = op.edit.as_ref().expect("decoded edit");
-                    trial
-                        .apply_edit(e.start, utf16_len(&e.deleted), &e.inserted)
-                        .map_err(|e| model_error(e.to_string()))?;
+                    if let Some(reference) = ghost_edit {
+                        trial
+                            .replay_text_ghost_edit(e, reference)
+                            .map_err(model_error)?;
+                    } else {
+                        trial
+                            .apply_edit_mapped(e.start, utf16_len(&e.deleted), &e.inserted)
+                            .map_err(|e| model_error(e.to_string()))?;
+                    }
                 }
                 HistoryKind::Alt { span, target } => {
                     let e = op.edit.as_ref().expect("decoded edit");
@@ -2976,7 +3150,7 @@ impl DocumentSession {
                 HistoryKind::Overflow { before, after } => {
                     let e = op.edit.as_ref().expect("decoded edit");
                     trial
-                        .apply_edit(e.start, utf16_len(&e.deleted), &e.inserted)
+                        .apply_edit_mapped(e.start, utf16_len(&e.deleted), &e.inserted)
                         .map_err(|e| model_error(e.to_string()))?;
                     if !trial
                         .replay_overflow(before, after)
@@ -3012,12 +3186,467 @@ impl DocumentSession {
     }
 }
 
+// The ordinary dispatcher shares the native checkpoint, never a reopened mirror.
+fn action_generation(value: &Value, field: &str) -> Result<String, HistoryTransactionError> {
+    let text = history_string(value, field)?;
+    if text.is_empty()
+        || !text.bytes().all(|b| b.is_ascii_digit())
+        || (text.len() > 1 && text.starts_with('0'))
+    {
+        return Err(history_error(
+            "invalid-payload",
+            "generation must be a canonical decimal string",
+        ));
+    }
+    Ok(text)
+}
+
+fn current_action_role_generation() -> String {
+    let snapshot: Value = serde_json::from_str(&crate::kg::role_snapshot_json())
+        .expect("native role snapshot is JSON");
+    snapshot["generation"]
+        .as_str()
+        .expect("native generation string")
+        .to_owned()
+}
+
+fn action_edit_fields(value: &Value, with_kind: bool) -> Result<(), HistoryTransactionError> {
+    if with_kind {
+        history_fields(
+            value,
+            &[
+                "kind",
+                "start",
+                "deleteUtf16",
+                "insertedRef",
+                "beforeBodyHash",
+                "afterBodyHash",
+            ],
+        )?;
+    } else {
+        history_fields(
+            value,
+            &[
+                "start",
+                "deleteUtf16",
+                "insertedRef",
+                "beforeBodyHash",
+                "afterBodyHash",
+            ],
+        )?;
+    }
+    for field in ["start", "deleteUtf16", "insertedRef"] {
+        history_integer(value, field)?;
+    }
+    for field in ["beforeBodyHash", "afterBodyHash"] {
+        let hash = history_string(value, field)?;
+        if hash.len() != 64
+            || !hash
+                .bytes()
+                .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+        {
+            return Err(history_error(
+                "invalid-payload",
+                "expected lowercase SHA-256",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn action_ref(
+    value: &Value,
+    field: &str,
+    used: &mut [bool],
+) -> Result<(), HistoryTransactionError> {
+    let index = history_integer(value, field)?;
+    let slot = used
+        .get_mut(index)
+        .ok_or_else(|| history_error("invalid-payload", "text reference out of range"))?;
+    if *slot {
+        return Err(history_error("invalid-payload", "text reference reused"));
+    }
+    *slot = true;
+    Ok(())
+}
+
+fn parse_action_metadata(meta: &str, args: &[String]) -> Result<Value, HistoryTransactionError> {
+    history_bytes(meta)?;
+    if args.len() > HISTORY_OPERATION_LIMIT {
+        return Err(history_error("limit", "more than 4096 text arguments"));
+    }
+    let mut bytes = 0usize;
+    for arg in args {
+        history_bytes(arg)?;
+        bytes = bytes
+            .checked_add(arg.len())
+            .ok_or_else(|| history_error("limit", "text budget exhausted"))?;
+        if bytes > HISTORY_JSON_LIMIT {
+            return Err(history_error(
+                "limit",
+                "combined text arguments exceed 16 MiB",
+            ));
+        }
+    }
+    let value: Value = serde_json::from_str(meta)
+        .map_err(|_| history_error("invalid-payload", "invalid action JSON or nesting"))?;
+    let kind = value["kind"]
+        .as_str()
+        .ok_or_else(|| history_error("invalid-payload", "missing action kind"))?;
+    let fields: &[&str] = match kind {
+        "text_edit" => &[
+            "kind",
+            "start",
+            "deleteUtf16",
+            "insertedRef",
+            "beforeBodyHash",
+            "afterBodyHash",
+        ],
+        "text_edits" => &["kind", "edits"],
+        "ghost_range" | "revive_range" | "stash" => &["kind", "start", "end"],
+        "alt_create" => &["kind", "spanKind", "start", "end", "textRef", "source"],
+        "alt_add" => &["kind", "spanId", "textRef", "source"],
+        "alt_edit" => &["kind", "spanId", "index", "textRef"],
+        "alt_remove" | "alt_active" => &["kind", "spanId", "index"],
+        "kg_swap" => &["kind", "spanId", "index", "roleGeneration"],
+        "alt_move" => &["kind", "spanId", "from", "to"],
+        "append_alternatives" => &[
+            "kind",
+            "start",
+            "end",
+            "suppliedJsonRef",
+            "roleGeneration",
+            "providerGeneration",
+        ],
+        "pull" => &["kind", "at", "from", "to"],
+        "overflow_set" => &["kind", "textRef"],
+        _ => {
+            return Err(history_error(
+                "invalid-payload",
+                "unsupported ordinary action",
+            ))
+        }
+    };
+    history_fields(&value, fields)?;
+    for field in fields {
+        match *field {
+            "start" | "end" | "at" | "from" | "to" | "index" | "deleteUtf16" => {
+                history_integer(&value, field)?;
+            }
+            "spanId" | "spanKind" | "source" => {
+                history_string(&value, field)?;
+            }
+            "roleGeneration" | "providerGeneration" => {
+                action_generation(&value, field)?;
+            }
+            _ => {}
+        }
+    }
+    let mut used = vec![false; args.len()];
+    match kind {
+        "text_edit" => {
+            action_edit_fields(&value, true)?;
+            action_ref(&value, "insertedRef", &mut used)?;
+        }
+        "text_edits" => {
+            let edits = value["edits"]
+                .as_array()
+                .ok_or_else(|| history_error("invalid-payload", "edits must be an array"))?;
+            if edits.is_empty() || edits.len() > HISTORY_OPERATION_LIMIT {
+                return Err(history_error("limit", "batch must contain 1–4096 edits"));
+            }
+            for edit in edits {
+                action_edit_fields(edit, false)?;
+                action_ref(edit, "insertedRef", &mut used)?;
+            }
+        }
+        "alt_create" | "alt_add" | "alt_edit" | "overflow_set" => {
+            action_ref(&value, "textRef", &mut used)?
+        }
+        "append_alternatives" => action_ref(&value, "suppliedJsonRef", &mut used)?,
+        _ => {}
+    }
+    if used.iter().any(|used| !used) {
+        return Err(history_error("invalid-payload", "unused text argument"));
+    }
+    Ok(value)
+}
+
+fn apply_action_edit(
+    trial: &mut DocumentSession,
+    edit: &Value,
+    args: &[String],
+) -> Result<Value, HistoryTransactionError> {
+    if crate::host::source_hash(trial.body())
+        != edit["beforeBodyHash"].as_str().expect("checked hash")
+    {
+        return Err(history_error(
+            "body-conflict",
+            "intermediate edit body does not match",
+        ));
+    }
+    let start = history_integer(edit, "start")?;
+    let deleted_len = history_integer(edit, "deleteUtf16")?;
+    let end = start
+        .checked_add(deleted_len)
+        .ok_or_else(|| history_error("invalid-payload", "edit range overflow"))?;
+    let (a, b) = (
+        utf16_to_byte(trial.body(), start),
+        utf16_to_byte(trial.body(), end),
+    );
+    let (Some(a), Some(b)) = (a, b) else {
+        return Err(history_error(
+            "model-refusal",
+            "edit range does not fit UTF-16 body",
+        ));
+    };
+    let deleted = trial.body()[a..b].to_owned();
+    let inserted = &args[history_integer(edit, "insertedRef")?];
+    let outcome = trial
+        .apply_edit(start, deleted_len, inserted)
+        .map_err(|e| history_error("model-refusal", e.to_string()))?;
+    history_bytes(trial.body())?;
+    if crate::host::source_hash(trial.body())
+        != edit["afterBodyHash"].as_str().expect("checked hash")
+    {
+        return Err(history_error(
+            "body-conflict",
+            "result edit body does not match",
+        ));
+    }
+    let mut result = outcome.to_json();
+    let mut actual_edit = json!({"start":start,"deletedLength":deleted_len,"deletedText":deleted,"insertedText":inserted});
+    if let Some(reference) = &outcome.ghost_edit {
+        actual_edit["ghostEdit"] = reference.to_json();
+    }
+    result
+        .as_object_mut()
+        .expect("outcome object")
+        .insert("edit".into(), actual_edit);
+    Ok(result)
+}
+
+/// Begin an ordinary typed action on the existing native session authority.
+///
+/// # Errors
+/// Refuses stale bodies/roles, malformed or oversized arguments, domain errors,
+/// and outstanding transactions. Failure leaves the session/checkpoint intact.
+/// A returned token must be finished or guarded-aborted exactly once.
+pub fn begin_document_action_json(
+    expected_body: &str,
+    action_meta_json: &str,
+    text_args: &[String],
+) -> Result<Option<Value>, HistoryTransactionError> {
+    history_bytes(expected_body)?;
+    let meta = parse_action_metadata(action_meta_json, text_args)?;
+    history_available()?;
+    let role = if meta.get("roleGeneration").is_some() {
+        Some(action_generation(&meta, "roleGeneration")?)
+    } else {
+        None
+    };
+    if role
+        .as_ref()
+        .is_some_and(|g| *g != current_action_role_generation())
+    {
+        return Err(history_error("role-conflict", "displayed role changed"));
+    }
+    let started = begin_history_checkpoint(None, |trial| {
+        if trial.body() != expected_body {
+            return Err(history_error("body-conflict", "action body does not match"));
+        }
+        let before = trial.clone();
+        let n = |field| history_integer(&meta, field);
+        let s = |field: &str| meta[field].as_str().expect("checked string");
+        let text = |field| -> Result<&str, HistoryTransactionError> { Ok(&text_args[n(field)?]) };
+        let domain = |e: String| history_error("model-refusal", e);
+        let kind = s("kind");
+        let result = match kind {
+            "text_edit" => apply_action_edit(trial, &meta, text_args)?,
+            "text_edits" => {
+                let mut results = Vec::new();
+                for edit in meta["edits"].as_array().expect("checked edits") {
+                    results.push(apply_action_edit(trial, edit, text_args)?);
+                }
+                json!({"edits":results})
+            }
+            "ghost_range" => {
+                let id = trial
+                    .ghost(n("start")?, n("end")?)
+                    .map_err(|e| domain(e.to_string()))?;
+                json!({"ok":true,"id":id,"annotations":trial.annotations_json()})
+            }
+            "revive_range" => {
+                let changed = trial
+                    .revive(n("start")?, n("end")?)
+                    .map_err(|e| domain(e.to_string()))?;
+                json!({"ok":true,"changed":changed,"annotations":trial.annotations_json()})
+            }
+            "alt_create" => trial
+                .alt_create_span(
+                    parse_span_kind(s("spanKind")).map_err(domain)?,
+                    n("start")?,
+                    n("end")?,
+                    text("textRef")?,
+                    parse_alt_source(s("source")).map_err(domain)?,
+                )
+                .map_err(domain)?
+                .to_json(),
+            "alt_add" => match trial
+                .alt_add(
+                    s("spanId"),
+                    text("textRef")?,
+                    parse_alt_source(s("source")).map_err(domain)?,
+                )
+                .map_err(domain)?
+            {
+                Some(v) => v.to_json(),
+                None => return Ok(None),
+            },
+            "alt_edit" => match trial
+                .alt_edit(s("spanId"), n("index")?, text("textRef")?)
+                .map_err(domain)?
+            {
+                Some(v) => v.to_json(),
+                None => return Ok(None),
+            },
+            "alt_remove" => trial
+                .alt_remove(s("spanId"), n("index")?)
+                .map_err(domain)?
+                .to_json(),
+            "alt_move" => match trial
+                .alt_move(s("spanId"), n("from")?, n("to")?)
+                .map_err(domain)?
+            {
+                Some(v) => v.to_json(),
+                None => return Ok(None),
+            },
+            "alt_active" => trial
+                .set_active(s("spanId"), n("index")?)
+                .map_err(|e| domain(e.to_string()))?
+                .to_json(),
+            "kg_swap" => crate::kg::kg_swap(trial, s("spanId"), n("index")?)
+                .map_err(|e| domain(e.to_string()))?
+                .to_json(),
+            "append_alternatives" => {
+                let supplied =
+                    crate::providers::parse_supplied(text("suppliedJsonRef")?).map_err(domain)?;
+                match crate::providers::append_from_providers(
+                    trial,
+                    n("start")?,
+                    n("end")?,
+                    &supplied,
+                )
+                .map_err(|e| domain(e.to_string()))?
+                {
+                    Some(v) => v.to_json(),
+                    None => return Ok(None),
+                }
+            }
+            "stash" => trial
+                .stash(n("start")?, n("end")?)
+                .map_err(|e| domain(e.to_string()))?
+                .to_json(),
+            "pull" => {
+                let pull = trial
+                    .pull_back_text(n("at")?, n("from")?, n("to")?)
+                    .map_err(|e| domain(e.to_string()))?;
+                let outcome = trial
+                    .apply_edit(pull.start, 0, &pull.text)
+                    .map_err(|e| domain(e.to_string()))?;
+                json!({"start":pull.start,"text":pull.text,"outcome":outcome.to_json(),
+                    "edit":{"start":pull.start,"deletedLength":0,"deletedText":"","insertedText":pull.text},
+                    "overflow":{"before":trial.overflow(),"after":trial.overflow()}})
+            }
+            "overflow_set" => {
+                trial
+                    .set_overflow(text("textRef")?)
+                    .map_err(|e| domain(e.to_string()))?;
+                json!({"ok":true,"overflow":trial.overflow()})
+            }
+            _ => unreachable!("strict allowlist"),
+        };
+        if *trial == before {
+            return Ok(None);
+        }
+        let source = trial.save();
+        history_bytes(&source)?;
+        Ok(Some(
+            json!({"ok":true,"result":result,"annotations":trial.annotations_json(),"source":source}),
+        ))
+    })?;
+    if started.is_some() {
+        HISTORY_BRIDGE.with(|b| {
+            b.borrow_mut()
+                .pending
+                .as_mut()
+                .expect("issued checkpoint")
+                .action_role_generation = role
+        });
+    }
+    Ok(started)
+}
+
+/// WASM transport for the strict ordinary-action checkpoint dispatcher.
+///
+/// # Errors
+/// Uses the native typed refusals. Response conversion failure guarded-aborts
+/// the issued checkpoint rather than leaving an undelivered action accepted.
+#[wasm_bindgen]
+pub fn begin_document_action(
+    expected_body: &str,
+    action_meta_json: &str,
+    text_args: js_sys::Array,
+) -> Result<JsValue, JsValue> {
+    if text_args.length() as usize > HISTORY_OPERATION_LIMIT {
+        return Err(history_js_error(history_error(
+            "limit",
+            "more than 4096 text arguments",
+        )));
+    }
+    let mut args = Vec::with_capacity(text_args.length() as usize);
+    let mut total = 0usize;
+    for value in text_args.iter() {
+        if !value.is_string() {
+            return Err(history_js_error(history_error(
+                "invalid-payload",
+                "text arguments must be strings",
+            )));
+        }
+        let js_text = js_sys::JsString::from(value.clone());
+        if js_text.length() as usize > HISTORY_JSON_LIMIT {
+            return Err(history_js_error(history_error(
+                "limit",
+                "text argument exceeds limit",
+            )));
+        }
+        let text = value.as_string().expect("checked string");
+        total = total
+            .checked_add(text.len())
+            .ok_or_else(|| history_js_error(history_error("limit", "text budget exhausted")))?;
+        if total > HISTORY_JSON_LIMIT {
+            return Err(history_js_error(history_error(
+                "limit",
+                "combined text arguments exceed 16 MiB",
+            )));
+        }
+        args.push(text);
+    }
+    match begin_document_action_json(expected_body, action_meta_json, &args)
+        .map_err(history_js_error)?
+    {
+        Some(v) => history_begin_js(v),
+        None => Ok(JsValue::NULL),
+    }
+}
+
 #[derive(Debug)]
 struct HistoryCheckpoint {
     token: String,
     before: DocumentSession,
     after: DocumentSession,
     role_generation: Option<u64>,
+    action_role_generation: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -3076,6 +3705,7 @@ fn begin_history_checkpoint(
                 before: session.clone(),
                 after: trial.clone(),
                 role_generation,
+                action_role_generation: None,
             };
             bridge.watermark = next;
             bridge.pending = Some(checkpoint);
@@ -3175,6 +3805,17 @@ fn acknowledge_history(token: &str, abort: bool) -> Result<Value, HistoryTransac
             return Err(history_error(
                 "role-conflict",
                 "protected role changed; guarded document abort is still available",
+            ));
+        }
+        if !abort
+            && checkpoint
+                .action_role_generation
+                .as_ref()
+                .is_some_and(|g| *g != current_action_role_generation())
+        {
+            return Err(history_error(
+                "role-conflict",
+                "displayed role changed; guarded document abort remains available",
             ));
         }
         let response = if abort {
@@ -5702,5 +6343,400 @@ mod tests {
             json,
             json!({ "ok": true, "overflow": "a\n\nb", "applied": true })
         );
+    }
+}
+
+#[cfg(test)]
+mod ordinary_action_tests {
+    use super::*;
+
+    fn reset(body: &str) {
+        HISTORY_BRIDGE.with(|b| *b.borrow_mut() = HistoryBridge::default());
+        with_session(|s| {
+            s.open(body);
+        });
+        crate::providers::reset_providers();
+    }
+    fn run(meta: Value, args: &[&str]) -> Option<Value> {
+        let body = with_session(|s| s.body().to_owned());
+        begin_document_action_json(
+            &body,
+            &meta.to_string(),
+            &args.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+    fn commit(meta: Value, args: &[&str]) -> Value {
+        let v = run(meta, args).unwrap();
+        finish_history_transaction_json(v["token"].as_str().unwrap()).unwrap();
+        v["result"].clone()
+    }
+    fn edit(before: &str, after: &str, start: usize, len: usize, arg: usize) -> Value {
+        json!({"kind":"text_edit","start":start,"deleteUtf16":len,"insertedRef":arg,
+            "beforeBodyHash":crate::host::source_hash(before),"afterBodyHash":crate::host::source_hash(after)})
+    }
+    #[test]
+    fn actual_actions_keep_private_receipt_identity_and_support_guarded_abort() {
+        reset("risk here");
+        let receipt = with_session(|s| {
+            s.ghost_ranges_atomic("risk here", &[(5, 9)])
+                .unwrap()
+                .unwrap()
+        });
+        let before = with_session(|s| s.clone());
+        let v = run(edit("risk here", "risk here!", 9, 0, 0), &["!"]).unwrap();
+        abort_history_transaction_json(v["token"].as_str().unwrap()).unwrap();
+        assert_eq!(with_session(|s| s.clone()), before);
+        commit(edit("risk here", "risk here!", 9, 0, 0), &["!"]);
+        commit(edit("risk here!", "risk here", 9, 1, 0), &[""]);
+        with_session(|s| s.replay_ghost_change(&receipt, true)).unwrap();
+        assert!(with_session(|s| s.annotations_json()["ghosts"]
+            .as_array()
+            .unwrap()
+            .is_empty()));
+    }
+    #[test]
+    fn real_alternative_crud_swap_manual_ghost_and_overflow_actions() {
+        reset("risk here");
+        let created = commit(
+            json!({"kind":"alt_create","spanKind":"word","start":0,"end":4,"textRef":0,"source":"human"}),
+            &["concern"],
+        );
+        let id = created["span"].as_str().unwrap();
+        commit(
+            json!({"kind":"alt_add","spanId":id,"textRef":0,"source":"human"}),
+            &["worry"],
+        );
+        commit(
+            json!({"kind":"alt_edit","spanId":id,"index":2,"textRef":0}),
+            &["hazard"],
+        );
+        commit(json!({"kind":"alt_move","spanId":id,"from":2,"to":1}), &[]);
+        commit(json!({"kind":"alt_active","spanId":id,"index":1}), &[]);
+        assert_eq!(with_session(|s| s.body().to_owned()), "hazard here");
+        commit(json!({"kind":"alt_remove","spanId":id,"index":1}), &[]);
+        assert_eq!(with_session(|s| s.body().to_owned()), "risk here");
+        commit(json!({"kind":"ghost_range","start":5,"end":9}), &[]);
+        commit(json!({"kind":"revive_range","start":5,"end":9}), &[]);
+        commit(json!({"kind":"stash","start":5,"end":9}), &[]);
+        assert_eq!(with_session(|s| s.overflow().to_owned()), "here");
+        let pulled = commit(json!({"kind":"pull","at":5,"from":0,"to":4}), &[]);
+        assert_eq!(pulled["edit"]["insertedText"], pulled["text"]);
+        assert_eq!(pulled["overflow"]["before"], "here");
+        assert_eq!(pulled["overflow"]["after"], "here");
+        assert!(with_session(|s| s.body().contains("here")));
+        commit(json!({"kind":"overflow_set","textRef":0}), &["notes"]);
+        assert_eq!(with_session(|s| s.overflow().to_owned()), "notes");
+    }
+    #[test]
+    fn strict_metadata_refs_and_batch_failure_leave_actual_state_and_pending_unchanged() {
+        reset("abc");
+        for (meta, args) in [
+            (json!({"kind":"history_replay"}), vec![]),
+            (json!({"kind":"trim_promote"}), vec![]),
+            (
+                json!({"kind":"overflow_set","textRef":0,"extra":true}),
+                vec!["x".into()],
+            ),
+            (json!({"kind":"overflow_set","textRef":1}), vec!["x".into()]),
+            (
+                json!({"kind":"overflow_set","textRef":0}),
+                vec!["x".into(), "unused".into()],
+            ),
+        ] {
+            let before = with_session(|s| s.clone());
+            assert!(begin_document_action_json("abc", &meta.to_string(), &args).is_err());
+            assert_eq!(with_session(|s| s.clone()), before);
+            assert!(HISTORY_BRIDGE.with(|b| b.borrow().pending.is_none()));
+        }
+        let first = edit("abc", "abcd", 3, 0, 0);
+        let second = edit("wrong", "abcde", 4, 0, 1);
+        let entries: Vec<Value> = [first, second]
+            .into_iter()
+            .map(|mut v| {
+                v.as_object_mut().unwrap().remove("kind");
+                v
+            })
+            .collect();
+        assert!(begin_document_action_json(
+            "abc",
+            &json!({"kind":"text_edits","edits":entries}).to_string(),
+            &["d".into(), "e".into()]
+        )
+        .is_err());
+        assert_eq!(with_session(|s| s.body().to_owned()), "abc");
+    }
+    #[test]
+    fn append_uses_real_provider_parser_and_stale_role_cannot_finish() {
+        reset("risk");
+        crate::providers::register_external_provider("test-provider", "real-model").unwrap();
+        let generation: Value = serde_json::from_str(&crate::kg::role_snapshot_json()).unwrap();
+        let meta = json!({"kind":"append_alternatives","start":0,"end":4,"suppliedJsonRef":0,
+            "roleGeneration":generation["generation"],"providerGeneration":"1"});
+        let prepared = run(meta, &[r#"{"test-provider":["concern"]}"#]).unwrap();
+        assert_eq!(
+            prepared["result"]["after"]["alts"][1]["model"],
+            "real-model"
+        );
+        crate::kg::clear_thesaurus();
+        assert_eq!(
+            finish_history_transaction_json(prepared["token"].as_str().unwrap())
+                .unwrap_err()
+                .kind,
+            "role-conflict"
+        );
+        abort_history_transaction_json(prepared["token"].as_str().unwrap()).unwrap();
+        assert!(with_session(|s| s.document().annotations.spans.is_empty()));
+    }
+    #[test]
+    fn kg_swap_binds_displayed_role_at_begin_and_finish_without_resetting_native_state() {
+        reset("risk");
+        let role = r#"{"name":"one","data":{"risk":{"id":1,"nterm":"risk"},"concern":{"id":1,"nterm":"risk"}}}"#;
+        crate::kg::load_thesaurus(role).unwrap();
+        let snapshot: Value = serde_json::from_str(&crate::kg::role_snapshot_json()).unwrap();
+        let spans = with_session(|s| crate::kg::kg_spans_json(s));
+        let row = &spans[0];
+        let index = row["alts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|v| v["text"] == "concern")
+            .unwrap();
+        let action = json!({"kind":"kg_swap","spanId":row["id"],"index":index,"roleGeneration":snapshot["generation"]});
+        let before = with_session(|s| s.clone());
+        let v = run(action.clone(), &[]).unwrap();
+        assert_eq!(with_session(|s| s.body().to_owned()), "concern");
+        crate::kg::load_thesaurus(role).unwrap();
+        assert_eq!(
+            finish_history_transaction_json(v["token"].as_str().unwrap())
+                .unwrap_err()
+                .kind,
+            "role-conflict"
+        );
+        abort_history_transaction_json(v["token"].as_str().unwrap()).unwrap();
+        assert_eq!(with_session(|s| s.clone()), before);
+        assert_eq!(
+            begin_document_action_json("risk", &action.to_string(), &[])
+                .unwrap_err()
+                .kind,
+            "role-conflict"
+        );
+    }
+    #[test]
+    fn valid_batch_and_nochange_preserve_order_and_do_not_issue_phantom_tokens() {
+        reset("a");
+        let mut first = edit("a", "ab", 1, 0, 0);
+        let mut second = edit("ab", "abc", 2, 0, 1);
+        first.as_object_mut().unwrap().remove("kind");
+        second.as_object_mut().unwrap().remove("kind");
+        let v = run(
+            json!({"kind":"text_edits","edits":[first,second]}),
+            &["b", "c"],
+        )
+        .unwrap();
+        assert_eq!(v["result"]["edits"][1]["edit"]["insertedText"], "c");
+        assert_eq!(
+            begin_document_action_json(
+                "abc",
+                &json!({"kind":"overflow_set","textRef":0}).to_string(),
+                &["x".into()]
+            )
+            .unwrap_err()
+            .kind,
+            "pending"
+        );
+        finish_history_transaction_json(v["token"].as_str().unwrap()).unwrap();
+        let watermark = HISTORY_BRIDGE.with(|b| b.borrow().watermark);
+        assert!(run(edit("abc", "abc", 3, 0, 0), &[""]).is_none());
+        assert_eq!(HISTORY_BRIDGE.with(|b| b.borrow().watermark), watermark);
+    }
+    #[test]
+    fn action_limits_and_utf16_refusals_preserve_actual_engine() {
+        reset("😀a");
+        for field in ["start", "deleteUtf16", "insertedRef"] {
+            let mut v = edit("😀a", "😀b", 2, 1, 0);
+            v[field] = json!(9_007_199_254_740_991u64);
+            assert!(begin_document_action_json("😀a", &v.to_string(), &["b".into()]).is_err());
+        }
+        assert!(begin_document_action_json(
+            "😀a",
+            &edit("😀a", "bad", 1, 1, 0).to_string(),
+            &["b".into()]
+        )
+        .is_err());
+        assert_eq!(with_session(|s| s.body().to_owned()), "😀a");
+        assert_eq!(
+            begin_document_action_json("😀a", &" ".repeat(HISTORY_JSON_LIMIT + 1), &[])
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        assert_eq!(
+            begin_document_action_json(
+                "😀a",
+                r#"{"kind":"overflow_set","textRef":0}"#,
+                &["a".repeat(HISTORY_JSON_LIMIT), "b".into()]
+            )
+            .unwrap_err()
+            .kind,
+            "limit"
+        );
+        let repeated = json!({"start":0,"deleteUtf16":0,"insertedRef":0,"beforeBodyHash":crate::host::source_hash("😀a"),"afterBodyHash":crate::host::source_hash("😀a")});
+        assert!(begin_document_action_json(
+            "😀a",
+            &json!({"kind":"text_edits","edits":[repeated.clone(),repeated]}).to_string(),
+            &["".into()]
+        )
+        .is_err());
+    }
+    #[test]
+    fn exact_argument_and_operation_budgets_admit_boundary_and_refuse_next_item() {
+        reset("x");
+        let mut edits = Vec::new();
+        for index in 0..HISTORY_OPERATION_LIMIT {
+            let mut value = edit("x", "x", 1, 0, index);
+            value.as_object_mut().unwrap().remove("kind");
+            edits.push(value);
+        }
+        let args = vec![String::new(); HISTORY_OPERATION_LIMIT];
+        let meta = json!({"kind":"text_edits","edits":edits});
+        assert!(begin_document_action_json("x", &meta.to_string(), &args)
+            .unwrap()
+            .is_none());
+        let mut over = meta;
+        let repeated = over["edits"][0].clone();
+        over["edits"].as_array_mut().unwrap().push(repeated);
+        assert_eq!(
+            begin_document_action_json("x", &over.to_string(), &args)
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        let exact = vec!["x".repeat(HISTORY_JSON_LIMIT)];
+        assert!(parse_action_metadata(r#"{"kind":"overflow_set","textRef":0}"#, &exact).is_ok());
+        let excessive = vec!["x".repeat(HISTORY_JSON_LIMIT + 1)];
+        assert_eq!(
+            parse_action_metadata(r#"{"kind":"overflow_set","textRef":0}"#, &excessive)
+                .unwrap_err()
+                .kind,
+            "limit"
+        );
+        assert_eq!(with_session(|s| s.body().to_owned()), "x");
+    }
+
+    #[test]
+    fn admitted_near_limit_full_replacement_does_not_duplicate_deleted_transport_budget() {
+        let before = "a".repeat(HISTORY_JSON_LIMIT - 1024);
+        let after = "b".repeat(HISTORY_JSON_LIMIT - 1024);
+        reset(&before);
+        let v = begin_document_action_json(
+            &before,
+            &edit(&before, &after, 0, before.len(), 0).to_string(),
+            std::slice::from_ref(&after),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(v["source"], after);
+        abort_history_transaction_json(v["token"].as_str().unwrap()).unwrap();
+        assert_eq!(with_session(|s| s.body().to_owned()), before);
+    }
+    #[test]
+    fn pure_persisted_eol_materialization_retains_native_receipts_and_roundtrips_annotations() {
+        reset("😀 risk\nnext line\n");
+        let receipt = with_session(|s| {
+            s.ghost_ranges_atomic("😀 risk\nnext line\n", &[(8, 17)])
+                .unwrap()
+                .unwrap()
+        });
+        let native = with_session(|s| s.clone());
+        let source = native.save();
+        let crlf = crate::host::host_persistence_source(&source, true).unwrap();
+        assert!(crlf.contains("\r\n"));
+        assert_eq!(
+            crate::host::host_presentation_source(&crlf).unwrap(),
+            source
+        );
+        assert_eq!(with_session(|s| s.clone()), native);
+        with_session(|s| s.replay_ghost_change(&receipt, true)).unwrap();
+        let malformed = "body\n\n```terraphim-alternatives\n{ broken }\n```\n";
+        assert!(crate::host::host_persistence_source(malformed, true).is_err());
+    }
+    #[test]
+    fn dispatcher_saved_synonyms_query_real_graph_and_original_authority_undo_redo() {
+        use terraphim_rolegraph_browser::GraphSession;
+        fn query(group: &Value, text: &str) -> Value {
+            let mut graph = GraphSession::default();
+            let mut call = |generation: &str, op: &str, payload: Value| -> Value {
+                let response: Value = serde_json::from_str(&graph.dispatch(&json!({"version":1,"requestId":"native-authority-synonyms","generation":generation,"expectedRevision":null,"op":op,"payload":payload}).to_string()).unwrap()).unwrap();
+                assert_eq!(response["ok"], true, "{response}");
+                response["result"].clone()
+            };
+            let prepared = call(
+                "0",
+                "prepare_role",
+                json!({"thesaurusText":group["thesaurus"].to_string()}),
+            );
+            call(
+                "0",
+                "activate_role",
+                json!({"token":prepared["token"],"nextGeneration":"1"}),
+            );
+            call("1", "match", json!({"text":text}))
+        }
+        reset("risk here");
+        let ghost = with_session(|s| {
+            s.ghost_ranges_atomic("risk here", &[(5, 9)])
+                .unwrap()
+                .unwrap()
+        });
+        let added = commit(
+            json!({"kind":"alt_create","spanKind":"word","start":0,"end":4,"textRef":0,"source":"human"}),
+            &["concern"],
+        );
+        let id = added["span"].as_str().unwrap();
+        assert_eq!(
+            with_session(|s| s.synonyms_for(id, "risk")),
+            vec!["risk", "concern"]
+        );
+        let groups = with_session(|s| s.synonym_groups_json());
+        assert!(groups[0]["markdown"]
+            .as_str()
+            .unwrap()
+            .contains("synonyms:: risk, concern"));
+        assert_eq!(query(&groups[0], "concern"), query(&groups[0], "risk"));
+        assert_eq!(query(&groups[0], "concern"), json!(["1"]));
+        let saved = with_session(|s| s.save());
+        let path = std::env::temp_dir().join(format!(
+            "terraphim-authority-synonyms-{}-{}.md",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&path, saved.as_bytes()).unwrap();
+        let actual = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(actual, saved);
+        let mut reopened = DocumentSession::new();
+        reopened.open(&actual);
+        assert_eq!(reopened.synonym_groups_json(), groups);
+        assert_eq!(
+            query(&reopened.synonym_groups_json()[0], "concern"),
+            json!(["1"])
+        );
+        let op = |target: Value| {
+            json!([{"kind":"alt","body":"risk here","start":0,"deletedText":"","insertedText":"","span":id,"target":target}]).to_string()
+        };
+        let undo = begin_history_replay_json("risk here", "risk here", &op(Value::Null)).unwrap();
+        finish_history_transaction_json(undo["token"].as_str().unwrap()).unwrap();
+        assert!(with_session(|s| s.synonyms_for(id, "risk").is_empty()));
+        assert_eq!(with_session(|s| s.synonym_groups_json()), json!([]));
+        let redo = begin_history_replay_json("risk here", "risk here", &op(added["after"].clone()))
+            .unwrap();
+        finish_history_transaction_json(redo["token"].as_str().unwrap()).unwrap();
+        assert_eq!(with_session(|s| s.synonym_groups_json()), groups);
+        assert_eq!(with_session(|s| s.save()), saved);
+        with_session(|s| s.replay_ghost_change(&ghost, true)).unwrap();
+        std::fs::remove_file(path).unwrap();
     }
 }

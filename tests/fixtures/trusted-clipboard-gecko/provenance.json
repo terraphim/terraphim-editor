@@ -1,0 +1,10 @@
+{
+  "scope": "Actual historical recorded Firefox153 outputs for parser regressions only; not current candidate/CI admission",
+  "evidence": "publication/extension-marketplaces-20261013/execution-20261017/native-authority-verification/firefox-gecko-clipboard-v9-headed-separate-keys",
+  "sha256": {
+    "clipboard-receipt.json": "556ece18d73b554a9d814c4e953919b6365963d86a5f1864c7495ffe88547c95",
+    "actual-pasted.txt": "5593f540d4b1ca35a9ab6ebc1b020b9ddf14937aeabf6f744d9905e1fc7e6d8c",
+    "actual-copied.txt": "b98d848751a3c1557a6b378fb3cc331ca8fa3ec54f8e6ab124e70ac897050b13",
+    "runtime-assets.json": "eabb8ccbebe7351a2407a71c9fec530dff4d2dc8bc3a793076d68db4e510a484"
+  }
+}

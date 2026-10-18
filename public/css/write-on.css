@@ -115,7 +115,8 @@
     position: fixed;
     top: 1px;
     left: 20px;
-    z-index: 20;
+    /* Like the corner groups, stay above the full-height side panels. */
+    z-index: 21;
     display: inline-flex;
     align-items: baseline;
     gap: 0.5ch;

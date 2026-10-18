@@ -93,7 +93,7 @@ async fn bench_typing_latency_textarea_vs_debounced_surface() {
         (t, flush_ms)
     };
 
-    bench_load_surface(&doc_text);
+    bench_load_surface(&doc_text).await;
     sleep(0).await;
     let renders_before = js_number("teTest.surface().renderCount");
     let preview_renders_before = preview_render_count();

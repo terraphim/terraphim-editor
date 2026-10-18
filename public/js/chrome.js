@@ -278,6 +278,14 @@ class WriteOnChrome {
     root.append(counter, corners, this.buildShortcutReference(listen));
     this.mount.appendChild(root);
 
+    // Escape can return focus to a chrome button. Keep its history keys in
+    // this editor instead of allowing a host's normal Markdown Undo route.
+    listen(root, 'keydown', (e) => {
+      if (e.defaultPrevented || !(e.target instanceof Element) || !e.target.closest('button')) return;
+      this.editor.surface?.onKeyDown(e);
+      if (e.defaultPrevented) e.stopPropagation();
+    });
+
     // The tools toggle, from anywhere inside the editor (the surface, a
     // toolbar button, the preview). Exactly Ctrl+Shift+L: Shift is matched
     // as teConfigShortcutMatches does, so Ctrl+L stays the link shortcut.
@@ -470,11 +478,28 @@ class WriteOnChrome {
   }
 
   toggle() {
-    this.setMode(this.isWriteOn() ? 'plain' : 'write-on');
+    const current=this.authorityModePending?this.authorityRequestedMode:this.mode;
+    return this.setMode(current==='write-on'?'plain':'write-on');
   }
 
   setMode(mode, { persist = true } = {}) {
     if (this.destroyed) return;
+    const blocks=this.editor.blocks;
+    if(this.editor.authority&&!this.authorityModePainting&&blocks&&
+       (blocks.editing||blocks.authorityApplying||blocks.authorityPendingActions||this.authorityModePending)) {
+      this.authorityRequestedMode=mode==='write-on'?'write-on':'plain';
+      this.authorityModePending=(this.authorityModePending||0)+1;
+      const pending=(this.authorityModeQueue||Promise.resolve()).then(async()=> {
+        try {
+          await blocks.settledAuthority();
+          if(this.destroyed)return;
+          this.authorityModePainting=true;
+          try{return this.setMode(mode,{persist});}finally{this.authorityModePainting=false;}
+        } finally {this.authorityModePending-=1;}
+      });
+      this.authorityModeQueue=pending.catch(error=>blocks.showNotice(`Mode not changed: ${error?.message||error}`));
+      return pending;
+    }
     const next = mode === 'write-on' ? 'write-on' : 'plain';
     const changed = next !== this.mode;
     this.mode = next;

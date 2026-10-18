@@ -248,3 +248,67 @@ async fn test_paragraph_rule_follows_the_column_when_a_panel_moves_it() {
         );
     }
 }
+
+/// Native queue status is a real flow sibling of the writing surface. Its
+/// pending line must not leave indicators displaced after it disappears.
+/// This exercises the actual queue and DOM layout; it does not substitute a
+/// native transaction or claim native-worker qualification.
+#[wasm_bindgen_test]
+async fn test_authority_queue_status_transitions_keep_indicators_aligned() {
+    setup();
+    let result = js_async(
+        r##"
+        const ed = teInd.editor();
+        teInd.open();
+        const status = document.createElement('div');
+        status.className = 'te-authority-status';
+        status.setAttribute('role', 'status');
+        ed.surface.root.before(status);
+        ed.createdNodes.push(status);
+        ed.authorityStatus = status;
+        // Queue state only: no native adapter or fabricated transaction result.
+        ed.authorityQueue = Promise.resolve();
+        ed.authorityQueueGeneration = 0;
+        const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+        const deltas = () => Array.from(ed.indicators.spans.values(), entry => {
+          const span = teInd.span(entry.id);
+          const rects = Array.from(ed.surface.rangeForOffsets(span.anchor.start, span.anchor.end).getClientRects()).filter(rect => rect.width > 0 && rect.height > 0);
+          const expected = entry.kind === 'paragraph' ? rects[0].top : entry.kind === 'word'
+            ? Math.max(...rects.map(rect => rect.bottom)) + 2
+            : rects[rects.length - 1].bottom + 2;
+          return [entry.id, entry.headline ? 'headline' : entry.kind, entry.el.getBoundingClientRect().top - expected];
+        });
+        const aligned = () => {
+          const rows = deltas();
+          return rows.length === 4 && JSON.stringify(rows.map(row => row[1]).sort()) === '["headline","paragraph","sentence","word"]'
+            && rows.every(row => Math.abs(row[2]) < 1.5);
+        };
+        const saved = ed.saveDocument();
+        let pendingHeight = 0;
+        await ed.authorityEnqueue(async () => {
+          pendingHeight = status.getBoundingClientRect().height;
+          // Establish geometry while the real queue's pending status occupies
+          // its line, as an actual native projection refresh does. Never flush
+          // after the status clears: that would conceal the regression.
+          ed.indicators.flush();
+          if (!aligned()) throw new Error('pending geometry is not aligned');
+        });
+        await frame(); await frame();
+        console.log('TERRAPHIM_AUTHORITY_STATUS_GEOMETRY ' + JSON.stringify({phase:'cleared',pendingHeight,statusHeight:status.getBoundingClientRect().height,deltas:deltas()}));
+        if (!(pendingHeight > 0)) return 'pending status did not occupy a real flow line';
+        if (status.textContent !== '') return 'completed queue did not clear status';
+        if (!aligned()) return 'cleared status left stale indicator positions: ' + JSON.stringify(deltas());
+        // An actual refused queue operation must also invalidate geometry.
+        try { await ed.authorityEnqueue(async () => { throw new Error('Public regression refusal'); }); }
+        catch (error) { if (error.message !== 'Public regression refusal') throw error; }
+        await ed.authorityQueue;
+        await frame(); await frame();
+        if (!status.textContent.startsWith('Not accepted:')) return 'refusal status not displayed';
+        if (!aligned()) return 'refusal status left stale indicator positions: ' + JSON.stringify(deltas());
+        if (ed.saveDocument() !== saved) return 'status transitions changed the saved document';
+        return '';
+        "##,
+    )
+    .await;
+    assert_eq!(result, "");
+}

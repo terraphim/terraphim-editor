@@ -40,6 +40,7 @@ jobs:
       - name: Verify clean public source, immutable RC tag and admission policy
         run: |
           python3 -m unittest discover -s tests -p 'test_release_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_trusted_clipboard.py' -v
           python3 -m unittest discover -s tests -p 'test_editor_release.py' -v
           python3 -m unittest discover -s tests -p 'test_public_*.py' -v
           python3 -m unittest discover -s tests -p 'test_rolegraph_public_provenance.py' -v
@@ -92,8 +93,45 @@ jobs:
           name: editor-observed-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/editor-evidence/
           if-no-files-found: ignore
-  publish:
+  trusted-clipboard:
     needs: candidate
+    if: github.repository == 'terraphim/terraphim-editor' && github.ref_type == 'tag'
+    runs-on: macos-15
+    timeout-minutes: 15
+    outputs:
+      artifact-id: ${{ steps.clipboard-evidence.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.candidate.outputs.artifact-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/editor-qualified
+      - name: Verify actual Chrome and Firefox clipboard on the exact release archive
+        run: |
+          sw_vers
+          uname -a
+          python3 scripts/publish-editor-release.py verify --folder "$RUNNER_TEMP/editor-qualified" --tag "$RELEASE_TAG"
+          python3 scripts/qualify-trusted-clipboard.py run --candidate "$RUNNER_TEMP/editor-qualified" --evidence "$RUNNER_TEMP/editor-trusted-clipboard" --source "$GITHUB_SHA"
+      - name: Retain actual clipboard outputs, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: clipboard-evidence
+        with:
+          name: editor-release-clipboard-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/editor-trusted-clipboard/
+          if-no-files-found: error
+  publish:
+    needs: [candidate, trusted-clipboard]
     if: github.repository == 'terraphim/terraphim-editor' && github.ref_type == 'tag'
     environment: editor-release
     runs-on: ubuntu-latest
@@ -114,12 +152,17 @@ jobs:
           artifact-ids: ${{ needs.candidate.outputs.artifact-id }}
           merge-multiple: true
           path: ${{ runner.temp }}/editor-qualified
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.trusted-clipboard.outputs.artifact-id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/editor-trusted-clipboard
       - name: Revalidate exact candidate before protected publication
         run: python3 scripts/publish-editor-release.py verify --folder "$RUNNER_TEMP/editor-qualified" --tag "$RELEASE_TAG"
       - name: Publish immutable prerelease and verify anonymous downloads
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish-editor-release.py publish --folder "$RUNNER_TEMP/editor-qualified" --tag "$RELEASE_TAG" --receipt "$RUNNER_TEMP/editor-published.json"
+        run: python3 scripts/publish-editor-release.py publish --folder "$RUNNER_TEMP/editor-qualified" --tag "$RELEASE_TAG" --receipt "$RUNNER_TEMP/editor-published.json" --clipboard-evidence "$RUNNER_TEMP/editor-trusted-clipboard"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: editor-published-${{ github.sha }}-${{ github.run_attempt }}
